@@ -28,7 +28,7 @@ class RegisterActivity : AppCompatActivity() {
         // Initialize UI elements
         usernameEditText = findViewById(R.id.username_edittext) // Add this ID in XML
         passwordEditText = findViewById(R.id.password_edittext) // Add this ID in XML
-        confirmPasswordEditText = findViewById(R.id.confirm_password_edittext)
+        confirmPasswordEditText = findViewById(R.id.confirmpassword_edittext)
         signUpButton = findViewById(R.id.sign_up_button)
         loginTextView = findViewById(R.id.login_textview)
 
