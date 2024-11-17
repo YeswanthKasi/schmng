@@ -12,55 +12,65 @@
         android:padding="16dp">
 
         <!-- Username Field -->
+
+        <!-- Password Field -->
+
+        <!-- Confirm Password Field -->
+
         <EditText
             android:id="@+id/username_edittext"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginTop="168dp"
+            android:background="@drawable/rounded_edittext"
             android:hint="Email Address"
             android:inputType="textEmailAddress"
             android:padding="12dp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintWidth_default="spread"
-            android:layout_marginBottom="16dp" />
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintWidth_default="spread" />
 
-        <!-- Password Field -->
         <EditText
             android:id="@+id/password_edittext"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/rounded_edittext"
             android:hint="Password"
             android:inputType="textPassword"
             android:padding="12dp"
-            app:layout_constraintTop_toBottomOf="@id/username_edittext"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintWidth_default="spread"
-            android:layout_marginBottom="16dp" />
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/username_edittext"
+            app:layout_constraintWidth_default="spread" />
 
-        <!-- Confirm Password Field -->
+        <!-- Sign Up Button -->
+
         <EditText
             android:id="@+id/confirm_password_edittext"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/rounded_edittext"
             android:hint="Confirm Password"
             android:inputType="textPassword"
             android:padding="12dp"
-            app:layout_constraintTop_toBottomOf="@id/password_edittext"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintWidth_default="spread"
-            android:layout_marginBottom="16dp" />
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/password_edittext"
+            app:layout_constraintWidth_default="spread" />
 
-        <!-- Sign Up Button -->
         <Button
             android:id="@+id/sign_up_button"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="Sign Up"
             android:textColor="@color/white"
-            android:background="@color/cardview_light_background"
+            android:background="@drawable/rounded_edittext"
             app:layout_constraintTop_toBottomOf="@id/confirm_password_edittext"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
@@ -72,12 +82,12 @@
             android:id="@+id/login_textview"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="44dp"
             android:text="Already have an account? Login"
-            android:textColor="@color/black"
-            app:layout_constraintTop_toBottomOf="@id/sign_up_button"
-            app:layout_constraintStart_toStartOf="parent"
+            android:textColor="@color/white"
             app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="16dp" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/sign_up_button" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>

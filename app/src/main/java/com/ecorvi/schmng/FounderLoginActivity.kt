@@ -2,10 +2,11 @@ package com.ecorvi.schmng
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.*
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.ecorvi.schmng.ForgotPasswordActivity
-import com.ecorvi.schmng.RegisterActivity
 import com.google.firebase.auth.FirebaseAuth
 
 class LoginActivity : AppCompatActivity() {
@@ -14,9 +15,6 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var usernameEditText: EditText
     private lateinit var passwordEditText: EditText
     private lateinit var founderLoginButton: Button
-    private lateinit var adminLoginButton: Button
-    private lateinit var teacherLoginButton: Button
-    private lateinit var parentLoginButton: Button
     private lateinit var forgotPasswordTextView: TextView
     private lateinit var signUpTextView: TextView
 
@@ -31,17 +29,12 @@ class LoginActivity : AppCompatActivity() {
         usernameEditText = findViewById(R.id.username_edittext)
         passwordEditText = findViewById(R.id.password_edittext)
         founderLoginButton = findViewById(R.id.Founder_login_button)
-        adminLoginButton = findViewById(R.id.administrator_login_button)
-        teacherLoginButton = findViewById(R.id.staff_login_button)
-        parentLoginButton = findViewById(R.id.Login_as_Parent)
         forgotPasswordTextView = findViewById(R.id.forgot_password_textview)
         signUpTextView = findViewById(R.id.signup_textview)
 
         // Login for different roles
         founderLoginButton.setOnClickListener { loginUser("Founder") }
-        adminLoginButton.setOnClickListener { loginUser("Administrator") }
-        teacherLoginButton.setOnClickListener { loginUser("Teacher") }
-        parentLoginButton.setOnClickListener { loginUser("Parent") }
+
 
         // Forgot password
         forgotPasswordTextView.setOnClickListener {

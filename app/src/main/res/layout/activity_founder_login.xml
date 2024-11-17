@@ -16,10 +16,11 @@
             android:id="@+id/logo"
             android:layout_width="114dp"
             android:layout_height="71dp"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="96dp"
             android:contentDescription="App Logo"
             android:src="@drawable/emmanuellogo"
             app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.497"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
@@ -103,39 +104,10 @@
                     android:layout_height="50dp"
                     android:layout_marginTop="16dp"
                     android:background="@color/cardview_light_background"
-                    android:text="Login as Founder"
+                    android:text="LOGIN"
                     android:textColor="@color/white"
                     android:textSize="16sp" />
 
-                <Button
-                    android:id="@+id/administrator_login_button"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="16dp"
-                    android:background="@color/cardview_light_background"
-                    android:text="Login as Administrator"
-                    android:textColor="@color/white"
-                    android:textSize="16sp" />
-
-                <Button
-                    android:id="@+id/staff_login_button"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="16dp"
-                    android:background="@color/cardview_light_background"
-                    android:text="Login as Teacher"
-                    android:textColor="@color/white"
-                    android:textSize="16sp" />
-
-                <Button
-                    android:id="@+id/Login_as_Parent"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="16dp"
-                    android:background="@color/cardview_light_background"
-                    android:text="Login as Parent"
-                    android:textColor="@color/white"
-                    android:textSize="16sp" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
