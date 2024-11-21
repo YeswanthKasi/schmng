@@ -33,6 +33,13 @@
             android:name=".RegisterActivity"
             android:exported="false" />
 
+        <!-- WebView screen for the web app -->
+        <activity
+            android:name=".WebAppActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        </activity>
+
     </application>
 
 </manifest>
