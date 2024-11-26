@@ -14,13 +14,14 @@ class WebAppActivity : AppCompatActivity() {
 
         val webView = findViewById<WebView>(R.id.webView)
 
-        // Enable JavaScript for your web app
         val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
-        webSettings.domStorageEnabled = true // Enable DOM storage for modern web apps
+        webSettings.domStorageEnabled = true
+        webSettings.allowFileAccess = true
+        webSettings.allowContentAccess = true
 
-        // Load your web app URL
-        webView.webViewClient = WebViewClient() // Ensures links open in WebView
-        webView.loadUrl("https://ecorvi.com/") // Replace with your web app's URL
+        webView.webViewClient = WebViewClient() // Open links in WebView
+        webView.loadUrl("https://ecorvi.com/")
+        // Correct path for assets
     }
 }
