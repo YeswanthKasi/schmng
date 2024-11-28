@@ -1,0 +1,80 @@
+name: CI/CD Pipeline for Android App
+
+on:
+  push:
+    branches:
+      - main  # Trigger the pipeline on pushes to the main branch
+  pull_request:
+    branches:
+      - main  # Trigger for pull requests targeting the main branch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up JDK (Java 21 as you use it)
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      # Step 3: Set up Android SDK
+      - name: Set up Android SDK
+        uses: reactivecircus/android-sdk-action@v2
+        with:
+          api-level: 33  # Set the desired Android API level
+          build-tools: 33.0.0  # Set build tools version
+
+      # Step 4: Set up Gradle wrapper
+      - name: Set up Gradle
+        uses: gradle/wrapper-validation-action@v2
+
+      # Step 5: Run Unit Tests (locally executed tests)
+      - name: Run Unit Tests
+        run: ./gradlew test --no-daemon
+
+      # Step 6: Run UI Tests (connected Android tests) (optional)
+      - name: Run UI Tests
+        run: ./gradlew connectedAndroidTest --no-daemon
+
+      # Step 7: Build the Release APK
+      - name: Build the project
+        run: ./gradlew assembleRelease
+
+      # Step 8: Lint Check (optional, for static code analysis)
+      - name: Run Lint check
+        run: ./gradlew lint
+
+      # Step 9: Create GitHub Release and Upload APK
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: app/build/outputs/apk/release/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Step 10: Upload test results as artifacts (optional)
+  upload-test-results:
+    needs: build  # Ensure test results are uploaded after the tests
+    runs-on: ubuntu-latest
+    steps:
+      # Upload JUnit Test Results
+      - name: Upload Unit Test Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: unit-test-results
+          path: app/build/test-results/testDebugUnitTest/  # Path to your unit test results
+
+      # Upload UI Test Results
+      - name: Upload UI Test Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: ui-test-results
+          path: app/build/outputs/androidTest-results/connected/  # Path to UI test results
