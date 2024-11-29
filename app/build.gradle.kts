@@ -13,16 +13,18 @@ android {
     defaultConfig {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 33// Updated to match compileSdk
         versionCode = 2
         versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Optional: Add testInstrumentationRunnerArguments if needed
+        // testInstrumentationRunnerArguments = [key: "value"]
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true // Enable code shrinking for release builds
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -39,6 +41,10 @@ android {
     kotlinOptions {
         // Set JVM target to match Java 21
         jvmTarget = "21"
+    }
+
+    buildFeatures {
+        viewBinding = true // Enable View Binding if used
     }
 }
 
@@ -57,4 +63,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    // Optional: Add Kotlin Coroutines if needed
+    // implementation(libs.kotlinx.coroutines.core)
+    // implementation(libs.kotlinx.coroutines.android)
 }
