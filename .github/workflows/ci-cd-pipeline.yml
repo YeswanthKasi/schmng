@@ -8,6 +8,9 @@ on:
     branches:
       - master  # Trigger for pull requests targeting the master branch
 
+permissions:
+  contents: write  # Grant write access to the repository contents
+
 jobs:
   build:
     runs-on: ubuntu-latest  # Use the latest Ubuntu runner
@@ -28,8 +31,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v2
         with:
-          api-level: 35  # Set the desired Android API level to 35
-          build-tools: 33.0.0  # Set build tools version
+          components: |
+            cmdline-tools;latest
+            platform-tools
+            platforms;android-35  # Specify the Android API level you need
+            build-tools;33.0.0  # Specify the build tools version you need
 
       # Step 4: Grant execute permission to gradlew
       - name: Grant execute permission to gradlew
@@ -46,6 +52,8 @@ jobs:
           TAG_NAME="v1.0.0"  # Set the tag name to v1.0.0
           git tag $TAG_NAME
           git push origin $TAG_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
 
       # Step 7: Create GitHub Release and Upload APK
       - name: Create Release
