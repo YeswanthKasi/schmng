@@ -60,7 +60,7 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag: v1.0.0  # Use the created tag
+          tag_name: v1.0.0  # Use the created tag
           files: app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
