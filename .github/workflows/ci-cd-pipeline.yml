@@ -45,10 +45,10 @@ jobs:
       - name: Build the project
         run: ./gradlew assembleRelease
 
-      # Step 6: Push to Releases
-      - name: Push to Releases
+      # Step 6: Upload the APK as a release asset
+      - name: Upload Release APK
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "app/build/outputs/apk/release/*"  # Path to the APK files
+          artifacts: "app/build/outputs/apk/release/*.apk"  # Path to the APK files
           tag: v${{ github.run_number }}  # Use the run number as the tag
           token: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
