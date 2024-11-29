@@ -1,38 +1,58 @@
-name: Build and Release APK
+name: CI/CD Pipeline for Android App
 
 on:
   push:
-    tags:
-      - 'v*' # Triggers workflow on version tags like v1.0.0
+    branches:
+      - master  # Trigger the pipeline on pushes to the master branch
+  pull_request:
+    branches:
+      - master  # Trigger for pull requests targeting the master branch
+
+permissions:
+  contents: write  # Grant write access to the repository contents
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+
     steps:
-      - name: Checkout Code
+      # Step 1: Checkout the repository
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up JDK
+      # Step 2: Set up JDK (Java 21 as you use it)
+      - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
-          java-version: '11'  # Specify the Java version you need
+          java-version: '21'
+          distribution: 'zulu'
 
-      - name: Build APK
-        run: ./gradlew assembleRelease # Command to build the release APK
+      # Step 3: Set up Android SDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v2
+        with:
+          components: |
+            cmdline-tools;latest
+            platform-tools
+            platforms;android-35  # Specify the Android API level you need
+            build-tools;33.0.0  # Specify the build tools version you need
 
+      # Step 4: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x ./gradlew
+
+      # Step 5: Build the Release APK
+      - name: Build the project
+        run: ./gradlew assembleRelease
+
+      # Step 6: Create GitHub Release and Upload APK
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}  # Use the tag that triggered the workflow
-          release_name: ${{ github.ref_name }}  # Name of the release
-          draft: false
-          prerelease: false
-
-      - name: Upload APK to Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: app/build/outputs/apk/release/app-release.apk  # Path to the built APK file
-          asset_name: app-release.apk  # Name of the APK file in the release
-          asset_content_type: application/vnd.android.package-archive
+          tag_name: ${{ github.sha }}  # Use the commit SHA as the tag name
+          name: Release ${{ github.sha }}  # Name of the release
+          body: "Release of APK version based on commit ${{ github.sha }}"  # Description of the release
+          files: app/build/outputs/apk/release/app-release.apk  # Path to the APK file
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
