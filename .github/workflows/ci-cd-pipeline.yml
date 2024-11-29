@@ -31,11 +31,15 @@ jobs:
           api-level: 35  # Set the desired Android API level to 35
           build-tools: 33.0.0  # Set build tools version
 
-      # Step 4: Build the Release APK
+      # Step 4: Grant execute permission to gradlew
+      - name: Grant execute permission to gradlew
+        run: chmod +x ./gradlew
+
+      # Step 5: Build the Release APK
       - name: Build the project
         run: ./gradlew assembleRelease
 
-      # Step 5: Create GitHub Release and Upload APK
+      # Step 6: Create GitHub Release and Upload APK
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
