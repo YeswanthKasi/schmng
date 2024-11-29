@@ -24,9 +24,9 @@ jobs:
           java-version: '21'
           distribution: 'zulu'
 
-      # Step 3: Set up Android SDK
+      # Step 3: Set up Android SDK using an alternative action
       - name: Set up Android SDK
-        uses: reactivecircus/android-sdk-action@v2.1.0
+        uses: android-actions/setup-android@v2
         with:
           api-level: 35  # Set the desired Android API level to 35
           build-tools: 33.0.0  # Set build tools version (you can update this later if needed)
