@@ -26,7 +26,7 @@ android {
         create("release") {
             keyAlias = "key0" // Replace with your key alias
             keyPassword = "955326" // Replace with your key password
-            storeFile = file("C:\\Users\\Yeswanth\\OneDrive\\Desktop\\schmng\\schmng.kts") // Path to your keystore file
+            storeFile = file("schmng.jks") // Path to your keystore file
             storePassword = "955326" // Replace with your store password
         }
     }
