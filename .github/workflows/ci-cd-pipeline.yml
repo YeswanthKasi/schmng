@@ -45,14 +45,10 @@ jobs:
       - name: Build the project
         run: ./gradlew assembleRelease
 
-      # Step 6: Create GitHub Release and Upload APK
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
+      # Step 6: Push to Releases
+      - name: Push to Releases
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.sha }}  # Use the commit SHA as the tag name
-          name: Release ${{ github.sha }}  # Name of the release
-          body: "Release of APK version based on commit ${{ github.sha }}"  # Description of the release
-          files: app/release  # Path to the APK file
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
+          artifacts: "app/build/outputs/apk/release/*"  # Path to the APK files
+          tag: v${{ github.run_number }}  # Use the run number as the tag
+          token: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
