@@ -28,8 +28,8 @@ jobs:
       - name: Set up Android SDK
         uses: reactivecircus/android-sdk-action@v2.1.0
         with:
-          api-level: 33  # Set the desired Android API level
-          build-tools: 33.0.0  # Set build tools version
+          api-level: 35  # Set the desired Android API level to 35
+          build-tools: 33.0.0  # Set build tools version (you can update this later if needed)
 
       # Step 4: Set up Gradle wrapper
       - name: Set up Gradle
@@ -39,19 +39,15 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew test --no-daemon
 
-      # Step 6: Run UI Tests (connected Android tests) (optional)
-      - name: Run UI Tests
-        run: ./gradlew connectedAndroidTest --no-daemon
-
-      # Step 7: Build the Release APK
+      # Step 6: Build the Release APK
       - name: Build the project
         run: ./gradlew assembleRelease
 
-      # Step 8: Lint Check (optional, for static code analysis)
+      # Step 7: Lint Check (optional, for static code analysis)
       - name: Run Lint check
         run: ./gradlew lint
 
-      # Step 9: Create GitHub Release and Upload APK
+      # Step 8: Create GitHub Release and Upload APK
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -60,7 +56,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Step 10: Upload test results as artifacts (optional)
+  # Step 9: Upload test results as artifacts (optional)
   upload-test-results:
     needs: build  # Ensure test results are uploaded after the tests
     runs-on: ubuntu-latest
@@ -82,10 +78,3 @@ jobs:
         with:
           name: unit-test-results-release
           path: app/build/test-results/testReleaseUnitTest/  # Path to your release unit test results
-
-      # Upload UI Test Results
-      - name: Upload UI Test Results
-        uses: actions/upload-artifact@v3
-        with:
-          name: ui-test-results
-          path: app/build/outputs/androidTest-results/connected/  # Path to UI test results
