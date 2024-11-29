@@ -36,7 +36,6 @@ jobs:
             platform-tools
             platforms;android-35  # Specify the Android API level you need
             build-tools;33.0.0  # Specify the build tools version you need
-
       # Step 4: Grant execute permission to gradlew
       - name: Grant execute permission to gradlew
         run: chmod +x ./gradlew
@@ -45,10 +44,26 @@ jobs:
       - name: Build the project
         run: ./gradlew assembleRelease
 
-      # Step 6: Upload the APK as a release asset
-      - name: Upload Release APK
-        uses: ncipollo/release-action@v1
+      # Step 6: Create a Git tag
+      - name: Create Tag
+        id: create_tag
+        run: |
+          TAG_NAME="v1.0.1"  # Set the tag name to v1.0.1
+          git tag -d $TAG_NAME || true  # Delete the local tag if it exists
+          git push origin :refs/tags/$TAG_NAME || true  # Delete the remote tag if it exists
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
+
+      # Step 7: Create GitHub Release and Upload APK
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
         with:
-          artifacts: "app/build/outputs/apk/release/*.apk"  # Path to the APK files
-          tag: v${{ github.run_number }}  # Use the run number as the tag
-          token: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
+          tag_name: v1.0.1  # Use the created tag
+          name: Release v1.0.1  # Name of the release
+          body: "Release of APK version 1.0.1"  # Description of the release
+          files: app/build/outputs/apk/release/app-release.apk  # Path to the APK file
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set

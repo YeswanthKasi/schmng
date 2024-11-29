@@ -13,22 +13,13 @@ android {
     defaultConfig {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
-        targetSdk = 33 // Updated to match compileSdk
+        targetSdk = 33// Updated to match compileSdk
         versionCode = 2
         versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Optional: Add testInstrumentationRunnerArguments if needed
         // testInstrumentationRunnerArguments = [key: "value"]
-    }
-
-    signingConfigs {
-        create("release") {
-            keyAlias = "key0" // Replace with your key alias
-            keyPassword = "955326" // Replace with your key password
-            storeFile = file("schmng.jks") // Path to your keystore file
-            storePassword = "955326" // Replace with your store password
-        }
     }
 
     buildTypes {
@@ -38,7 +29,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release") // Set the signing config for release builds
         }
     }
 
