@@ -26,7 +26,7 @@ jobs:
 
       # Step 3: Set up Android SDK
       - name: Set up Android SDK
-        uses: reactivecircus/android-sdk-action@v2
+        uses: reactivecircus/android-sdk-action@v2.1.0
         with:
           api-level: 33  # Set the desired Android API level
           build-tools: 33.0.0  # Set build tools version
@@ -65,12 +65,23 @@ jobs:
     needs: build  # Ensure test results are uploaded after the tests
     runs-on: ubuntu-latest
     steps:
-      # Upload JUnit Test Results
-      - name: Upload Unit Test Results
+      # List the contents of the test results directory for debugging
+      - name: List Test Results Directory
+        run: ls -R app/build/test-results/
+
+      # Upload JUnit Test Results for Debug
+      - name: Upload Unit Test Results (Debug)
         uses: actions/upload-artifact@v3
         with:
-          name: unit-test-results
-          path: app/build/test-results/testDebugUnitTest/  # Path to your unit test results
+          name: unit-test-results-debug
+          path: app/build/test-results/testDebugUnitTest/  # Path to your debug unit test results
+
+      # Upload JUnit Test Results for Release
+      - name: Upload Unit Test Results (Release)
+        uses: actions/upload-artifact@v3
+        with:
+          name: unit-test-results-release
+          path: app/build/test-results/testReleaseUnitTest/  # Path to your release unit test results
 
       # Upload UI Test Results
       - name: Upload UI Test Results
