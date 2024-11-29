@@ -53,6 +53,6 @@ jobs:
           tag_name: ${{ github.sha }}  # Use the commit SHA as the tag name
           name: Release ${{ github.sha }}  # Name of the release
           body: "Release of APK version based on commit ${{ github.sha }}"  # Description of the release
-          files: app/build/outputs/apk/release/app-release.apk  # Path to the APK file
+          files: app/release  # Path to the APK file
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
