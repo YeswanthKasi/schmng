@@ -1,3 +1,6 @@
+import java.util.Base64
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -22,10 +25,10 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = "key0" // Directly set the key alias
-            keyPassword = "955326" // Directly set the key password
-            storeFile = file("C:/Users/Yeswanth/OneDrive/Desktop/schmng/schmng.jks") // Directly reference the keystore file
-            storePassword = "955326" // Replace with your actual store password
+            keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias" // Use environment variable or default
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "defaultKeyPassword" // Use environment variable or default
+            storeFile = file(decodeBase64(System.getenv("KEYSTORE_FILE"))) // Decode the base64 content
+            storePassword = System.getenv("STORE_PASSWORD") ?: "defaultStorePassword" // Use environment variable or default
         }
     }
 
@@ -52,6 +55,14 @@ android {
     buildFeatures {
         viewBinding = true // Enable View Binding if used
     }
+}
+
+// Function to decode base64 encoded keystore file
+fun decodeBase64(encoded: String): String {
+    val decodedBytes = Base64.getDecoder().decode(encoded)
+    val tempFile = File.createTempFile("keystore",".jks")
+    tempFile.writeBytes(decodedBytes)
+    return tempFile.absolutePath
 }
 
 dependencies {
