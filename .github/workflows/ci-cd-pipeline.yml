@@ -1,76 +1,83 @@
-name: CI/CD Pipeline for Android App
+import java.util.Base64
+import java.io.File
 
-on:
-  push:
-    branches:
-      - master  # Trigger the pipeline on pushes to the master branch
-  pull_request:
-    branches:
-      - master  # Trigger for pull requests targeting the master branch
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.google.gms.google.services)
+    alias(libs.plugins.google.firebase.crashlytics)
+    alias(libs.plugins.google.firebase.firebase.perf)
+}
 
-permissions:
-  contents: write  # Grant write access to the repository contents
+android {
+    namespace = "com.ecorvi.schmng"
+    compileSdk = 35
 
-jobs:
-  build:
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+    defaultConfig {
+        applicationId = "com.ecorvi.schmng"
+        minSdk = 24
+        targetSdk = 33 // Updated to match compileSdk
+        versionCode = 2
+        versionName = "2.0"
 
-    steps:
-      # Step 1: Checkout the repository
-      - name: Checkout repository
-        uses: actions/checkout@v3
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
-      # Step 2: Set up JDK (Java 21 as you use it)
-      - name: Set up JDK 21
-        uses: actions/setup-java@v3
-        with:
-          java-version: '21'
-          distribution: 'zulu'
+    signingConfigs {
+        create("release") {
+            keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias"  // Use environment variable or default
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "defaultKeyPassword" // Use environment variable or default
+            storeFile = file(decodeBase64(System.getenv("KEYSTORE_FILE"))) // Decode the base64 content
+            storePassword = System.getenv("STORE_PASSWORD") ?: "defaultStorePassword" // Use environment variable or default
+        }
+    }
 
-      # Step 3: Set up Android SDK
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v2
-        with:
-          components: |
-            cmdline-tools;latest
-            platform-tools
-            platforms;android-35  # Specify the Android API level you need
-            build-tools;33.0.0  # Specify the build tools version you need
+    buildTypes {
+        release {
+            isMinifyEnabled = true // Enable code shrinking for release builds
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("release") // Set the signing config
+        }
+    }
 
-      # Step 4: Grant execute permission to gradlew
-      - name: Grant execute permission to gradlew
-        run: chmod +x ./gradlew
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
 
-      # Step 5: Build the Release APK
-      - name: Build the project
-        env:
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}  # This will be used in build.gradle.kts
-        run: ./gradlew assembleRelease
+    kotlinOptions {
+        jvmTarget = "21"
+    }
 
-      # Step 6: Create a Git tag
-      - name: Create Tag
-        id: create_tag
-        run: |
-          TAG_NAME="v${{ github.run_number }}"  # Set the tag name to the run number
-          echo "Creating tag: $TAG_NAME"
-          git tag -d $TAG_NAME || true  # Delete the local tag if it exists
-          git push origin :refs/tags/$TAG_NAME || true  # Delete the remote tag if it exists
-          git tag $TAG_NAME
-          git push origin $TAG_NAME
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
+    buildFeatures {
+        viewBinding = true // Enable View Binding if used
+    }
+}
 
-      # Step 7: Create GitHub Release and Upload APK
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.run_number }}  # Use the created tag
-          name: Release v${{ github.run_number }}  # Name of the release
-          body: "Release of APK version v${{ github.run_number }}"  # Description of the release
-          files: app/build/outputs/apk/release/app-release.apk  # Path to the APK file
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
+// Function to decode base64 encoded keystore file
+fun decodeBase64(encoded: String): String {
+    val decodedBytes = Base64.getDecoder().decode(encoded)
+    val tempFile = File.createTempFile("keystore", ".jks")
+    tempFile.writeBytes(decodedBytes)
+    return tempFile.absolutePath
+}
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.constraintlayout)
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.database)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.perf)
+    implementation(libs.firebase.messaging)
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+}
