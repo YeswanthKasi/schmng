@@ -66,11 +66,13 @@ jobs:
       # Step 7: Create GitHub Release and Upload APK
       - name: Create Release
         id: create_release
+        run: |
+          echo "Tag name for release: ${{ steps.create_tag.outputs.TAG_NAME }}"
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.create_tag.outputs.TAG_NAME }}  # Use the created tag
-          name: Release ${{ steps.create_tag.outputs.TAG_NAME }}  # Name of the release
-          body: "Release of APK version ${{ steps.create_tag.outputs.TAG_NAME }}"  # Description of the release
+          tag_name: $TAG_NAME  # Use the created tag
+          name: Release $TAG_NAME  # Name of the release
+          body: "Release of APK version $TAG_NAME"  # Description of the release
           files: app/build/outputs/apk/release/app-release.apk  # Path to the APK file
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
