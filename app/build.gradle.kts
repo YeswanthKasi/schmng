@@ -1,4 +1,4 @@
-import java.util.Base64 // Add this import
+import java.util.Base64
 import java.io.File
 
 plugins {
@@ -23,6 +23,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias" // Use environment variable or default
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "defaultKeyPassword" // Use environment variable or default
+            storeFile = file(decodeBase64(System.getenv("KEYSTORE_FILE"))) // Decode the base64 content
+            storePassword = System.getenv("STORE_PASSWORD") ?: "defaultStorePassword" // Use environment variable or default
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true // Enable code shrinking for release builds
@@ -31,15 +40,6 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release") // Set the signing config
-        }
-    }
-
-    signingConfigs {
-        create("release") {
-            keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias" // Use environment variable or default
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "defaultKeyPassword" // Use environment variable or default
-            storeFile = file(decodeBase64(System.getenv("KEYSTORE_FILE"))) // Decode the base64 content
-            storePassword = System.getenv("STORE_PASSWORD") ?: "defaultStorePassword" // Use environment variable or default
         }
     }
 
