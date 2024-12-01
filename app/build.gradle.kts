@@ -25,7 +25,7 @@ android {
         create("release") {
             keyAlias = "key0" // Directly set the key alias
             keyPassword = "955326" // Directly set the key password
-            storeFile = file("./schmng.jks") // Directly reference the keystore file
+            storeFile = file("schmng.jks") // Directly reference the keystore file
             storePassword = "955326" // Replace with your actual store password
         }
     }
