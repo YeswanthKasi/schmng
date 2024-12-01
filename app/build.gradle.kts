@@ -1,3 +1,6 @@
+import java.util.Base64 // Add this import
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
