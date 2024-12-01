@@ -13,13 +13,11 @@ android {
     defaultConfig {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
-        targetSdk = 33// Updated to match compileSdk
+        targetSdk = 33 // Updated to match compileSdk
         versionCode = 2
         versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Optional: Add testInstrumentationRunnerArguments if needed
-        // testInstrumentationRunnerArguments = [key: "value"]
     }
 
     buildTypes {
@@ -29,23 +27,39 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release") // Set the signing config
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias" // Use environment variable or default
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "defaultKeyPassword" // Use environment variable or default
+            storeFile = file(decodeBase64(System.getenv("KEYSTORE_FILE"))) // Decode the base64 content
+            storePassword = System.getenv("STORE_PASSWORD") ?: "defaultStorePassword" // Use environment variable or default
         }
     }
 
     compileOptions {
-        // Updated to support Java 21
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
 
     kotlinOptions {
-        // Set JVM target to match Java 21
         jvmTarget = "21"
     }
 
     buildFeatures {
         viewBinding = true // Enable View Binding if used
     }
+}
+
+// Function to decode base64 encoded keystore file
+fun decodeBase64(encoded: String): String {
+    val decodedBytes = Base64.getDecoder().decode(encoded)
+    val tempFile = File.createTempFile("keystore", ".jks")
+    tempFile.writeBytes(decodedBytes)
+    return tempFile.absolutePath
 }
 
 dependencies {
@@ -63,7 +77,4 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    // Optional: Add Kotlin Coroutines if needed
-    // implementation(libs.kotlinx.coroutines.core)
-    // implementation(libs.kotlinx.coroutines.android)
 }
