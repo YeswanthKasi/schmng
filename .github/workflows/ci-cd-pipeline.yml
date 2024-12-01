@@ -55,7 +55,7 @@ jobs:
           KEY_ALIAS: "key0"  # Directly set the key alias
           KEY_PASSWORD: "955326"  # Directly set the key password
           STORE_PASSWORD: "yourStorePassword"  # Replace with your actual store password
-          KEYSTORE_FILE: "./KEY_STORE/schmng.jks"  # Reference the keystore file in the project directory
+          KEYSTORE_FILE: "./KEY_STORE"  # Reference the keystore file in the project directory
         run: ./gradlew assembleRelease
 
       # Step 8: Create a Git tag
