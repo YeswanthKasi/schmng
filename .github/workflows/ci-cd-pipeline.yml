@@ -41,6 +41,9 @@ jobs:
       - name: Grant execute permission to gradlew
         run: chmod +x ./gradlew
 
+      - name: List files in KEY_STORE
+        run: ls -la ./KEY_STORE
+
       # Step 5: Build the Release APK
       - name: Build the project
         env:

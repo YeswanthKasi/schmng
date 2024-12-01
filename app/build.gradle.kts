@@ -20,13 +20,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-
     signingConfigs {
         create("release") {
-            keyAlias = "key0" // Directly set the key alias
-            keyPassword = "955326" // Directly set the key password
-            storeFile = file("./KEY_STORE/schmng.jks") // Directly reference the keystore file
-            storePassword = "955326" // Replace with your actual store password
+            keyAlias = System.getenv("KEY_ALIAS") ?: "key0" // Use environment variable for key alias
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "955326" // Use environment variable for key password
+            storeFile = file(System.getenv("KEYSTORE_FILE") ?: "./KEY_STORE/schmng.jks") // Use environment variable for keystore path
+            storePassword = System.getenv("STORE_PASSWORD") ?: "yourStorePassword" // Use environment variable for store password
         }
     }
 
