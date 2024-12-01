@@ -41,19 +41,24 @@ jobs:
       - name: Grant execute permission to gradlew
         run: chmod +x ./gradlew
 
+      # Step 5: Decode keystore
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > ./KEY_STORE/schmng.jks
+
+      # Step 6: List files in KEY_STORE
       - name: List files in KEY_STORE
         run: ls -la ./KEY_STORE
 
-      # Step 5: Build the Release APK
+      # Step 7: Build the Release APK
       - name: Build the project
         env:
           KEY_ALIAS: "key0"  # Directly set the key alias
           KEY_PASSWORD: "955326"  # Directly set the key password
-          STORE_PASSWORD: "955326"  # Replace with your actual store password
+          STORE_PASSWORD: "yourStorePassword"  # Replace with your actual store password
           KEYSTORE_FILE: "./KEY_STORE/schmng.jks"  # Reference the keystore file in the project directory
         run: ./gradlew assembleRelease
 
-      # Step 6: Create a Git tag
+      # Step 8: Create a Git tag
       - name: Create Tag
         id: create_tag
         run: |
@@ -66,7 +71,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
 
-      # Step 7: Create GitHub Release and Upload APK
+      # Step 9: Create GitHub Release and Upload APK
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1

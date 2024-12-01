@@ -24,7 +24,7 @@ android {
         create("release") {
             keyAlias = System.getenv("KEY_ALIAS") ?: "key0" // Use environment variable for key alias
             keyPassword = System.getenv("KEY_PASSWORD") ?: "955326" // Use environment variable for key password
-            storeFile = file(System.getenv("KEYSTORE_FILE") ?: "./KEY_STORE/schmng.jks") // Use environment variable for keystore path
+            storeFile = file(System.getenv("KEYSTORE_FILE") ?: "./KEY_STORE") // Use environment variable for keystore path
             storePassword = System.getenv("STORE_PASSWORD") ?: "yourStorePassword" // Use environment variable for store password
         }
     }
