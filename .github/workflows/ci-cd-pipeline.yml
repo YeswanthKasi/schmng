@@ -43,7 +43,7 @@ jobs:
 
       # Step 5: Decode keystore and place it in the correct directory
       - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > ./KEY_STORE/schmng.jks
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > ./KEY_STORE/schmng.jks
 
       # Step 6: Verify the keystore file is present
       - name: List files in KEY_STORE
@@ -64,7 +64,7 @@ jobs:
           KEYSTORE_FILE: "./KEY_STORE/schmng.jks"  # Reference the keystore file in the project directory
         run: ./gradlew assembleRelease
 
-      # Step 9: Create a Git tag
+      # Step 9: Create Git tag
       - name: Create Tag
         id: create_tag
         run: |
