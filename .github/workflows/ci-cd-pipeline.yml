@@ -43,11 +43,13 @@ jobs:
 
       # Step 5: Decode keystore and place it in the correct directory
       - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > ./app/KEY_STORE/schmng.jks
+        run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > ./KEY_STORE/schmng.jks
 
       # Step 6: Verify the keystore file is present
       - name: List files in KEY_STORE
-        run: ls -la ./app/KEY_STORE
+        run: |
+          echo "Listing contents of ./KEY_STORE"
+          ls -la ./KEY_STORE
 
       # Step 7: Run tests (optional)
       - name: Run unit tests
@@ -59,7 +61,7 @@ jobs:
           KEY_ALIAS: "key0"  # Directly set the key alias
           KEY_PASSWORD: "955326"  # Directly set the key password
           STORE_PASSWORD: "955326"  # Replace with your actual store password
-          KEYSTORE_FILE: "./app/KEY_STORE/schmng.jks"  # Reference the keystore file in the project directory
+          KEYSTORE_FILE: "./KEY_STORE/schmng.jks"  # Reference the keystore file in the project directory
         run: ./gradlew assembleRelease
 
       # Step 9: Create a Git tag
