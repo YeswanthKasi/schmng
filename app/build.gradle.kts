@@ -24,7 +24,7 @@ android {
         create("release") {
             keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias"
             keyPassword = System.getenv("KEY_PASSWORD") ?: "defaultKeyPassword"
-            storeFile = file(System.getenv("C:\\Users\\Yeswanth\\OneDrive\\Desktop\\schmng\\KEY_STORE\\schmng.jks") ?: "./app/KEY_STORE/schmng.jks") // Path to keystore
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "KEY_STORE/schmng.jks")
             storePassword = System.getenv("STORE_PASSWORD") ?: "defaultStorePassword"
         }
     }
