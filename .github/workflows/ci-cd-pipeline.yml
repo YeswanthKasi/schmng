@@ -76,4 +76,16 @@ jobs:
           git tag $TAG_NAME
           git push origin $TAG_NAME
         env:
-          GITH
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
+
+      # Step 10: Create GitHub Release and Upload APK
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}  # Use the created tag
+          name: Release v${{ github.run_number }}  # Name of the release
+          body: "Release of APK version v${{ github.run_number }}"  # Description of the release
+          files: app/build/outputs/apk/release/app-release.apk  # Path to the APK file
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
