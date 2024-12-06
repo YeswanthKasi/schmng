@@ -26,7 +26,7 @@ android {
             keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias"
             keyPassword = System.getenv("KEY_PASSWORD") ?: "defaultKeyPassword"
             // Ensure the keystore file path is correct, based on the GitHub Actions decode step
-            storeFile = file(System.getenv("KEYSTORE_FILE") ?: "./KEY_STORE/schmng.jks")
+            storeFile = file("C:/Users/Yeswanth/Ecorvi_Important_Keys/schmng.jks")
             storePassword = System.getenv("STORE_PASSWORD") ?: "defaultStorePassword"
         }
     }
