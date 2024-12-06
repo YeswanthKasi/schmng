@@ -18,15 +18,13 @@ android {
         versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
     signingConfigs {
         create("release") {
             keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias"
             keyPassword = System.getenv("KEY_PASSWORD") ?: "defaultKeyPassword"
-            // Ensure the keystore file path is correct, based on the GitHub Actions decode step
-            storeFile = file("KEYSTORE_FILE")
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "default.keystore") // Path to keystore
             storePassword = System.getenv("STORE_PASSWORD") ?: "defaultStorePassword"
         }
     }
@@ -57,28 +55,18 @@ android {
 }
 
 dependencies {
-    // Core dependencies
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
-
-    // Firebase dependencies
     implementation(libs.firebase.auth)
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.database)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.perf)
     implementation(libs.firebase.messaging)
-
-    // Unit testing dependencies
-    testImplementation(libs.junit) // JUnit for unit testing
-    testImplementation("org.mockito:mockito-core:5.5.0") // Mockito for mocking dependencies
-
-    // Android instrumentation testing dependencies
-    androidTestImplementation(libs.androidx.junit) // AndroidX JUnit extensions
-    androidTestImplementation(libs.androidx.espresso.core) // Espresso for UI testing
-    androidTestImplementation("androidx.test:rules:1.5.0") // Test rules for Android tests
-    androidTestImplementation("androidx.test:runner:1.5.0") // Test runner for Android tests
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }
