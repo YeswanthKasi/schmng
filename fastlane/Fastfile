@@ -1,0 +1,49 @@
+default_platform(:android)
+
+platform :android do
+  # Runs all unit tests
+default_platform(:android)
+
+platform :android do
+  # Runs all unit tests
+  desc "Runs all the tests"
+  lane :test do
+    gradle(task: "test")
+  end
+
+  # Submit a new Beta Build to Crashlytics Beta
+  desc "Submit a new Beta Build to Crashlytics Beta"
+  lane :beta do
+    gradle(task: "clean assembleRelease")
+    crashlytics # Uploads the release build to Firebase Crashlytics
+  end
+
+  # Deploy a new version to the Google Play Store
+  desc "Deploy a new version to the Google Play"
+  lane :deploy do
+    begin
+      # Generate the Android App Bundle (AAB)
+      gradle(task: "bundleRelease")
+
+      # Find the AAB file
+      aab_path = Dir["app/build/outputs/bundle/release/*.aab"].first
+
+      unless aab_path
+        UI.error("❌ No AAB file found. Make sure the build process completed successfully.")
+        return
+      end
+
+      # Upload to Google Play Store
+      upload_to_play_store(
+        json_key: "C:/Users/Yeswanth/Ecorvi_Important_Keys/schmng/schoolmanagement-450904-a659375ef355.json",
+        track: "production", # Change to "alpha", "beta", or "production" as needed
+        aab: aab_path # Provide the correct AAB file path
+      )
+
+      UI.success("✅ Deployment successful!")
+    rescue => e
+      UI.error("❌ Deployment failed: #{e.message}")
+    end
+  end
+end
+

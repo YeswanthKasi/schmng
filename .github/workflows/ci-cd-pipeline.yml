@@ -13,12 +13,13 @@ permissions:
 
 jobs:
   build:
+    name: Build & Deploy to Play Store
     runs-on: ubuntu-latest  # Use the latest Ubuntu runner
 
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Step 2: Set up JDK (Java 21 as you use it)
       - name: Set up JDK 21
@@ -59,11 +60,12 @@ jobs:
 
       # Step 8: Build the Release APK
       - name: Build the project
+        run: ./gradlew assembleRelease
         env:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}  # Set the key alias from secrets
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}  # Set the key password from secrets
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}  # Set the store password from secrets
-        run: ./gradlew assembleRelease
+
 
       # Step 9: Create Git tag
       - name: Create Tag
@@ -89,3 +91,13 @@ jobs:
           files: app/build/outputs/apk/release/app-release.apk  # Path to the APK file
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Ensure the token is set
+
+      - name: Upload App Bundle to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON }}
+          packageName: com.ecorvi.schmng # Replace with your actual package name
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          track: production
+          status: completed
+          inAppUpdatePriority: 0  # Forces a new Edit
