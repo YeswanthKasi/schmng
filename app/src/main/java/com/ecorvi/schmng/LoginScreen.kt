@@ -4,31 +4,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -39,6 +19,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,19 +30,14 @@ import com.ecorvi.schmng.R
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(navController: NavController) {
-    var selectedOption by remember { mutableStateOf("Choose an Option") }
-    var isDropdownExpanded by remember { mutableStateOf(false) }
-    var email by remember { mutableStateOf(TextFieldValue()) }
-    var password by remember { mutableStateOf(TextFieldValue()) }
-
-    val loginOptions = listOf("Admin", "Student", "Teacher")
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var errorMessage by rememberSaveable { mutableStateOf("") }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
+        modifier = Modifier.fillMaxSize().background(Color.White)
     ) {
-        // Background Image
         Image(
             painter = painterResource(id = R.drawable.bg_ui),
             contentDescription = null,
@@ -77,47 +53,10 @@ fun LoginScreen(navController: NavController) {
         ) {
             Spacer(modifier = Modifier.height(100.dp))
 
-            // Heading
             Text(
-                text = "Login as",
+                text = "Login to Company Website",
                 style = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F41BB))
             )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Dropdown for Role Selection
-            Box(
-                modifier = Modifier
-                    .border(2.dp, Color(0xFF1F41BB), RoundedCornerShape(100.dp))
-                    .background(Color(0xFFF1F4FF), RoundedCornerShape(100.dp))
-                    .clickable { isDropdownExpanded = true }
-                    .padding(16.dp)
-                    .width(300.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Text(text = selectedOption, fontSize = 16.sp, color = Color(0xFF626262))
-                    Image(
-                        painter = painterResource(id = R.drawable.arrowdown),
-                        contentDescription = "Dropdown",
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                DropdownMenu(
-                    expanded = isDropdownExpanded,
-                    onDismissRequest = { isDropdownExpanded = false }
-                ) {
-                    loginOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                selectedOption = option
-                                isDropdownExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -125,44 +64,42 @@ fun LoginScreen(navController: NavController) {
                 value = email,
                 onValueChange = { email = it },
                 placeholder = { Text("Email", color = Color.Gray, fontSize = 16.sp) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-                    .border(2.dp, Color(0xFF003f87), RoundedCornerShape(12.dp))
-                    .background(Color(0xFFF2F5FF), shape = RoundedCornerShape(12.dp)), // Light blue background
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = TextFieldDefaults.outlinedTextFieldColors(
-                    containerColor = Color.Transparent, // Use containerColor instead of backgroundColor
                     focusedBorderColor = Color(0xFF003f87),
-                    unfocusedBorderColor = Color(0xFF003f87)
+                    unfocusedBorderColor = Color.Gray
                 )
             )
 
-
-            Spacer(modifier = Modifier.height(11.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
                 placeholder = { Text("Password", color = Color.Gray, fontSize = 16.sp) },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-                    .border(2.dp, Color(0xFF003f87), RoundedCornerShape(12.dp))
-                    .background(Color(0xFFF2F5FF), shape = RoundedCornerShape(12.dp)), // Light blue background
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        val icon = if (passwordVisible) R.drawable.visibility else R.drawable.visibilityoff
+                        Image(painter = painterResource(id = icon), contentDescription = "Toggle Password")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = TextFieldDefaults.outlinedTextFieldColors(
-                    containerColor = Color.Transparent, // Use containerColor instead of backgroundColor
                     focusedBorderColor = Color(0xFF003f87),
-                    unfocusedBorderColor = Color(0xFF003f87)
+                    unfocusedBorderColor = Color.Gray
                 )
             )
 
-
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Forgot Password
+            if (errorMessage.isNotEmpty()) {
+                Text(text = errorMessage, color = Color.Red, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             Text(
                 text = "Forgot Password?",
                 color = Color(0xFF1F41BB),
@@ -171,27 +108,65 @@ fun LoginScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Login Button
             Button(
-                onClick = { /* Handle login */ },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(50)) // Adds shadow effect
-                    .background(Color(0xFF1F41BB), shape = RoundedCornerShape(50)), // Button background
+                onClick = {
+                    if (email.isBlank() || password.isBlank()) {
+                        errorMessage = "Please enter email and password"
+                    } else {
+                        navController.navigate("company_website") {
+                            popUpTo("login_screen") { inclusive = true }
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF1F41BB), // Primary color
-                    contentColor = Color.White // White text color
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
             ) {
                 Text(text = "Sign in", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Or continue with text
+            Text(
+                text = "Or continue with",
+                style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F41BB))
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Social Media Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                IconButton(onClick = { /* Handle Google Sign-In */ }) {
+                    Image(
+                        painter = painterResource(id = R.drawable.google),
+                        contentDescription = "Google Sign-In",
+                        modifier = Modifier.size(60.dp)
+                    )
+                }
+                IconButton(onClick = { /* Handle Facebook Sign-In */ }) {
+                    Image(
+                        painter = painterResource(id = R.drawable.facebook),
+                        contentDescription = "Facebook Sign-In",
+                        modifier = Modifier.size(60.dp)
+                    )
+                }
+                IconButton(onClick = { /* Handle Apple Sign-In */ }) {
+                    Image(
+                        painter = painterResource(id = R.drawable.apple),
+                        contentDescription = "Apple Sign-In",
+                        modifier = Modifier.size(60.dp)
+                    )
+                }
+            }
         }
     }
 }
 
+// Preview function to visualize the screen in Android Studio
 @Preview(showBackground = true)
 @Composable
 fun LoginScreenPreview() {

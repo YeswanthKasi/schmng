@@ -1,0 +1,56 @@
+{
+  "project_info": {
+    "project_number": "299094006829",
+    "firebase_url": "https://ecorvischoolmanagementapp-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "ecorvischoolmanagementapp",
+    "storage_bucket": "ecorvischoolmanagementapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:299094006829:android:aadce36e742f490b866ca4",
+        "android_client_info": {
+          "package_name": "com.ecorvi.schmng"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "299094006829-i0rqchg6nag5et3u6ap979ee0h36akvl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ecorvi.schmng",
+            "certificate_hash": "cccbcfaa82f44e5d19fde0489857720dea68bde8"
+          }
+        },
+        {
+          "client_id": "299094006829-k0rvl7ogtt4tt8nmfli6f754icrn4lqh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ecorvi.schmng",
+            "certificate_hash": "214be003756b9dc60671ebf11dc2d47ef6545117"
+          }
+        },
+        {
+          "client_id": "299094006829-ko8jclq7hv6i7kl9fp74jl4sdib0c6nc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDooIlGn3Cn726G4euVPHZvumt8CGanTKk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "299094006829-ko8jclq7hv6i7kl9fp74jl4sdib0c6nc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
