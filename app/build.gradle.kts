@@ -68,7 +68,12 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.perf)
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.auth.ktx)  // Firebase Authentication
+    implementation(libs.firebase.firestore.ktx) // Firebase Firestore (if used)
+    implementation(libs.firebase.analytics.ktx) // Firebase Analytics (optional)
     testImplementation(libs.junit)
+    implementation(libs.google.play.app.update)
+    implementation(libs.google.play.app.update.ktx)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.androidx.lifecycle.runtime.ktx)

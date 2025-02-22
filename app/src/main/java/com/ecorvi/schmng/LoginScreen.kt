@@ -1,8 +1,8 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,20 +11,24 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import android.content.Context
 import androidx.navigation.compose.rememberNavController
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseUser
+
 import com.ecorvi.schmng.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,7 +55,7 @@ fun LoginScreen(navController: NavController) {
                 .padding(horizontal = 30.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(100.dp))
+            Spacer(modifier = Modifier.height(270.dp))
 
             Text(
                 text = "Login to Company Website",
@@ -66,9 +70,13 @@ fun LoginScreen(navController: NavController) {
                 placeholder = { Text("Email", color = Color.Gray, fontSize = 16.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = Color(0xFF003f87),
-                    unfocusedBorderColor = Color.Gray
+                singleLine = true, // Prevents enlarging when pressing enter
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color(0xFF003f87),
+                    unfocusedIndicatorColor = Color.Gray,
+                    cursorColor = Color(0xFF003f87)
                 )
             )
 
@@ -87,9 +95,13 @@ fun LoginScreen(navController: NavController) {
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = Color(0xFF003f87),
-                    unfocusedBorderColor = Color.Gray
+                singleLine = true, // Prevents enlarging when pressing enter
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color(0xFF003f87),
+                    unfocusedIndicatorColor = Color.Gray,
+                    cursorColor = Color(0xFF003f87)
                 )
             )
 
@@ -113,8 +125,11 @@ fun LoginScreen(navController: NavController) {
                     if (email.isBlank() || password.isBlank()) {
                         errorMessage = "Please enter email and password"
                     } else {
-                        navController.navigate("company_website") {
-                            popUpTo("login_screen") { inclusive = true }
+                        errorMessage = "" // Clear previous errors
+                        LoginUser(email, password, navController) { success, message ->
+                            if (!success) {
+                                errorMessage = message ?: "Authentication failed"
+                            }
                         }
                     }
                 },
@@ -165,6 +180,28 @@ fun LoginScreen(navController: NavController) {
         }
     }
 }
+
+fun LoginUser(email: String, password: String, navController: NavController, onLoginResult: (Boolean, String?) -> Unit) {
+    val auth = FirebaseAuth.getInstance()
+    auth.signInWithEmailAndPassword(email, password)
+        .addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                // Navigate to the company website screen after successful login
+                navController.navigate("company_website") {
+                    popUpTo("login") { inclusive = true } // Clears back stack
+                }
+                onLoginResult(true, null)
+            } else {
+                val errorMsg = when (task.exception) {
+                    is FirebaseAuthInvalidUserException -> "User not found. Check your email."
+                    is FirebaseAuthInvalidCredentialsException -> "Invalid password. Try again."
+                    else -> "Authentication failed. Please try again."
+                }
+                onLoginResult(false, errorMsg)
+            }
+        }
+}
+
 
 // Preview function to visualize the screen in Android Studio
 @Preview(showBackground = true)

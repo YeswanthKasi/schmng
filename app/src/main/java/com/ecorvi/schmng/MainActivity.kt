@@ -18,29 +18,33 @@ import com.ecorvi.schmng.ui.theme.OnboardingJetpackComposeTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.google.firebase.FirebaseApp //  Import FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        FirebaseApp.initializeApp(this) //  Initialize Firebase
+        FirebaseApp.initializeApp(this) // Initialize Firebase
+
+        val auth = FirebaseAuth.getInstance()
+        val startDestination = if (auth.currentUser != null) "company_website" else "welcome"
 
         setContent {
             OnboardingJetpackComposeTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     val navController = rememberNavController()
 
-                    //  Add a route for Company Website
-                    NavHost(navController = navController, startDestination = "welcome") {
+                    NavHost(navController = navController, startDestination = startDestination) {
                         composable("welcome") { WelcomeScreen(navController) }
                         composable("login") { LoginScreen(navController) }
-                        composable("company_website") { CompanyWebsiteScreen() } // ✅ New Route
+                        composable("company_website") { CompanyWebsiteScreen() }
                     }
                 }
             }
         }
     }
 }
+
 
 
 @Composable
