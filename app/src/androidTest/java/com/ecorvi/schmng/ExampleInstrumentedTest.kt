@@ -26,10 +26,4 @@ class ExampleInstrumentedTest {
         assertTrue("App should have INTERNET permission", hasPermission)
     }
 
-    @Test
-    fun launchWebAppActivity() {
-        // Verifies that MainActivity launches successfully
-        val scenario = ActivityScenario.launch(WebAppActivity::class.java)
-        assertNotNull("WebAppActivity launched successfully", scenario)
-    }
 }

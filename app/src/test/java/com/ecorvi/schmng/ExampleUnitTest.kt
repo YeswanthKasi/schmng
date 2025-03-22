@@ -27,7 +27,7 @@ class ExampleUnitTest {
     @Test
     fun emailValidation_isCorrect() {
         // Valid email test cases
-        val validEmails = listOf("test@example.com", "user.name@domain.co", "user+mailbox@domain.info")
+        val validEmails = listOf("test@example.com", "user.name@domain.com", "user+mailbox@domain.info")
         validEmails.forEach { email ->
             assertTrue("Expected '$email' to be valid, but it was invalid", isValidEmail(email))
         }

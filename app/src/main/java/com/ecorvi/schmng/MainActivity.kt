@@ -29,29 +29,39 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
+    // AppUpdateManager for handling in-app updates
     private lateinit var appUpdateManager: AppUpdateManager
+    // Request code for starting the update flow
     private val REQUEST_CODE_UPDATE = 100
 
+    // Called when the activity is first created.
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Call the superclass implementation of onCreate to do standard setup.
         super.onCreate(savedInstanceState)
 
-        // Initialize Firebase
+        // Initialize Firebase to enable its services.
         FirebaseApp.initializeApp(this)
 
-        // Initialize AppUpdateManager
+        // Initialize AppUpdateManager to check for and manage app updates.
         appUpdateManager = AppUpdateManagerFactory.create(this)
 
-        // Check for app updates
+        // Check for app updates when the activity is created.
         checkForAppUpdate()
 
-        // Determine the start destination based on authentication state
+        // Get the current Firebase authentication instance.
         val auth = FirebaseAuth.getInstance()
+        // Determine the start destination of the navigation based on whether a user is logged in.
         val startDestination = if (auth.currentUser != null) "company_website" else "welcome"
 
+        // Set the content view to a Composable UI.
         setContent {
+            // Apply the OnboardingJetpackComposeTheme to the UI.
             OnboardingJetpackComposeTheme {
+                // A surface container using the 'background' color from the theme.
                 Surface(color = MaterialTheme.colorScheme.background) {
+                    // Create a NavHostController to manage the navigation.
                     val navController = rememberNavController()
+                    // Set up the NavHost with the start destination and define the navigation routes.
                     NavHost(navController = navController, startDestination = startDestination) {
                         composable("welcome") { WelcomeScreen(navController) }
                         composable("login") { LoginScreen(navController) }
@@ -62,49 +72,64 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Function to check for available app updates.
     private fun checkForAppUpdate() {
+        // Get the AppUpdateInfo task from the AppUpdateManager.
         val appUpdateInfoTask = appUpdateManager.appUpdateInfo
 
+        // Add a success listener to the task to check the update availability.
         appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+            // Check if an update is available and if the flexible update type is allowed.
             if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
                 appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
-                // Request the update
+                // Start the update flow for a flexible update.
                 appUpdateManager.startUpdateFlowForResult(
                     appUpdateInfo,
                     AppUpdateType.FLEXIBLE,
                     this,
                     REQUEST_CODE_UPDATE
                 )
-            }
+            } // If no update is available or not allowed, nothing happens.
         }
 
-        // Listen for update state changes
+        // Register a listener to get notified of the update state changes.
         appUpdateManager.registerListener(installStateUpdatedListener)
     }
 
+    // Listener for receiving updates on the state of the update installation.
     private val installStateUpdatedListener = InstallStateUpdatedListener { state ->
+        // Check if the update has been downloaded and is ready to be installed.
         if (state.installStatus() == InstallStatus.DOWNLOADED) {
-            // After the update is downloaded, prompt the user to restart the app
+            // Prompt the user to restart the app to complete the update.
             popupSnackbarForCompleteUpdate()
         }
     }
 
+    // Display a snackbar to prompt the user to restart the app for completing the update.
     private fun popupSnackbarForCompleteUpdate() {
-        // Display a snackbar or dialog to prompt the user to restart the app
+        // Make a snackbar that displays a message about the completed download.
         Snackbar.make(
+            // Find the root view to attach the snackbar.
             findViewById(android.R.id.content),
             "An update has just been downloaded.",
+            // Display the snackbar indefinitely until an action is taken.
             Snackbar.LENGTH_INDEFINITE
+            // Set the action button "Restart" that will trigger the update completion.
         ).setAction("Restart") {
+            // Complete the update by restarting the app.
             appUpdateManager.completeUpdate()
+            // Show the SnackBar
         }.show()
     }
 
+    // Called when an activity you launched exits, giving you the requestCode you started it with, the resultCode it returned, and any additional data from it.
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        // Check if the result is from the update flow.
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_UPDATE) {
+            // Check if the update flow was not successful.
             if (resultCode != RESULT_OK) {
-                // Handle the update failure
+                // Log an error indicating the update failure.
                 Log.e("MainActivity", "Update flow failed! Result code: $resultCode")
             }
         }
@@ -112,18 +137,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Unregister the update listener to prevent memory leaks.
         appUpdateManager.unregisterListener(installStateUpdatedListener)
     }
 }
 
+// Composable function for previewing the WelcomeScreen.
 @Composable
 @Preview(showBackground = true)
 fun PreviewWelcomeScreen() {
+    // Apply the OnboardingJetpackComposeTheme to the UI.
     OnboardingJetpackComposeTheme {
+        // A surface container using the 'background' color from the theme.
         Surface(
+            // Make the Surface fill the maximum available space.
             modifier = Modifier.fillMaxSize(),
+            // Set the background color to the color scheme's background.
             color = MaterialTheme.colorScheme.background
         ) {
+            // Display the WelcomeScreen with a remembered NavController.
             WelcomeScreen(navController = rememberNavController())
         }
     }

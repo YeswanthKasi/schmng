@@ -22,38 +22,54 @@ import com.google.firebase.auth.FirebaseAuth
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun CompanyWebsiteScreen(navController: NavController) {
+    // Get an instance of FirebaseAuth for handling user authentication
     val auth = FirebaseAuth.getInstance()
 
+    // Box composable to stack UI elements on top of each other
     Box(modifier = Modifier.fillMaxSize()) {
-        // WebView to load the company website
+        // AndroidView composable to integrate an Android WebView into the Compose UI
         AndroidView(
+            // Set the modifier to fill the entire available space
             modifier = Modifier.fillMaxSize(),
+            // Factory lambda to create and configure the WebView
             factory = { context ->
+                // Create a WebView instance
                 WebView(context).apply {
-                    settings.javaScriptEnabled = true // Enable JavaScript
-                    webViewClient = WebViewClient() // Ensure navigation inside WebView
-                    loadUrl("https://www.ecorvi.com") // Load your company website
+                    // Enable JavaScript in the WebView
+                    settings.javaScriptEnabled = true
+                    // Set a WebViewClient to handle page navigation within the WebView
+                    webViewClient = WebViewClient()
+                    // Load the specified URL (company website)
+                    loadUrl("https://www.ecorvi.com")
                 }
             }
         )
 
-        // Logout Button (Floating on Top-Right)
+        // TextButton composable for the Logout button
         TextButton(
+            // Lambda to handle the button click event
             onClick = {
-                auth.signOut() // Sign out the user
-                navController.navigate("login") { // Navigate to LoginScreen
-                    popUpTo("company_website") { inclusive = true } // Clear back stack
+                // Sign out the current user
+                auth.signOut()
+                // Navigate to the "login" screen
+                navController.navigate("login") {
+                    // Clear the back stack up to the "company_website" route
+                    popUpTo("company_website") { inclusive = true }
                 }
             },
+            // Set the modifier to align the button to the top-right and add padding
             modifier = Modifier
-                .align(Alignment.TopEnd) // Aligns to top-right
-                .padding(16.dp) // Adds spacing from edges
-                .background(Color(0xFF1F41BB), shape = RoundedCornerShape(8.dp)) // Blue background
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .background(Color(0xFF1F41BB), shape = RoundedCornerShape(8.dp))
         ) {
+            // Text composable for the button's label
             Text("Logout", color = Color.White)
         }
     }
 }
+// Preview function for the CompanyWebsiteScreen
+
 
 @Preview(showBackground = true)
 @Composable

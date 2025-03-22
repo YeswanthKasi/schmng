@@ -25,69 +25,79 @@ import com.ecorvi.schmng.R
 // Composable function for Welcome Screen
 @Composable
 fun WelcomeScreen(navController: NavController) {
+    // Box composable to hold the entire screen content
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White) // Background color
+            .fillMaxSize() // Make the Box fill the entire screen
+            .background(Color.White) // Set the background color to white
     ) {
-        // Background image
-        Image(painter = painterResource(id = R.drawable.bg_ui), contentDescription = "bg_ui", modifier = Modifier.fillMaxSize())
-
-        Column (
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxSize().padding(16.dp) // Add padding
+        // Image composable for the background image
+        Image(
+            painter = painterResource(id = R.drawable.bg_ui), // Load the background image from resources
+            contentDescription = "bg_ui", // Description for accessibility
+            modifier = Modifier.fillMaxSize() // Make the image fill the entire screen
+        )
+        // Column composable to arrange elements vertically
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally, // Center the items horizontally
+            modifier = Modifier
+                .fillMaxSize() // Make the column fill the entire screen
+                .padding(16.dp) // Add padding around the column
         ) {
+            // Column composable for the top section (logo, heading, subheading)
             Column(
                 modifier = Modifier
-                    .weight(1f) // Takes up available space
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .weight(1f) // Use the available space
+                    .fillMaxWidth(), // Make the column fill the width of the parent
+                horizontalAlignment = Alignment.CenterHorizontally, // Center items horizontally
+                verticalArrangement = Arrangement.Center // Center items vertically
             ) {
-                // Logo Image
+                // Image composable for the logo
                 Image(
-                    painter = painterResource(id = R.drawable.ecorvi_logo),
-                    contentDescription = "Ecorvi Logo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.width(182.dp).height(64.dp)
+                    painter = painterResource(id = R.drawable.ecorvi_logo), // Load the logo from resources
+                    contentDescription = "Ecorvi Logo", // Description for accessibility
+                    contentScale = ContentScale.Crop, // Scale the image to crop
+                    modifier = Modifier
+                        .width(182.dp) // Set the width of the logo
+                        .height(64.dp) // Set the height of the logo
                 )
-
-                Spacer(modifier = Modifier.height(26.dp))
-
-                // Heading
+                // Spacer composable to add vertical space
+                Spacer(modifier = Modifier.height(26.dp)) // Add space below the logo
+                // Text composable for the heading
                 Text(
-                    text = "Welcome to Ecorvi School Management",
-                    color = Color(0xFF1F41BB),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 20.dp)
+                    text = "Welcome to Ecorvi School Management", // Set the heading text
+                    color = Color(0xFF1F41BB), // Set the text color
+                    fontSize = 20.sp, // Set the font size
+                    fontWeight = FontWeight.SemiBold, // Set the font weight to semi-bold
+                    textAlign = TextAlign.Center, // Center the text
+                    modifier = Modifier.padding(horizontal = 20.dp) // Add horizontal padding
                 )
-
-                Spacer(modifier = Modifier.height(72.dp))
-
-                // Subheading
+                // Spacer composable to add vertical space
+                Spacer(modifier = Modifier.height(72.dp)) // Add space below the heading
+                // Text composable for the subheading
                 Text(
-                    text = "Streamline your school operations with ease and efficiency.",
-                    color = Color.Black,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 30.dp)
+                    text = "Streamline your school operations with ease and efficiency.", // Set the subheading text
+                    color = Color.Black, // Set the text color
+                    fontSize = 14.sp, // Set the font size
+                    textAlign = TextAlign.Center, // Center the text
+                    modifier = Modifier.padding(horizontal = 30.dp) // Add horizontal padding
                 )
             }
-
-            // Navigation button to Login screen
+            // Button composable for navigation
             Button(
                 onClick = {
-                    navController.navigate("login") // Navigate to Login Screen
+                    navController.navigate("login") // Navigate to the login screen when clicked
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFE1F40BA)),
-                shape = RoundedCornerShape(size = 10.dp),
-                modifier = Modifier.width(180.dp).height(50.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFE1F40BA)), // Set the button color
+                shape = RoundedCornerShape(size = 10.dp), // Set the button shape
+                modifier = Modifier
+                    .width(180.dp) // Set the width of the button
+                    .height(50.dp) // Set the height of the button
             ) {
-                Text(text = "Get Started", color = Color.White, fontSize = 16.sp)
+                Text(text = "Get Started", color = Color.White, fontSize = 16.sp) // Set the button text
             }
-            Spacer(modifier = Modifier.height(16.dp)) // Space at the bottom
+            // Spacer composable to add vertical space
+            Spacer(modifier = Modifier.height(16.dp)) // Add space at the bottom
         }
     }
 }
@@ -95,5 +105,8 @@ fun WelcomeScreen(navController: NavController) {
 @Preview(showBackground = true)
 @Composable
 fun WelcomeScreenPreview() {
-    WelcomeScreen(navController = NavController(LocalContext.current)) // Dummy NavController for preview
+    // Preview composable for the Welcome Screen
+    WelcomeScreen(
+        navController = NavController(LocalContext.current)
+    ) // Provide a dummy NavController for preview
 }
