@@ -1,3 +1,5 @@
+import org.gradle.kotlin.dsl.implementation
+
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
     alias(libs.plugins.android.application)
@@ -68,9 +70,9 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.perf)
     implementation(libs.firebase.messaging)
-    implementation(libs.firebase.auth.ktx)  // Firebase Authentication
-    implementation(libs.firebase.firestore.ktx) // Firebase Firestore (if used)
-    implementation(libs.firebase.analytics.ktx) // Firebase Analytics (optional)
+    implementation(libs.firebase.auth.ktx)
+    implementation(libs.firebase.firestore.ktx)
+    implementation(libs.firebase.analytics.ktx)
     testImplementation(libs.junit)
     implementation(libs.google.play.app.update)
     implementation(libs.google.play.app.update.ktx)
@@ -82,7 +84,9 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
+    implementation ("androidx.compose.material3:material3:1.3.1")
+    implementation ("androidx.compose.material:material-icons-extended:1.6.8") // Added this
+    implementation ("androidx.navigation:navigation-compose:2.7.7") // Updated this
     implementation(libs.androidx.media3.effect)
     implementation(libs.androidx.storage)
     implementation(libs.androidx.core.splashscreen)
