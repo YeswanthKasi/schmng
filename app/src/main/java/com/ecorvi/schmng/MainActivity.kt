@@ -14,6 +14,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.ecorvi.schmng.ui.screens.AdminDashboardScreen
 import com.ecorvi.schmng.ui.screens.WelcomeScreen
 import com.ecorvi.schmng.ui.screens.LoginScreen
 import com.ecorvi.schmng.ui.screens.CompanyWebsiteScreen // Import new screen
@@ -51,21 +52,18 @@ class MainActivity : ComponentActivity() {
         // Get the current Firebase authentication instance.
         val auth = FirebaseAuth.getInstance()
         // Determine the start destination of the navigation based on whether a user is logged in.
-        val startDestination = if (auth.currentUser != null) "company_website" else "welcome"
+        val startDestination = if (auth.currentUser != null) "admin_dashboard" else "welcome"
 
-        // Set the content view to a Composable UI.
         setContent {
-            // Apply the OnboardingJetpackComposeTheme to the UI.
             OnboardingJetpackComposeTheme {
-                // A surface container using the 'background' color from the theme.
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    // Create a NavHostController to manage the navigation.
                     val navController = rememberNavController()
-                    // Set up the NavHost with the start destination and define the navigation routes.
                     NavHost(navController = navController, startDestination = startDestination) {
                         composable("welcome") { WelcomeScreen(navController) }
                         composable("login") { LoginScreen(navController) }
                         composable("company_website") { CompanyWebsiteScreen(navController) }
+                        composable("admin_dashboard") { AdminDashboardScreen(navController) }
+                        composable("manage_students") { /* Add a screen for managing students */ }
                     }
                 }
             }

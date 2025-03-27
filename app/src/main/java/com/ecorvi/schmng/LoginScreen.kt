@@ -67,7 +67,7 @@ fun LoginScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(210.dp))
 
             Text(
-                text = "Login to Company Website",
+                text = "Login",
                 style = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F41BB))
             )
 
@@ -160,7 +160,7 @@ fun LoginScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(24.dp))
             // 'Or continue with' text
             Text(
-                  text = "Or continue with",
+                text = "Or continue with",
                 style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F41BB))
             )
 
@@ -203,22 +203,15 @@ fun LoginScreen(navController: NavController) {
 
 // Function to handle user login with email and password
 fun LoginUser(email: String, password: String, navController: NavController, onLoginResult: (Boolean, String?) -> Unit) {
-    // Get an instance of FirebaseAuth
     val auth = FirebaseAuth.getInstance()
-    // Sign in the user with the provided email and password
     auth.signInWithEmailAndPassword(email, password)
         .addOnCompleteListener { task ->
-            // Check if the sign-in task was successful
             if (task.isSuccessful) {
-                // Navigate to the company website screen upon successful login
-                navController.navigate("company_website") {
-                    // Clear the back stack to prevent going back to the login screen
+                navController.navigate("admin_dashboard") {
                     popUpTo("login") { inclusive = true }
                 }
-                // Invoke the callback with success status and no error message
                 onLoginResult(true, null)
             } else {
-                // Determine the error message based on the exception type
                 val errorMsg = when (task.exception) {
                     is FirebaseAuthInvalidUserException -> "User not found. Check your email."
                     is FirebaseAuthInvalidCredentialsException -> "Invalid password. Try again."
