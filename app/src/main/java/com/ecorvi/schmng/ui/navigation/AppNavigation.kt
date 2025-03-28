@@ -24,11 +24,9 @@ fun AppNavigation() {
 
     // Determine the start destination
     val startDestination = if (isFirstLaunch) {
-        // Mark that the app has been launched
         sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
         "welcome"
     } else {
-        // If not the first launch, check the user's login state
         if (auth.currentUser != null) "adminDashboard" else "login"
     }
 
@@ -37,7 +35,7 @@ fun AppNavigation() {
         startDestination = startDestination,
         modifier = Modifier,
         builder = {
-            composable("welcome") { // Changed route name from "Get Started" to "welcome"
+            composable("welcome") {
                 WelcomeScreen(navController)
             }
             composable("login") {
@@ -51,6 +49,12 @@ fun AppNavigation() {
             }
             composable("teachers") {
                 TeachersScreen(navController)
+            }
+            composable("add_student") { // Added route for adding a student
+                AddPersonScreen(navController, personType = "student")
+            }
+            composable("add_teacher") { // Added route for adding a teacher
+                AddPersonScreen(navController, personType = "teacher")
             }
             composable(
                 route = "profile/{personId}/{personType}",

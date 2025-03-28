@@ -18,8 +18,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.1"
+        versionCode = 5
+        versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -74,8 +74,8 @@ dependencies {
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.analytics.ktx)
     testImplementation(libs.junit)
-    implementation(libs.google.play.app.update)
-    implementation(libs.google.play.app.update.ktx)
+    implementation(libs.google.play.app.update) // Keep only one instance
+    implementation(libs.google.play.app.update.ktx) // Keep only one instance
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -84,9 +84,9 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
-    implementation ("androidx.compose.material3:material3:1.3.1")
-    implementation ("androidx.compose.material:material-icons-extended:1.6.8") // Added this
-    implementation ("androidx.navigation:navigation-compose:2.7.7") // Updated this
+    implementation("androidx.compose.material3:material3:1.3.1")
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
+    implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation(libs.androidx.media3.effect)
     implementation(libs.androidx.storage)
     implementation(libs.androidx.core.splashscreen)
@@ -96,6 +96,4 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    implementation(libs.google.play.app.update)
-    implementation(libs.google.play.app.update.ktx)
 }

@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.components.TeacherListItem
@@ -139,4 +141,11 @@ fun TeachersScreen(navController: NavController) {
             }
         }
     )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun TeachersScreenPreview() {
+    val navController = NavController(androidx.compose.ui.platform.LocalContext.current)
+    TeachersScreen(navController)
 }

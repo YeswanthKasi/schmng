@@ -10,6 +10,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -140,3 +142,10 @@ fun StudentsScreen(navController: NavController) {
         }
     )
 }
+
+@Preview
+@Composable
+fun PreviewStudentsScreen(){
+    StudentsScreen(navController = NavController(context = androidx.compose.ui.platform.LocalContext.current))
+}
+
