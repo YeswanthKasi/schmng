@@ -1,6 +1,8 @@
 package com.ecorvi.schmng
 
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -9,169 +11,147 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.ecorvi.schmng.ui.navigation.AppNavigation
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
-import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.InstallStatus
 import com.google.android.play.core.install.model.UpdateAvailability
+import com.google.android.play.core.install.InstallStateUpdatedListener
 
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
+    private var showUpdateDialog by mutableStateOf(false)
+    private var isUpdating by mutableStateOf(false) // 🚀 Shows update progress
     private val MY_REQUEST_CODE = 100
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize the AppUpdateManager
         appUpdateManager = AppUpdateManagerFactory.create(this)
+        checkForUpdates()
 
-        // Set up the update flow
         setContent {
-            var showUpdateDialog by remember { mutableStateOf(false) }
-            var isDownloading by remember { mutableStateOf(false) }
-            var downloadProgress by remember { mutableStateOf(0) }
-
-            // Listener for update state changes
-            val listener = InstallStateUpdatedListener { state ->
-                if (state.installStatus() == InstallStatus.DOWNLOADING) {
-                    isDownloading = true
-                    val bytesDownloaded = state.bytesDownloaded()
-                    val totalBytesToDownload = state.totalBytesToDownload()
-                    downloadProgress = ((bytesDownloaded * 100) / totalBytesToDownload).toInt()
-                } else if (state.installStatus() == InstallStatus.DOWNLOADED) {
-                    isDownloading = false
-                    showUpdateDialog = true
+            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (isUpdating) {
+                    // 🔄 Show a progress indicator when update is in progress
+                    CircularProgressIndicator(modifier = Modifier.padding(16.dp))
+                    Text("Updating... Please wait")
                 }
-            }
 
-            // Register the listener
-            LaunchedEffect(Unit) {
-                appUpdateManager.registerListener(listener)
-            }
-
-            // Check for updates when the app starts
-            LaunchedEffect(Unit) {
-                val appUpdateInfoTask = appUpdateManager.appUpdateInfo
-                appUpdateInfoTask
-                    .addOnSuccessListener { appUpdateInfo ->
-                        if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
-                            && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
-                        ) {
-                            // Start the flexible update
-                            try {
-                                appUpdateManager.startUpdateFlowForResult(
-                                    appUpdateInfo,
-                                    AppUpdateType.FLEXIBLE,
-                                    this@MainActivity,
-                                    MY_REQUEST_CODE
-                                )
-                            } catch (e: Exception) {
-                                // Handle the error (e.g., show a toast or log the error)
-                                android.widget.Toast.makeText(
-                                    this@MainActivity,
-                                    "Failed to start update: ${e.message}",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        // Handle the failure to check for updates
-                        android.widget.Toast.makeText(
-                            this@MainActivity,
-                            "Failed to check for updates: ${e.message}",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                    }
-            }
-
-            // Clean up the listener when the activity is destroyed
-            DisposableEffect(Unit) {
-                onDispose {
-                    appUpdateManager.unregisterListener(listener)
-                }
-            }
-
-            // Show the update dialog when the download is complete
-            if (showUpdateDialog) {
-                AlertDialog(
-                    onDismissRequest = { showUpdateDialog = false },
-                    title = { Text("Update Available") },
-                    text = { Text("A new version of the app has been downloaded. Please install it to continue.") },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                appUpdateManager.completeUpdate()
+                if (showUpdateDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showUpdateDialog = false },
+                        title = { Text("Update Ready") },
+                        text = { Text("A new version has been downloaded. Restart to install.") },
+                        confirmButton = {
+                            Button(onClick = {
                                 showUpdateDialog = false
+                                appUpdateManager.completeUpdate()
+                            }) {
+                                Text("Restart Now")
                             }
-                        ) {
-                            Text("Install Now")
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showUpdateDialog = false }) {
+                                Text("Later")
+                            }
                         }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showUpdateDialog = false }) {
-                            Text("Later")
-                        }
-                    }
-                )
-            }
+                    )
+                }
 
-            // Show download progress if the update is downloading
-            if (isDownloading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Downloading Update: $downloadProgress%", fontSize = 16.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LinearProgressIndicator(progress = downloadProgress / 100f)
+                AppNavigation()
+            }
+        }
+    }
+
+    private fun checkForUpdates() {
+        val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+
+        appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+            when {
+                // Handle IMMEDIATE update if required
+                appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+                        appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE) -> {
+                    try {
+                        appUpdateManager.startUpdateFlowForResult(
+                            appUpdateInfo,
+                            AppUpdateType.IMMEDIATE,
+                            this@MainActivity,
+                            MY_REQUEST_CODE
+                        )
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "Immediate update error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                // Handle FLEXIBLE update with PROGRESS
+                appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+                        appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE) -> {
+                    try {
+                        isUpdating = true // ✅ Show progress
+                        appUpdateManager.startUpdateFlowForResult(
+                            appUpdateInfo,
+                            AppUpdateType.FLEXIBLE,
+                            this@MainActivity,
+                            MY_REQUEST_CODE
+                        )
+                        appUpdateManager.registerListener(installStateListener) // 🔄 Listen for update progress
+                    } catch (e: Exception) {
+                        isUpdating = false
+                        Toast.makeText(this, "Flexible update error: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
+        }.addOnFailureListener { e ->
+            Toast.makeText(this, "Failed to check updates: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
 
-            // Your app's main content
-            AppNavigation()
+    // 🚀 Listen for install progress updates
+    private val installStateListener = InstallStateUpdatedListener { state ->
+        when (state.installStatus()) {
+            InstallStatus.DOWNLOADING -> {
+                isUpdating = true // ✅ Show progress
+            }
+            InstallStatus.DOWNLOADED -> {
+                isUpdating = false
+                showUpdateDialog = true // ✅ Show "Restart Now" popup
+            }
+            InstallStatus.INSTALLED -> {
+                isUpdating = false
+                Toast.makeText(this, "Update installed!", Toast.LENGTH_SHORT).show()
+            }
+            InstallStatus.FAILED -> {
+                isUpdating = false
+                Toast.makeText(this, "Update failed! Try again later.", Toast.LENGTH_LONG).show()
+            }
+            else -> {}
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // Check if a flexible update has been downloaded and is ready to install
         appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
             if (appUpdateInfo.installStatus() == InstallStatus.DOWNLOADED) {
-                setContent {
-                    var showUpdateDialog by remember { mutableStateOf(true) }
-                    if (showUpdateDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showUpdateDialog = false },
-                            title = { Text("Update Available") },
-                            text = { Text("A new version of the app has been downloaded. Please install it to continue.") },
-                            confirmButton = {
-                                Button(
-                                    onClick = {
-                                        appUpdateManager.completeUpdate()
-                                        showUpdateDialog = false
-                                    }
-                                ) {
-                                    Text("Install Now")
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showUpdateDialog = false }) {
-                                    Text("Later")
-                                }
-                            }
-                        )
-                    }
-                    AppNavigation()
-                }
+                showUpdateDialog = true
             }
         }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == MY_REQUEST_CODE) {
+            if (resultCode != RESULT_OK) {
+                isUpdating = false
+                Toast.makeText(this, "Update failed! Please try again.", Toast.LENGTH_LONG).show()
+                checkForUpdates() // Re-check for updates if the user cancels
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        appUpdateManager.unregisterListener(installStateListener) // ✅ Prevent memory leaks
     }
 }

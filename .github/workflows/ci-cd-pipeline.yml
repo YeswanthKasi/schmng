@@ -52,7 +52,6 @@ jobs:
             platform-tools
             platforms;android-35 
             build-tools;33.0.0  
-          
 
       # Step 4: Grant execute permission to the Gradle Wrapper (gradlew)
       - name: Grant execute permission to gradlew
@@ -77,18 +76,21 @@ jobs:
         # Run gradle task 'test'
         run: ./gradlew test
 
-      # Step 8: Build the Release APK and Bundle
+      # Step 8: Build the Release AAB (changed from assembleRelease to bundleRelease)
       - name: Build the project
-        # Run gradle task 'assembleRelease'
-        run: ./gradlew assembleRelease
+        # Run gradle task 'bundleRelease' to generate the AAB
+        run: ./gradlew bundleRelease
         # Set environment variables for signing configurations
         env:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
 
+      # Step 9: Verify the AAB file exists
+      - name: Verify AAB file
+        run: ls -la app/build/outputs/bundle/release/
 
-      # Step 9: Create Git tag
+      # Step 10: Create Git tag
       - name: Create Tag
         # Step id
         id: create_tag
@@ -104,7 +106,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 10: Create GitHub Release and Upload APK to the release
+      # Step 11: Create GitHub Release and Upload APK to the release
+      # Note: This step expects an APK, but we're now building an AAB.
+      # If you still want to upload an APK to the release, you can add './gradlew assembleRelease' back in.
+      # For now, let's skip this step or modify it to upload the AAB instead.
       - name: Create Release
         # Step id
         id: create_release
@@ -116,14 +121,14 @@ jobs:
           # Name of the release
           name: Release v${{ github.run_number }}
           # Description of the release
-          body: "Release of APK version v${{ github.run_number }}"
-          # Path to the APK file
-          files: app/build/outputs/apk/release/app-release.apk
+          body: "Release of AAB version v${{ github.run_number }}"
+          # Path to the AAB file (changed from APK to AAB)
+          files: app/build/outputs/bundle/release/app-release.aab
         # Set environment variable for the token
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 11: Upload App Bundle to Google Play Store
+      # Step 12: Upload App Bundle to Play Store
       - name: Upload App Bundle to Play Store
         # Use the r0adkll action to upload to google play
         uses: r0adkll/upload-google-play@v1
@@ -136,7 +141,7 @@ jobs:
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           # Production track of google play
           track: production
-          # Release status completed
+          # Release status set to completed to send for review
           status: completed
           # App update priority
           inAppUpdatePriority: 0

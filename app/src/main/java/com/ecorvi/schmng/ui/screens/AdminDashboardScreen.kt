@@ -34,7 +34,7 @@ fun AdminDashboardScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
 
     // State for expandable "Manage" section
-    val manageItems = listOf("Classroom", "Students", "Teachers", "Others Staff")
+    val manageItems = listOf( "Students", "Teachers")
     val expandedStates = remember { mutableStateMapOf<String, Boolean>().apply {
         manageItems.forEach { this[it] = false }
     } }
@@ -178,7 +178,7 @@ fun AdminDashboardScreen(navController: NavController) {
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                     label = { Text("Home") }
                 )
-                NavigationBarItem(
+                /*NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = {
                         selectedTab = 1
@@ -216,7 +216,7 @@ fun AdminDashboardScreen(navController: NavController) {
                         )
                     },
                     label = { Text("Chat") }
-                )
+                )*/
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -392,8 +392,8 @@ fun AdminDashboardScreen(navController: NavController) {
                             when (item) {
                                 "Students" -> navController.navigate("students")
                                 "Teachers" -> navController.navigate("teachers")
-                                "Classroom" -> showComingSoonMessage("Classroom")
-                                "Others Staff" -> showComingSoonMessage("Others Staff")
+                                //"Classroom" -> showComingSoonMessage("Classroom")
+                                //"Others Staff" -> showComingSoonMessage("Others Staff")
                             }
                         },
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -582,7 +582,7 @@ fun AdminDashboardScreenFullPreview() {
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                     label = { Text("Home") }
                 )
-                NavigationBarItem(
+                /*NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = {
                         selectedTab = 1
@@ -620,7 +620,7 @@ fun AdminDashboardScreenFullPreview() {
                         )
                     },
                     label = { Text("Chat") }
-                )
+                )*/
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
