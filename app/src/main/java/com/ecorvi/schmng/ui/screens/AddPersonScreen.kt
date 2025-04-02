@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
-import com.ecorvi.schmng.ui.data.InMemoryDatabase
+import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,6 +37,8 @@ fun AddPersonScreen(
     var mobileNo by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var className by remember { mutableStateOf("Class 1") }
+
+    // List of class options
     val classOptions = listOf("Class 1", "Class 2", "Class 3", "Class 4", "Class 5")
 
     Scaffold(
@@ -225,10 +228,9 @@ fun AddPersonScreen(
                 item {
                     Button(
                         onClick = {
-                            // Generate a new ID (for simplicity, use the size of the list)
-                            val newId = if (personType == "student") InMemoryDatabase.studentsList.size + 1 else InMemoryDatabase.teachersList.size + 1
+                            // Generate a new ID (for simplicity, use a random ID or Firestore's automatic ID generation)
                             val newPerson = Person(
-                                id = newId,
+                                id = "",  // Firestore will automatically generate an ID
                                 firstName = firstName,
                                 lastName = lastName,
                                 email = email,
@@ -236,15 +238,33 @@ fun AddPersonScreen(
                                 dateOfBirth = dateOfBirth,
                                 mobileNo = mobileNo,
                                 address = address,
-                                className = className,
+                                className = className,  // Ensure className is a String
                                 sex = gender
                             )
                             if (personType == "student") {
-                                InMemoryDatabase.studentsList.add(newPerson)
+                                FirestoreDatabase.addStudent(
+                                    newPerson,
+                                    onSuccess = {
+                                        Log.d("Firestore", "Student successfully added!")
+                                        navController.popBackStack()
+                                    },
+                                    onFailure = { exception ->
+                                        Log.e("Firestore", "Failed to add student: ${exception.message}")
+                                    }
+                                )
                             } else {
-                                InMemoryDatabase.teachersList.add(newPerson)
+                                FirestoreDatabase.addTeacher(
+                                    newPerson,
+                                    onSuccess = {
+                                        Log.d("Firestore", "Teacher successfully added!")
+                                        navController.popBackStack()
+                                    },
+                                    onFailure = { exception ->
+                                        Log.e("Firestore", "Failed to add teacher: ${exception.message}")
+                                    }
+                                )
                             }
-                            navController.popBackStack()
+
                         },
                         modifier = Modifier
                             .fillMaxWidth()

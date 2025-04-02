@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,43 +16,59 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.ecorvi.schmng.ui.data.InMemoryDatabase
+import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.DocumentSnapshot
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     navController: NavController,
-    personId: Int,
+    personId: String,  // Firestore ID is a String
     personType: String
 ) {
-    // Find the person from the list
-    val personList: MutableList<Person> = if (personType == "student") InMemoryDatabase.studentsList else InMemoryDatabase.teachersList
-    val person = personList.find { it.id == personId } ?: Person(
-        id = 0,
-        firstName = "",
-        lastName = "",
-        email = "",
-        gender = "",
-        dateOfBirth = "",
-        mobileNo = "",
-        address = "",
-        className = "",
-        sex = ""
-    )
-
     // State for editable fields
-    var firstName by remember { mutableStateOf<String>(person.firstName) }
-    var lastName by remember { mutableStateOf<String>(person.lastName) }
-    var email by remember { mutableStateOf<String>(person.email) }
-    var gender by remember { mutableStateOf<String>(person.gender) }
-    var dateOfBirth by remember { mutableStateOf<String>(person.dateOfBirth) }
-    var mobileNo by remember { mutableStateOf<String>(person.mobileNo) }
-    var address by remember { mutableStateOf<String>(person.address) }
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("Male") }
+    var dateOfBirth by remember { mutableStateOf("") }
+    var mobileNo by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+
+    // Fetch the Person data from Firestore when the screen is displayed
+    LaunchedEffect(personId) {
+        // Fetch the person from Firestore based on personType
+        val personRef = if (personType == "student") {
+            FirestoreDatabase.studentsCollection.document(personId)
+        } else {
+            FirestoreDatabase.teachersCollection.document(personId)
+        }
+
+        personRef.get().addOnSuccessListener { documentSnapshot: DocumentSnapshot ->
+            if (documentSnapshot.exists()) {
+                val person = documentSnapshot.toObject(Person::class.java)
+                person?.let {
+                    firstName = it.firstName
+                    lastName = it.lastName
+                    email = it.email
+                    gender = it.gender
+                    dateOfBirth = it.dateOfBirth
+                    mobileNo = it.mobileNo
+                    address = it.address
+                }
+            } else {
+                // Handle document not found
+                Toast.makeText(navController.context, "Person not found", Toast.LENGTH_SHORT).show()
+            }
+        }.addOnFailureListener {
+            Toast.makeText(navController.context, "Error fetching data", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -203,24 +220,34 @@ fun ProfileScreen(
                 item {
                     Button(
                         onClick = {
-                            // Update the person in the list
-                            val updatedPerson = person.copy(
+                            val updatedPerson = Person(
+                                id = personId.toInt().toString(), // Assuming personId is passed as String, convert it to Int
                                 firstName = firstName,
                                 lastName = lastName,
                                 email = email,
                                 gender = gender,
                                 dateOfBirth = dateOfBirth,
                                 mobileNo = mobileNo,
-                                address = address
+                                address = address,
+                                className = "Class 1", // You can modify this based on your requirements
+                                sex = gender
                             )
-                            if (personType == "student") {
-                                val index = InMemoryDatabase.studentsList.indexOf(person)
-                                if (index != -1) InMemoryDatabase.studentsList[index] = updatedPerson
+
+                            // Update the person in Firestore
+                            val personRef = if (personType == "student") {
+                                FirestoreDatabase.studentsCollection.document(personId)
                             } else {
-                                val index = InMemoryDatabase.teachersList.indexOf(person)
-                                if (index != -1) InMemoryDatabase.teachersList[index] = updatedPerson
+                                FirestoreDatabase.teachersCollection.document(personId)
                             }
-                            navController.popBackStack()
+
+                            personRef.set(updatedPerson)
+                                .addOnSuccessListener {
+                                    Toast.makeText(navController.context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                                    navController.popBackStack() // Go back to the previous screen
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(navController.context, "Failed to update profile: $e", Toast.LENGTH_SHORT).show()
+                                }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -237,9 +264,9 @@ fun ProfileScreen(
 
 @Preview(showBackground = true)
 @Composable
-fun ProfileScreenPreview(){
+fun ProfileScreenPreview() {
     // Sample NavController for preview
     val navController = NavController(androidx.compose.ui.platform.LocalContext.current)
 
-    ProfileScreen(navController, 1,"student")
+    ProfileScreen(navController, "1", "student")
 }

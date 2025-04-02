@@ -1,97 +1,123 @@
 package com.ecorvi.schmng.ui.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.ecorvi.schmng.R
 import com.ecorvi.schmng.ui.components.*
-import com.ecorvi.schmng.ui.data.InMemoryDatabase
+import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminDashboardScreen(navController: NavController) {
-    // Firebase Auth instance for logout
     val auth = FirebaseAuth.getInstance()
-
-    // State for expandable "Manage" section
-    val manageItems = listOf( "Students", "Teachers")
+    val manageItems = listOf("Students", "Teachers")
     val expandedStates = remember { mutableStateMapOf<String, Boolean>().apply {
         manageItems.forEach { this[it] = false }
     } }
-
-    // State for bottom navigation
     var selectedTab by remember { mutableIntStateOf(0) }
-
-    // State for dialog visibility and selected category
     var showDialog by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("") }
     var showAddInput by remember { mutableStateOf(false) }
     var showViewList by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
-
-    // State for Snackbar
+    var schedules by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingFees by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
-    // Function to show the "Coming Soon" message
-    fun showComingSoonMessage(feature: String) {
+    // Show snackbar message
+    fun showMessage(message: String) {
         coroutineScope.launch {
-            snackbarHostState.showSnackbar(
-                message = "$feature - Coming Soon!",
-                duration = SnackbarDuration.Short
-            )
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
         }
     }
 
-    // Initialize the in-memory database with sample data (only once)
+    // Fetch data from Firestore
     LaunchedEffect(Unit) {
-        if (InMemoryDatabase.schedulesList.isEmpty()) {
-            InMemoryDatabase.schedulesList.addAll(listOf("Math Class - 10 AM", "Science Class - 11 AM"))
-        }
-        if (InMemoryDatabase.pendingFeesList.isEmpty()) {
-            InMemoryDatabase.pendingFeesList.addAll(listOf("John Doe - $100", "Jane Smith - $50"))
+        FirestoreDatabase.fetchSchedules(
+            onComplete = { fetchedSchedules ->
+                schedules = fetchedSchedules
+                isLoading = false
+            },
+            onFailure = { e ->
+                errorMessage = "Failed to load schedules: ${e.message}"
+                isLoading = false
+            }
+        )
+        FirestoreDatabase.fetchPendingFees(
+            onComplete = { fetchedFees ->
+                pendingFees = fetchedFees
+                isLoading = false
+            },
+            onFailure = { e ->
+                errorMessage = "Failed to load pending fees: ${e.message}"
+                isLoading = false
+            }
+        )
+    }
+
+    // Add item to Firestore and refresh list
+    fun addItem(category: String, item: String) {
+        if (item.isBlank()) return
+        when (category) {
+            "SCHEDULE" -> {
+                FirestoreDatabase.addSchedule(
+                    schedule = item,
+                    onSuccess = {
+                        showMessage("Schedule added successfully")
+                        FirestoreDatabase.fetchSchedules(
+                            onComplete = { schedules = it },
+                            onFailure = { showMessage("Failed to refresh schedules") }
+                        )
+                    },
+                    onFailure = { e ->
+                        showMessage("Error adding schedule: ${e.message}")
+                    }
+                )
+            }
+            "PENDING FEES" -> {
+                FirestoreDatabase.addPendingFee(
+                    fee = item,
+                    onSuccess = {
+                        showMessage("Pending fee added successfully")
+                        FirestoreDatabase.fetchPendingFees(
+                            onComplete = { pendingFees = it },
+                            onFailure = { showMessage("Failed to refresh fees") }
+                        )
+                    },
+                    onFailure = { e ->
+                        showMessage("Error adding fee: ${e.message}")
+                    }
+                )
+            }
         }
     }
 
-    // Function to get the appropriate list based on the category
-    fun getDataList(category: String): List<String> {
-        return when (category) {
-            "SCHEDULE" -> InMemoryDatabase.schedulesList
-            "PENDING FEES" -> InMemoryDatabase.pendingFeesList
+    // Dialog for adding/viewing items
+    if (showDialog) {
+        val dataList = when (selectedCategory) {
+            "SCHEDULE" -> schedules
+            "PENDING FEES" -> pendingFees
             else -> emptyList()
         }
-    }
-
-    // Function to add an item to the appropriate list
-    fun addItem(category: String, item: String) {
-        when (category) {
-            "SCHEDULE" -> InMemoryDatabase.schedulesList.add(item)
-            "PENDING FEES" -> InMemoryDatabase.pendingFeesList.add(item)
-        }
-    }
-
-    // Show the dialog for SCHEDULE and PENDING FEES
-    if (showDialog) {
         OptionsDialog(
             category = selectedCategory,
             onDismiss = {
@@ -100,696 +126,160 @@ fun AdminDashboardScreen(navController: NavController) {
                 showViewList = false
                 inputText = ""
             },
-            onAddClick = {
-                showAddInput = true
-                showViewList = false
-            },
-            onViewClick = {
-                showViewList = true
-                showAddInput = false
-            },
+            onAddClick = { showAddInput = true; showViewList = false },
+            onViewClick = { showViewList = true; showAddInput = false },
             showAddInput = showAddInput,
             showViewList = showViewList,
             inputText = inputText,
             onInputChange = { inputText = it },
             onConfirmAdd = { newItem ->
-                if (newItem.isNotBlank()) {
-                    addItem(selectedCategory, newItem)
-                }
+                addItem(selectedCategory, newItem)
                 showAddInput = false
                 showDialog = false
                 inputText = ""
             },
-            dataList = getDataList(selectedCategory)
+            dataList = dataList
         )
     }
 
     Scaffold(
-        modifier = Modifier,
         topBar = {
             TopAppBar(
                 title = {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "DASHBOARD",
-                            color = Color.Black,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("DASHBOARD", color = Color.Black, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { /* Optionally handle navigation */ }) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ecorvilogo),
-                            contentDescription = "EI Logo",
-                            modifier = Modifier.size(40.dp)
-                        )
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Default.Menu, contentDescription = "Menu")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Handle notifications */ }) {
+                    IconButton(onClick = { /* Notifications */ }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notifications")
                     }
                     IconButton(onClick = {
                         auth.signOut()
-                        navController.navigate("login") {
-                            popUpTo("adminDashboard") { inclusive = true }
-                        }
+                        navController.navigate("login") { popUpTo("adminDashboard") { inclusive = true } }
                     }) {
                         Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = Color.White
-            ) {
+            NavigationBar(containerColor = Color.White) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                     label = { Text("Home") }
                 )
-                /*NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = {
-                        selectedTab = 1
-                        showComingSoonMessage("Profile")
-                    },
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                    label = { Text("Profile") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = {
-                        selectedTab = 2
-                        showComingSoonMessage("Analytics")
-                    },
-                    icon = {
-                        Image(
-                            painter = painterResource(id = R.drawable.analytics_icon),
-                            contentDescription = "Analytics",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    label = { Text("Analytics") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = {
-                        selectedTab = 3
-                        showComingSoonMessage("Chat")
-                    },
-                    icon = {
-                        Image(
-                            painter = painterResource(id = R.drawable.chat_icon),
-                            contentDescription = "Chat",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    label = { Text("Chat") }
-                )*/
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = { /* Empty */ },
-        floatingActionButtonPosition = FabPosition.End,
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = contentColorFor(MaterialTheme.colorScheme.background),
         content = { padding ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White)
-                    .padding(padding),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Search Bar
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        OutlinedTextField(
-                            value = "",
-                            onValueChange = { /* Handle search */ },
-                            placeholder = { Text("Search") },
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (errorMessage != null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(errorMessage ?: "Unknown error", color = Color.Red)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White)
+                        .padding(padding),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            OutlinedTextField(
+                                value = "",
+                                onValueChange = {},
+                                placeholder = { Text("Search") },
+                                modifier = Modifier.width(355.dp),
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") }
+                            )
+                        }
+                    }
+                    item {
+                        Row(
                             modifier = Modifier
-                                .width(355.dp)
-                                .height(58.dp)
-                                .clip(RoundedCornerShape(28.dp)),
-                            leadingIcon = {
-                                Icon(Icons.Default.Search, contentDescription = "Search")
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SummaryCard(
+                                title = "TOTAL STUDENTS",
+                                icon = Icons.Default.Person,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navController.navigate("students") }
+                            )
+                            SummaryCard(
+                                title = "TOTAL TEACHERS",
+                                icon = Icons.Default.Person,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navController.navigate("teachers") }
+                            )
+                        }
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SummaryCard(
+                                title = "SCHEDULE",
+                                icon = Icons.Default.Schedule,
+                                modifier = Modifier.weight(1f),
+                                onClick = { selectedCategory = "SCHEDULE"; showDialog = true }
+                            )
+                            SummaryCard(
+                                title = "PENDING FEES",
+                                icon = Icons.Default.Money,
+                                modifier = Modifier.weight(1f),
+                                onClick = { selectedCategory = "PENDING FEES"; showDialog = true }
+                            )
+                        }
+                    }
+                    item {
+                        Text(
+                            text = "MANAGE",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    items(manageItems) { item ->
+                        ExpandableItem(
+                            title = item,
+                            isExpanded = expandedStates[item] == true,
+                            onExpandClick = { expandedStates[item] = !(expandedStates[item] == true) },
+                            onItemClick = {
+                                when (item) {
+                                    "Students" -> navController.navigate("students")
+                                    "Teachers" -> navController.navigate("teachers")
+                                }
                             },
-                            colors = TextFieldDefaults.colors(
-                                focusedIndicatorColor = Color(0xFF1F41BB),
-                                unfocusedIndicatorColor = Color.Gray,
-                                unfocusedContainerColor = Color(0xFFECE6F0),
-                                focusedContainerColor = Color(0xFFECE6F0)
-                            )
+                            modifier = Modifier.padding(horizontal = 16.dp)
                         )
                     }
-                }
-
-                // Summary Cards
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        SummaryCard(
-                            title = "TOTAL STUDENTS",
-                            icon = Icons.Default.Person,
-                            modifier = Modifier.weight(1f),
-                            onClick = { category ->
-                                if (category == "TOTAL STUDENTS") {
-                                    navController.navigate("students")
-                                }
-                            }
-                        )
-                        SummaryCard(
-                            title = "TOTAL TEACHERS",
-                            image = painterResource(id = R.drawable.teacher_icon),
-                            modifier = Modifier.weight(1f),
-                            onClick = { category ->
-                                if (category == "TOTAL TEACHERS") {
-                                    navController.navigate("teachers")
-                                }
-                            }
-                        )
-                    }
-                }
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        SummaryCard(
-                            title = "SCHEDULE",
-                            image = painterResource(id = R.drawable.schedule),
-                            modifier = Modifier.weight(1f),
-                            onClick = { category ->
-                                selectedCategory = category
-                                showDialog = true
-                            }
-                        )
-                        SummaryCard(
-                            title = "PENDING FEES",
-                            image = painterResource(id = R.drawable.money),
-                            modifier = Modifier.weight(1f),
-                            onClick = { category ->
-                                selectedCategory = category
-                                showDialog = true
-                            }
-                        )
-                    }
-                }
-
-                // Attendance Pie Chart (Simulated)
-                item {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        Text(
-                            text = "ATTENDANCE",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(150.dp)
-                                    .background(Color(0xFFE91E63), shape = CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text("86 - 43.4%", color = Color(0xFFE91E63))
-                                Text("31 - 15.7%", color = Color(0xFF2196F3))
-                                Text("35 - 17.7%", color = Color(0xFF3F51B5))
-                                Text("46 - 23.2%", color = Color(0xFF795548))
-                            }
-                        }
-                    }
-                }
-
-                // Attendance Bar Chart (Simulated)
-                item {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        Text(
-                            text = "ATTENDANCE",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Bar(height = 30.dp, percentage = "13.7%")
-                            Bar(height = 40.dp, percentage = "17.7%")
-                            Bar(height = 50.dp, percentage = "23.2%")
-                            Bar(height = 80.dp, percentage = "43.4%")
-                        }
-                    }
-                }
-
-                // Manage Section
-                item {
-                    Text(
-                        text = "MANAGE",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
-                items(manageItems) { item ->
-                    ExpandableItem(
-                        title = item,
-                        isExpanded = expandedStates[item] == true,
-                        onExpandClick = {
-                            expandedStates[item] = !(expandedStates[item] == true)
-                        },
-                        onItemClick = {
-                            when (item) {
-                                "Students" -> navController.navigate("students")
-                                "Teachers" -> navController.navigate("teachers")
-                                //"Classroom" -> showComingSoonMessage("Classroom")
-                                //"Others Staff" -> showComingSoonMessage("Others Staff")
-                            }
-                        },
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
                 }
             }
         }
     )
 }
 
-// Update the preview composables to include the SnackbarHost
-@OptIn(ExperimentalMaterial3Api::class)
 @Preview(showBackground = true)
 @Composable
-fun AdminDashboardScreenPreview() {
-    val snackbarHostState = remember { SnackbarHostState() }
-    Scaffold(
-        modifier = Modifier,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ecorvilogo),
-                            contentDescription = "EI Logo",
-                            modifier = Modifier.size(40.dp)
-                        )
-                        Spacer(modifier = Modifier.width(35.dp))
-                        Text(
-                            text = "DASHBOARD",
-                            color = Color.Black,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* Handle notifications */ }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications")
-                    }
-                    IconButton(onClick = { /* Handle logout */ }) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                )
-            )
-        },
-        bottomBar = { /* Empty for preview */ },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = { /* Empty for preview */ },
-        floatingActionButtonPosition = FabPosition.End,
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = contentColorFor(MaterialTheme.colorScheme.background),
-        content = { padding ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White)
-                    .padding(padding),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        OutlinedTextField(
-                            value = "",
-                            onValueChange = { /* Handle search */ },
-                            placeholder = { Text("Search") },
-                            modifier = Modifier
-                                .width(355.dp)
-                                .height(58.dp)
-                                .clip(RoundedCornerShape(28.dp)),
-                            leadingIcon = {
-                                Icon(Icons.Default.Search, contentDescription = "Search")
-                            },
-                            colors = TextFieldDefaults.colors(
-                                focusedIndicatorColor = Color(0xFF1F41BB),
-                                unfocusedIndicatorColor = Color.Gray,
-                                unfocusedContainerColor = Color(0xFFECE6F0),
-                                focusedContainerColor = Color(0xFFECE6F0)
-                            )
-                        )
-                    }
-                }
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        SummaryCard(
-                            title = "TOTAL STUDENTS",
-                            icon = Icons.Default.Person,
-                            modifier = Modifier.weight(1f),
-                            onClick = { /* No-op for preview */ }
-                        )
-                        SummaryCard(
-                            title = "TOTAL TEACHERS",
-                            image = painterResource(id = R.drawable.teacher_icon),
-                            modifier = Modifier.weight(1f),
-                            onClick = { /* No-op for preview */ }
-                        )
-                    }
-                }
-            }
-        }
-    )
-}
+fun PreviewAdminDashboardScreen() {
+    AdminDashboardScreen(navController = NavController(LocalContext.current)) }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Preview(showBackground = true, heightDp = 800)
-@Composable
-fun AdminDashboardScreenFullPreview() {
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
-
-    // Mock state for expandable "Manage" section
-    val manageItems = listOf("Classroom", "Students", "Teachers", "Others Staff")
-    val expandedStates = remember { mutableStateMapOf<String, Boolean>().apply {
-        manageItems.forEach { this[it] = false }
-        this["Students"] = true // Mock one item as expanded
-    } }
-
-    // Mock state for bottom navigation
-    var selectedTab by remember { mutableIntStateOf(0) }
-
-    // Function to show the "Coming Soon" message
-    fun showComingSoonMessage(feature: String) {
-        coroutineScope.launch {
-            snackbarHostState.showSnackbar(
-                message = "$feature - Coming Soon!",
-                duration = SnackbarDuration.Short
-            )
-        }
-    }
-
-    Scaffold(
-        modifier = Modifier,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ecorvilogo),
-                            contentDescription = "EI Logo",
-                            modifier = Modifier.size(40.dp)
-                        )
-                        Spacer(modifier = Modifier.width(50.dp))
-                        Text(
-                            text = "DASHBOARD",
-                            color = Color.Black,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* Handle notifications */ }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications")
-                    }
-                    IconButton(onClick = { /* Handle logout */ }) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                )
-            )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = Color.White
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home") }
-                )
-                /*NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = {
-                        selectedTab = 1
-                        showComingSoonMessage("Profile")
-                    },
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                    label = { Text("Profile") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = {
-                        selectedTab = 2
-                        showComingSoonMessage("Analytics")
-                    },
-                    icon = {
-                        Image(
-                            painter = painterResource(id = R.drawable.analytics_icon),
-                            contentDescription = "Analytics",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    label = { Text("Analytics") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = {
-                        selectedTab = 3
-                        showComingSoonMessage("Chat")
-                    },
-                    icon = {
-                        Image(
-                            painter = painterResource(id = R.drawable.chat_icon),
-                            contentDescription = "Chat",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    label = { Text("Chat") }
-                )*/
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = { /* Empty for preview */ },
-        floatingActionButtonPosition = FabPosition.End,
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = contentColorFor(MaterialTheme.colorScheme.background),
-        content = { padding ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White)
-                    .padding(padding),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Search Bar
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        OutlinedTextField(
-                            value = "",
-                            onValueChange = { /* Handle search */ },
-                            placeholder = { Text("Search") },
-                            modifier = Modifier
-                                .width(355.dp)
-                                .height(58.dp)
-                                .clip(RoundedCornerShape(28.dp)),
-                            leadingIcon = {
-                                Icon(Icons.Default.Search, contentDescription = "Search")
-                            },
-                            colors = TextFieldDefaults.colors(
-                                focusedIndicatorColor = Color(0xFF1F41BB),
-                                unfocusedIndicatorColor = Color.Gray,
-                                unfocusedContainerColor = Color(0xFFECE6F0),
-                                focusedContainerColor = Color(0xFFECE6F0)
-                            )
-                        )
-                    }
-                }
-
-                // Summary Cards
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        SummaryCard(
-                            title = "TOTAL STUDENTS",
-                            icon = Icons.Default.Person,
-                            modifier = Modifier.weight(1f),
-                            onClick = { /* No-op for preview */ }
-                        )
-                        SummaryCard(
-                            title = "TOTAL TEACHERS",
-                            image = painterResource(id = R.drawable.teacher_icon),
-                            modifier = Modifier.weight(1f),
-                            onClick = { /* No-op for preview */ }
-                        )
-                    }
-                }
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        SummaryCard(
-                            title = "SCHEDULE",
-                            image = painterResource(id = R.drawable.schedule),
-                            modifier = Modifier.weight(1f),
-                            onClick = { /* No-op for preview */ }
-                        )
-                        SummaryCard(
-                            title = "PENDING FEES",
-                            image = painterResource(id = R.drawable.money),
-                            modifier = Modifier.weight(1f),
-                            onClick = { /* No-op for preview */ }
-                        )
-                    }
-                }
-
-                // Attendance Pie Chart (Simulated)
-                item {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        Text(
-                            text = "ATTENDANCE",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(150.dp)
-                                    .background(Color(0xFFE91E63), shape = CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text("86 - 43.4%", color = Color(0xFFE91E63))
-                                Text("31 - 15.7%", color = Color(0xFF2196F3))
-                                Text("35 - 17.7%", color = Color(0xFF3F51B5))
-                                Text("46 - 23.2%", color = Color(0xFF795548))
-                            }
-                        }
-                    }
-                }
-
-                // Attendance Bar Chart (Simulated)
-                item {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        Text(
-                            text = "ATTENDANCE",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Bar(height = 30.dp, percentage = "13.7%")
-                            Bar(height = 40.dp, percentage = "17.7%")
-                            Bar(height = 50.dp, percentage = "23.2%")
-                            Bar(height = 80.dp, percentage = "43.4%")
-                        }
-                    }
-                }
-
-                // Manage Section
-                item {
-                    Text(
-                        text = "MANAGE",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
-                items(manageItems) { item ->
-                    ExpandableItem(
-                        title = item,
-                        isExpanded = expandedStates[item] == true,
-                        onExpandClick = {
-                            expandedStates[item] = !(expandedStates[item] == true)
-                        },
-                        onItemClick = {
-                            when (item) {
-                                "Students" -> {}
-                                "Teachers" -> {}
-                                "Classroom" -> showComingSoonMessage("Classroom")
-                                "Others Staff" -> showComingSoonMessage("Others Staff")
-                            }
-                        },
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
-            }
-        }
-    )
-}

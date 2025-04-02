@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,28 +11,51 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.components.StudentListItem
-import com.ecorvi.schmng.ui.data.InMemoryDatabase.studentsList
+import com.ecorvi.schmng.ui.data.FirestoreDatabase
+import com.ecorvi.schmng.ui.data.model.Person
+import com.google.firebase.firestore.ListenerRegistration
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudentsScreen(navController: NavController) {
-    // State for search query and selected class
     var searchQuery by remember { mutableStateOf("") }
-    var selectedClass by remember { mutableStateOf("All Classes") }
-    val classOptions = listOf("All Classes", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5")
+    var studentsList by remember { mutableStateOf<List<Person>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
 
-    // Filter the students list based on search query and selected class
+    // Start listening for real-time updates when screen loads
+    LaunchedEffect(Unit) {
+        listenerRegistration = FirestoreDatabase.listenForStudentUpdates(
+            onUpdate = { fetchedStudents ->
+                studentsList = fetchedStudents
+                isLoading = false
+                Log.d("StudentsScreen", "Real-time student updates: $fetchedStudents")
+            },
+            onError = { exception ->
+                Log.e("Firestore", "Error fetching students in real-time", exception)
+                isLoading = false
+            }
+        )
+    }
+
+    // Stop listening when the composable is removed from the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            listenerRegistration?.remove()
+            Log.d("StudentsScreen", "Stopped listening for real-time student updates")
+        }
+    }
+
     val filteredStudents = studentsList.filter { student ->
-        (selectedClass == "All Classes" || student.className == selectedClass) &&
-                (student.firstName.contains(searchQuery, ignoreCase = true) ||
-                        student.lastName.contains(searchQuery, ignoreCase = true))
+        student.firstName.contains(searchQuery, ignoreCase = true) ||
+                student.lastName.contains(searchQuery, ignoreCase = true)
     }
 
     Scaffold(
@@ -44,7 +68,7 @@ fun StudentsScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Handle filter or other actions */ }) {
+                    IconButton(onClick = { /* Future: Add Filters */ }) {
                         Icon(Icons.Default.FilterList, contentDescription = "Filter")
                     }
                 },
@@ -60,92 +84,84 @@ fun StudentsScreen(navController: NavController) {
             }
         },
         content = { padding ->
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.White)
-                    .padding(padding),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(padding)
             ) {
                 // Search Bar
-                item {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search students") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .clip(RoundedCornerShape(28.dp)),
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = "Search")
-                        },
-                        colors = TextFieldDefaults.colors(
-                            focusedIndicatorColor = Color(0xFF1F41BB),
-                            unfocusedIndicatorColor = Color.Gray,
-                            unfocusedContainerColor = Color(0xFFECE6F0),
-                            focusedContainerColor = Color(0xFFECE6F0)
-                        )
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search students") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(28.dp)),
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedIndicatorColor = Color(0xFF1F41BB),
+                        unfocusedIndicatorColor = Color.Gray,
+                        unfocusedContainerColor = Color(0xFFECE6F0),
+                        focusedContainerColor = Color(0xFFECE6F0)
                     )
-                }
+                )
 
-                // Class Dropdown
-                item {
-                    ExposedDropdownMenuBox(
-                        expanded = false,
-                        onExpandedChange = { /* Handle dropdown expansion if needed */ },
+                // Student List
+                if (isLoading) {
+                    CircularProgressIndicator(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
+                            .fillMaxSize()
+                            .padding(top = 50.dp),
+                        color = Color(0xFF1F41BB)
+                    )
+                } else if (filteredStudents.isEmpty()) {
+                    Text(
+                        text = "No students found",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 50.dp),
+                        color = Color.Gray
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White)
+                            .padding(top = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        OutlinedTextField(
-                            value = selectedClass,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Select Class") },
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = false)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = false,
-                            onDismissRequest = {}
-                        ) {
-                            classOptions.forEach { className ->
-                                DropdownMenuItem(
-                                    text = { Text(className) },
-                                    onClick = {
-                                        selectedClass = className
-                                    }
-                                )
-                            }
+                        items(filteredStudents) { student ->
+                            StudentListItem(
+                                student = student,
+                                onViewClick = { navController.navigate("profile/${student.id}/student") },
+                                onDeleteClick = {
+                                    FirestoreDatabase.deleteStudent(
+                                        student.id,
+                                        onSuccess = {
+                                            studentsList = studentsList.filter { it.id != student.id } // Update list
+                                        },
+                                        onFailure = { exception ->
+                                            Log.e("Firestore", "Failed to delete student: ${exception.message}")
+                                        }
+                                    )
+                                }
+                            )
                         }
                     }
-                }
-
-                // Students List
-                items(filteredStudents) { student ->
-                    StudentListItem(
-                        student = student,
-                        onViewClick = {
-                            navController.navigate("profile/${student.id}/student")
-                        },
-                        onDeleteClick = {
-                            studentsList.remove(student)
-                        }
-                    )
                 }
             }
         }
     )
 }
 
+
+
 @Preview
 @Composable
-fun PreviewStudentsScreen(){
-    StudentsScreen(navController = NavController(context = androidx.compose.ui.platform.LocalContext.current))
+fun PreviewStudentsScreen() {
+    StudentsScreen(navController = NavController(LocalContext.current))
 }
-

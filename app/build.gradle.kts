@@ -17,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 35
-        versionCode = 11
-        versionName = "1.9"
+        versionCode = 12
+        versionName = "1.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -58,6 +58,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.compose.material3:material3:1.3.1") // Ensure you use the latest stable version
     implementation ("com.google.android.play:app-update:2.1.0")
     implementation ("com.google.android.play:app-update-ktx:2.1.0")
     implementation(libs.androidx.core.ktx)
@@ -73,7 +74,9 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth.ktx)
     implementation(libs.firebase.firestore.ktx)
+    implementation("com.google.firebase:firebase-firestore-ktx:24.0.0")
     implementation(libs.firebase.analytics.ktx)
+    implementation(libs.firebase.firestore)
     testImplementation(libs.junit)
     implementation(libs.google.play.app.update) // Keep only one instance
     implementation(libs.google.play.app.update.ktx) // Keep only one instance
@@ -86,7 +89,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation("androidx.compose.material3:material3:1.3.1")
-    implementation("androidx.compose.material:material-icons-extended:1.6.8")
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation(libs.androidx.media3.effect)
     implementation(libs.androidx.storage)

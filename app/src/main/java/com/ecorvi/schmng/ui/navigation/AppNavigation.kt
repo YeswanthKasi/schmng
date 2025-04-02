@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.navigation
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -10,7 +11,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.ecorvi.schmng.ui.screens.*
 import com.google.firebase.auth.FirebaseAuth
-import android.content.Context
 
 @Composable
 fun AppNavigation() {
@@ -33,40 +33,39 @@ fun AppNavigation() {
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        modifier = Modifier,
-        builder = {
-            composable("welcome") {
-                WelcomeScreen(navController)
-            }
-            composable("login") {
-                LoginScreen(navController)
-            }
-            composable("adminDashboard") {
-                AdminDashboardScreen(navController)
-            }
-            composable("students") {
-                StudentsScreen(navController)
-            }
-            composable("teachers") {
-                TeachersScreen(navController)
-            }
-            composable("add_student") { // Added route for adding a student
-                AddPersonScreen(navController, personType = "student")
-            }
-            composable("add_teacher") { // Added route for adding a teacher
-                AddPersonScreen(navController, personType = "teacher")
-            }
-            composable(
-                route = "profile/{personId}/{personType}",
-                arguments = listOf(
-                    navArgument("personId") { type = NavType.IntType },
-                    navArgument("personType") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val personId = backStackEntry.arguments?.getInt("personId") ?: 0
-                val personType = backStackEntry.arguments?.getString("personType") ?: "student"
-                ProfileScreen(navController, personId, personType)
-            }
+        modifier = Modifier
+    ) {
+        composable("welcome") {
+            WelcomeScreen(navController)
         }
-    )
+        composable("login") {
+            LoginScreen(navController)
+        }
+        composable("adminDashboard") {
+            AdminDashboardScreen(navController)
+        }
+        composable("students") {
+            StudentsScreen(navController)
+        }
+        composable("teachers") {
+            TeachersScreen(navController)
+        }
+        composable("add_student") { // Added route for adding a student
+            AddPersonScreen(navController, personType = "student")
+        }
+        composable("add_teacher") { // Added route for adding a teacher
+            AddPersonScreen(navController, personType = "teacher")
+        }
+        composable(
+            route = "profile/{personId}/{personType}",
+            arguments = listOf(
+                navArgument("personId") { type = NavType.IntType },
+                navArgument("personType") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val personId = backStackEntry.arguments?.getInt("personId") ?: 0
+            val personType = backStackEntry.arguments?.getString("personType") ?: "student"
+            ProfileScreen(navController, personId.toString(), personType)
+        }
+    }
 }
