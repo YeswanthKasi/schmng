@@ -47,6 +47,7 @@ fun LoginScreen(navController: NavController) {
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.FillBounds
         )
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -126,7 +127,9 @@ fun LoginScreen(navController: NavController) {
                 color = Color(0xFF1F41BB),
                 modifier = Modifier
                     .align(Alignment.End)
-                    .clickable { /* Handle Forgot Password */ }
+                    .clickable {
+                        // TODO: Forgot Password logic
+                    }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -174,7 +177,7 @@ fun LoginScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                IconButton(onClick = { /* Handle Google Sign-In */ }) {
+                IconButton(onClick = { /* TODO: Google Sign-In */ }) {
                     Image(
                         painter = painterResource(id = R.drawable.google),
                         contentDescription = "Google Sign-In",
@@ -182,7 +185,7 @@ fun LoginScreen(navController: NavController) {
                     )
                 }
 
-                IconButton(onClick = { /* Handle Facebook Sign-In */ }) {
+                IconButton(onClick = { /* TODO: Facebook Sign-In */ }) {
                     Image(
                         painter = painterResource(id = R.drawable.facebook),
                         contentDescription = "Facebook Sign-In",
@@ -190,7 +193,7 @@ fun LoginScreen(navController: NavController) {
                     )
                 }
 
-                IconButton(onClick = { /* Handle Apple Sign-In */ }) {
+                IconButton(onClick = { /* TODO: Apple Sign-In */ }) {
                     Image(
                         painter = painterResource(id = R.drawable.apple),
                         contentDescription = "Apple Sign-In",
@@ -212,7 +215,7 @@ fun LoginUser(
     auth.signInWithEmailAndPassword(email, password)
         .addOnCompleteListener { task ->
             if (task.isSuccessful) {
-                navController.navigate("adminDashboard") { // Changed from "admin_dashboard"
+                navController.navigate("adminDashboard") {
                     popUpTo("login") { inclusive = true }
                 }
                 onLoginResult(true, null)

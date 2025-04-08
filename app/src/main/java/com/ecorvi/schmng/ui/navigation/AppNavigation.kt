@@ -1,33 +1,24 @@
 package com.ecorvi.schmng.ui.navigation
 
-import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.ecorvi.schmng.ui.screens.*
-import com.google.firebase.auth.FirebaseAuth
 
 @Composable
-fun AppNavigation() {
-    val navController = rememberNavController()
-    val auth = FirebaseAuth.getInstance()
-    val context = LocalContext.current
-
-    // Use SharedPreferences to track if this is the first launch
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val isFirstLaunch = sharedPreferences.getBoolean("is_first_launch", true)
-
-    // Determine the start destination
-    val startDestination = if (isFirstLaunch) {
-        sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
-        "welcome"
-    } else {
-        if (auth.currentUser != null) "adminDashboard" else "login"
+fun AppNavigation(
+    navController: NavHostController,
+    isUserLoggedIn: Boolean,
+    isFirstLaunch: Boolean
+) {
+    val startDestination = when {
+        isFirstLaunch -> "welcome"
+        isUserLoggedIn -> "adminDashboard"
+        else -> "login"
     }
 
     NavHost(
@@ -50,16 +41,16 @@ fun AppNavigation() {
         composable("teachers") {
             TeachersScreen(navController)
         }
-        composable("add_student") { // Added route for adding a student
+        composable("add_student") {
             AddPersonScreen(navController, personType = "student")
         }
-        composable("add_teacher") { // Added route for adding a teacher
+        composable("add_teacher") {
             AddPersonScreen(navController, personType = "teacher")
         }
         composable(
             route = "profile/{personId}/{personType}",
             arguments = listOf(
-                navArgument("personId") { type = NavType.StringType }, // ✅ Changed to String
+                navArgument("personId") { type = NavType.StringType },
                 navArgument("personType") { type = NavType.StringType }
             )
         ) { backStackEntry ->
@@ -67,6 +58,5 @@ fun AppNavigation() {
             val personType = backStackEntry.arguments?.getString("personType") ?: "student"
             ProfileScreen(navController, personId, personType)
         }
-
     }
 }

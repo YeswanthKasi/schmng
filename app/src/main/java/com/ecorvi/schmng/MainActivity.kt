@@ -1,5 +1,7 @@
 package com.ecorvi.schmng
 
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
@@ -11,19 +13,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.ui.navigation.AppNavigation
-import com.google.android.play.core.appupdate.AppUpdateManager
-import com.google.android.play.core.appupdate.AppUpdateManagerFactory
-import com.google.android.play.core.install.model.AppUpdateType
-import com.google.android.play.core.install.model.InstallStatus
-import com.google.android.play.core.install.model.UpdateAvailability
+import com.ecorvi.schmng.ui.theme.SchmngTheme
+import com.google.android.play.core.appupdate.*
+import com.google.android.play.core.install.model.*
 import com.google.android.play.core.install.InstallStateUpdatedListener
+import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
-    private var showUpdateDialog by mutableStateOf(false)
-    private var isUpdating by mutableStateOf(false) // 🚀 Shows update progress
     private val MY_REQUEST_CODE = 100
+
+    private var showUpdateDialog by mutableStateOf(false)
+    private var isUpdating by mutableStateOf(false)
+
+    private var isUserLoggedIn by mutableStateOf(false)
+    private var isFirstLaunch by mutableStateOf(true)
+
+    private lateinit var navController: NavHostController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,136 +40,140 @@ class MainActivity : ComponentActivity() {
         appUpdateManager = AppUpdateManagerFactory.create(this)
         checkForUpdates()
 
-        setContent {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (isUpdating) {
-                    CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-                    Text("Updating... Please wait")
-                }
+        val sharedPrefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        isFirstLaunch = sharedPrefs.getBoolean("is_first_launch", true)
+        if (isFirstLaunch) {
+            sharedPrefs.edit().putBoolean("is_first_launch", false).apply()
+        }
 
-                if (showUpdateDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showUpdateDialog = false },
-                        title = { Text("Update Ready") },
-                        text = { Text("A new version has been downloaded. Restart to install.") },
-                        confirmButton = {
-                            Button(onClick = {
-                                showUpdateDialog = false
-                                appUpdateManager.completeUpdate()
-                            }) {
-                                Text("Restart Now")
+        isUserLoggedIn = FirebaseAuth.getInstance().currentUser != null
+
+        setContent {
+            SchmngTheme {
+                navController = rememberNavController()
+
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (isUpdating) {
+                        CircularProgressIndicator(modifier = Modifier.padding(16.dp))
+                        Text("Updating... Please wait")
+                    }
+
+                    if (showUpdateDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showUpdateDialog = false },
+                            title = { Text("Update Ready") },
+                            text = { Text("A new version has been downloaded. Restart to install.") },
+                            confirmButton = {
+                                Button(onClick = {
+                                    showUpdateDialog = false
+                                    appUpdateManager.completeUpdate()
+                                }) {
+                                    Text("Restart Now")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showUpdateDialog = false }) {
+                                    Text("Later")
+                                }
                             }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showUpdateDialog = false }) {
-                                Text("Later")
-                            }
-                        }
+                        )
+                    }
+
+                    AppNavigation(
+                        navController = navController,
+                        isUserLoggedIn = if (isFirstLaunch) false else isUserLoggedIn,
+                        isFirstLaunch = isFirstLaunch
                     )
                 }
+            }
+        }
+    }
 
-                AppNavigation()
+    override fun onStart() {
+        super.onStart()
+        val user = FirebaseAuth.getInstance().currentUser
+
+        if (user != null && ::navController.isInitialized) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute != "adminDashboard") {
+                navController.navigate("adminDashboard") {
+                    popUpTo("login") { inclusive = true }
+                }
             }
         }
     }
 
     private fun checkForUpdates() {
-        val packageManager = applicationContext.packageManager
-        val installer = packageManager.getInstallerPackageName(packageName)
-
-        // 🚀 Skip update check if app is sideloaded (not installed from Play Store)
+        val installer = applicationContext.packageManager.getInstallerPackageName(packageName)
         if (installer != "com.android.vending") {
-            Toast.makeText(
-                this,
-                "Updates disabled: App not installed from Play Store.",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "Updates disabled: App not installed from Play Store.", Toast.LENGTH_LONG).show()
             return
         }
 
-        val appUpdateInfoTask = appUpdateManager.appUpdateInfo
-
-        appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
             when {
-                // IMMEDIATE UPDATE
                 appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
                         appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE) -> {
                     try {
                         appUpdateManager.startUpdateFlowForResult(
                             appUpdateInfo,
                             AppUpdateType.IMMEDIATE,
-                            this@MainActivity,
+                            this,
                             MY_REQUEST_CODE
                         )
                     } catch (e: Exception) {
-                        Toast.makeText(
-                            this,
-                            "Immediate update error: ${e.message}",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(this, "Immediate update error: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
 
-                // FLEXIBLE UPDATE
                 appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
                         appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE) -> {
                     try {
-                        isUpdating = true // ✅ Show progress
+                        isUpdating = true
                         appUpdateManager.startUpdateFlowForResult(
                             appUpdateInfo,
                             AppUpdateType.FLEXIBLE,
-                            this@MainActivity,
+                            this,
                             MY_REQUEST_CODE
                         )
-                        appUpdateManager.registerListener(installStateListener) // 🔄 Listen for update progress
+                        appUpdateManager.registerListener(installStateListener)
                     } catch (e: Exception) {
                         isUpdating = false
-                        Toast.makeText(
-                            this,
-                            "Flexible update error: ${e.message}",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(this, "Flexible update error: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
-        }.addOnFailureListener { e ->
-            Toast.makeText(this, "Failed to check updates: ${e.message}", Toast.LENGTH_LONG).show()
+        }.addOnFailureListener {
+            Toast.makeText(this, "Update check failed: ${it.message}", Toast.LENGTH_LONG).show()
         }
     }
 
-    // 🚀 Listen for install progress updates
     private val installStateListener = InstallStateUpdatedListener { state ->
         when (state.installStatus()) {
-            InstallStatus.DOWNLOADING -> {
-                isUpdating = true // ✅ Show progress
-            }
-
+            InstallStatus.DOWNLOADING -> isUpdating = true
             InstallStatus.DOWNLOADED -> {
                 isUpdating = false
-                showUpdateDialog = true // ✅ Show "Restart Now" popup
+                showUpdateDialog = true
             }
-
             InstallStatus.INSTALLED -> {
                 isUpdating = false
                 Toast.makeText(this, "Update installed!", Toast.LENGTH_SHORT).show()
             }
-
             InstallStatus.FAILED -> {
                 isUpdating = false
-                Toast.makeText(this, "Update failed! Try again later.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Update failed!", Toast.LENGTH_LONG).show()
             }
-
             else -> {}
         }
     }
 
     override fun onResume() {
         super.onResume()
-        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
-            if (appUpdateInfo.installStatus() == InstallStatus.DOWNLOADED) {
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
+            if (info.installStatus() == InstallStatus.DOWNLOADED) {
                 showUpdateDialog = true
             }
         }
@@ -168,17 +181,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == MY_REQUEST_CODE) {
-            if (resultCode != RESULT_OK) {
-                isUpdating = false
-                Toast.makeText(this, "Update failed! Please try again.", Toast.LENGTH_LONG).show()
-                checkForUpdates() // Re-check for updates if the user cancels
-            }
+        if (requestCode == MY_REQUEST_CODE && resultCode != RESULT_OK) {
+            isUpdating = false
+            Toast.makeText(this, "Update canceled. Trying again.", Toast.LENGTH_SHORT).show()
+            checkForUpdates()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        appUpdateManager.unregisterListener(installStateListener) // ✅ Prevent memory leaks
+        appUpdateManager.unregisterListener(installStateListener)
     }
 }
