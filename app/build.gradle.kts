@@ -8,7 +8,6 @@ plugins {
     alias(libs.plugins.google.firebase.crashlytics)
     alias(libs.plugins.google.firebase.firebase.perf)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.play.publisher)
 }
 android {
     namespace = "com.ecorvi.schmng"
@@ -18,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.11"
+        versionCode = 14
+        versionName = "1.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

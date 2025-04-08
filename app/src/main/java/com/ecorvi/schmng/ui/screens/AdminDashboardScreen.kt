@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.Devices
@@ -77,25 +78,34 @@ fun AdminDashboardScreen(navController: NavController) {
         if (item.isBlank()) return
         when (category) {
             "SCHEDULE" -> {
-                FirestoreDatabase.addSchedule(item, {
-                    showMessage("Schedule added successfully")
-                    FirestoreDatabase.fetchSchedules({ schedules = it }, {
-                        showMessage("Failed to refresh schedules")
-                    })
-                }, {
-                    showMessage("Error adding schedule: ${it.message}")
-                })
+                FirestoreDatabase.addSchedule(
+                    schedule = item,
+                    onSuccess = {
+                        showMessage("Schedule added successfully")
+                        FirestoreDatabase.fetchSchedules(
+                            onComplete = { schedules = it },
+                            onFailure = { showMessage("Failed to refresh schedules") }
+                        )
+                    },
+                    onFailure = { e ->
+                        showMessage("Error adding schedule: ${e.message}")
+                    }
+                )
             }
-
             "PENDING FEES" -> {
-                FirestoreDatabase.addPendingFee(item, {
-                    showMessage("Pending fee added successfully")
-                    FirestoreDatabase.fetchPendingFees({ pendingFees = it }, {
-                        showMessage("Failed to refresh fees")
-                    })
-                }, {
-                    showMessage("Error adding fee: ${it.message}")
-                })
+                FirestoreDatabase.addPendingFee(
+                    fee = item,
+                    onSuccess = {
+                        showMessage("Pending fee added successfully")
+                        FirestoreDatabase.fetchPendingFees(
+                            onComplete = { pendingFees = it },
+                            onFailure = { showMessage("Failed to refresh fees") }
+                        )
+                    },
+                    onFailure = { e ->
+                        showMessage("Error adding fee: ${e.message}")
+                    }
+                )
             }
         }
     }
@@ -120,8 +130,8 @@ fun AdminDashboardScreen(navController: NavController) {
             showViewList = showViewList,
             inputText = inputText,
             onInputChange = { inputText = it },
-            onConfirmAdd = {
-                addItem(selectedCategory, it)
+            onConfirmAdd = { newItem ->
+                addItem(selectedCategory, newItem)
                 showAddInput = false
                 showDialog = false
                 inputText = ""
@@ -135,7 +145,7 @@ fun AdminDashboardScreen(navController: NavController) {
             TopAppBar(
                 title = {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("DASHBOARD", color = Color.Black, fontSize = 20.sp)
+                        Text("DASHBOARD", color = Color.Black, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 navigationIcon = {
@@ -144,7 +154,7 @@ fun AdminDashboardScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = {}) {
+                    IconButton(onClick = { /* Notifications */ }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notifications")
                     }
                     IconButton(onClick = {
@@ -169,135 +179,110 @@ fun AdminDashboardScreen(navController: NavController) {
                 )
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
-        when {
-            isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                CircularProgressIndicator()
-            }
-
-            errorMessage != null -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                Text(errorMessage ?: "Unknown error", color = Color.Red)
-            }
-
-            else -> AdminDashboardContent(
-                schedules = schedules,
-                pendingFees = pendingFees,
-                expandedStates = expandedStates,
-                onExpandClick = { item -> expandedStates[item] = !(expandedStates[item] == true) },
-                onItemClick = { item ->
-                    navController.navigate(item.lowercase()) // students or teachers
-                },
-                onSummaryClick = {
-                    selectedCategory = it
-                    showDialog = true
-                },
-                modifier = Modifier.padding(padding)
-            )
-        }
-    }
-}
-
-@Composable
-fun AdminDashboardContent(
-    schedules: List<String>,
-    pendingFees: List<String>,
-    expandedStates: Map<String, Boolean>,
-    onExpandClick: (String) -> Unit,
-    onItemClick: (String) -> Unit,
-    onSummaryClick: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val manageItems = listOf("Students", "Teachers")
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.White),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                OutlinedTextField(
-                    value = "",
-                    onValueChange = {},
-                    placeholder = { Text("Search") },
-                    modifier = Modifier.width(355.dp),
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") }
-                )
-            }
-        }
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                SummaryCard(
-                    title = "TOTAL STUDENTS",
-                    icon = Icons.Default.Person,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onItemClick("students") }
-                )
-                SummaryCard(
-                    title = "TOTAL TEACHERS",
-                    icon = Icons.Default.Person,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onItemClick("teachers") }
-                )
-            }
-        }
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                SummaryCard(
-                    title = "SCHEDULE",
-                    icon = Icons.Default.Schedule,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onSummaryClick("SCHEDULE") }
-                )
-                SummaryCard(
-                    title = "PENDING FEES",
-                    icon = Icons.Default.Money,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onSummaryClick("PENDING FEES") }
-                )
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        content = { padding ->
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (errorMessage != null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(errorMessage ?: "Unknown error", color = Color.Red)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White)
+                        .padding(padding),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            OutlinedTextField(
+                                value = "",
+                                onValueChange = {},
+                                placeholder = { Text("Search") },
+                                modifier = Modifier.width(355.dp),
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") }
+                            )
+                        }
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SummaryCard(
+                                title = "TOTAL STUDENTS",
+                                icon = Icons.Default.Person,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navController.navigate("students") }
+                            )
+                            SummaryCard(
+                                title = "TOTAL TEACHERS",
+                                icon = Icons.Default.Person,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navController.navigate("teachers") }
+                            )
+                        }
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SummaryCard(
+                                title = "SCHEDULE",
+                                icon = Icons.Default.Schedule,
+                                modifier = Modifier.weight(1f),
+                                onClick = { selectedCategory = "SCHEDULE"; showDialog = true }
+                            )
+                            SummaryCard(
+                                title = "PENDING FEES",
+                                icon = Icons.Default.Money,
+                                modifier = Modifier.weight(1f),
+                                onClick = { selectedCategory = "PENDING FEES"; showDialog = true }
+                            )
+                        }
+                    }
+                    item {
+                        Text(
+                            text = "MANAGE",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    items(manageItems) { item ->
+                        ExpandableItem(
+                            title = item,
+                            isExpanded = expandedStates[item] == true,
+                            onExpandClick = { expandedStates[item] = !(expandedStates[item] == true) },
+                            onItemClick = {
+                                when (item) {
+                                    "Students" -> navController.navigate("students")
+                                    "Teachers" -> navController.navigate("teachers")
+                                }
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                }
             }
         }
-        item {
-            Text(
-                text = "MANAGE",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-        items(manageItems) { item ->
-            ExpandableItem(
-                title = item,
-                isExpanded = expandedStates[item] == true,
-                onExpandClick = { onExpandClick(item) },
-                onItemClick = { onItemClick(item) },
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, device = Devices.PIXEL_4)
-@Composable
-fun PreviewAdminDashboardScreen() {
-    val dummyStates = mapOf("Students" to true, "Teachers" to false)
-    AdminDashboardContent(
-        schedules = listOf("Period 1 - 9AM", "Period 2 - 10AM"),
-        pendingFees = listOf("Student A", "Student B"),
-        expandedStates = dummyStates,
-        onExpandClick = {},
-        onItemClick = {},
-        onSummaryClick = {}
     )
 }
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewAdminDashboardScreen() {
+    AdminDashboardScreen(rememberNavController())
+}
+
+
+

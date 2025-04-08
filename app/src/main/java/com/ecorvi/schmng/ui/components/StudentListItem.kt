@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.R
 import com.ecorvi.schmng.ui.data.model.Person
+import androidx.compose.material.icons.filled.Edit
 
 @Composable
 fun StudentListItem(
@@ -69,6 +70,8 @@ fun StudentListItem(
                     onClick = {
                         if (student.id.isNotBlank()) {
                             navController.navigate("profile/${student.id}/student")
+                        } else {
+                            // Optional: handle empty ID case
                         }
                     }
                 ) {
@@ -95,6 +98,7 @@ fun StudentListItem(
 @Composable
 fun StudentListItemPreview() {
     val navController = rememberNavController()
+    val context = LocalContext.current
     val sampleStudent = Person(
         id = "2023-001",
         firstName = "John",
