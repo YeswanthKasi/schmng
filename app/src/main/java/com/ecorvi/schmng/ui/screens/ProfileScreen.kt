@@ -21,17 +21,15 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.DocumentSnapshot
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     navController: NavController,
-    personId: String,  // Firestore ID is a String
+    personId: String,
     personType: String
 ) {
-    // State for editable fields
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -40,9 +38,8 @@ fun ProfileScreen(
     var mobileNo by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
 
-    // Fetch the Person data from Firestore when the screen is displayed
+    // Load profile data
     LaunchedEffect(personId) {
-        // Fetch the person from Firestore based on personType
         val personRef = if (personType == "student") {
             FirestoreDatabase.studentsCollection.document(personId)
         } else {
@@ -62,7 +59,6 @@ fun ProfileScreen(
                     address = it.address
                 }
             } else {
-                // Handle document not found
                 Toast.makeText(navController.context, "Person not found", Toast.LENGTH_SHORT).show()
             }
         }.addOnFailureListener {
@@ -73,7 +69,9 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("${personType.replaceFirstChar { if (it.isLowerCase()) it.uppercase() else it.toString() }} Profile") },
+                title = {
+                    Text("${personType.replaceFirstChar { if (it.isLowerCase()) it.uppercase() else it.toString() }} Profile")
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -81,192 +79,165 @@ fun ProfileScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
-        },
-        content = { padding ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White)
-                    .padding(padding),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Profile Picture Placeholder
-                item {
-                    Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .background(Color(0xFF1F41BB), shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Profile Picture",
-                            tint = Color.White,
-                            modifier = Modifier.size(60.dp)
-                        )
-                    }
-                }
-
-                // First Name and Last Name
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = firstName,
-                            onValueChange = { firstName = it },
-                            label = { Text("First Name") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = lastName,
-                            onValueChange = { lastName = it },
-                            label = { Text("Last Name") },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                // Email
-                item {
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Email ID") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White)
+                .padding(padding),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .background(Color(0xFF1F41BB), shape = CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Profile Picture",
+                        tint = Color.White,
+                        modifier = Modifier.size(60.dp)
                     )
                 }
+            }
 
-                // Gender
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        Text("Gender", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = gender == "Male",
-                                    onClick = { gender = "Male" }
-                                )
-                                Text("Male")
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = gender == "Female",
-                                    onClick = { gender = "Female" }
-                                )
-                                Text("Female")
-                            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = firstName,
+                        onValueChange = { firstName = it },
+                        label = { Text("First Name") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = lastName,
+                        onValueChange = { lastName = it },
+                        label = { Text("Last Name") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email ID") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+            }
+
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Text("Gender", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = gender == "Male", onClick = { gender = "Male" })
+                            Text("Male")
                         }
-                    }
-                }
-
-                // Date of Birth
-                item {
-                    OutlinedTextField(
-                        value = dateOfBirth,
-                        onValueChange = { dateOfBirth = it },
-                        label = { Text("Date of Birth (mm/dd/yyyy)") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        trailingIcon = {
-                            Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = gender == "Female", onClick = { gender = "Female" })
+                            Text("Female")
                         }
-                    )
-                }
-
-                // Mobile No
-                item {
-                    OutlinedTextField(
-                        value = mobileNo,
-                        onValueChange = { mobileNo = it },
-                        label = { Text("Mobile No") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                    )
-                }
-
-                // Address
-                item {
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = { address = it },
-                        label = { Text("Address") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                    )
-                }
-
-                // Update Button
-                item {
-                    Button(
-                        onClick = {
-                            val updatedPerson = Person(
-                                id = personId.toInt().toString(), // Assuming personId is passed as String, convert it to Int
-                                firstName = firstName,
-                                lastName = lastName,
-                                email = email,
-                                gender = gender,
-                                dateOfBirth = dateOfBirth,
-                                mobileNo = mobileNo,
-                                address = address,
-                                className = "Class 1", // You can modify this based on your requirements
-                                sex = gender
-                            )
-
-                            // Update the person in Firestore
-                            val personRef = if (personType == "student") {
-                                FirestoreDatabase.studentsCollection.document(personId)
-                            } else {
-                                FirestoreDatabase.teachersCollection.document(personId)
-                            }
-
-                            personRef.set(updatedPerson)
-                                .addOnSuccessListener {
-                                    Toast.makeText(navController.context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
-                                    navController.popBackStack() // Go back to the previous screen
-                                }
-                                .addOnFailureListener { e ->
-                                    Toast.makeText(navController.context, "Failed to update profile: $e", Toast.LENGTH_SHORT).show()
-                                }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
-                    ) {
-                        Text("Update", color = Color.White)
                     }
                 }
             }
+
+            item {
+                OutlinedTextField(
+                    value = dateOfBirth,
+                    onValueChange = { dateOfBirth = it },
+                    label = { Text("Date of Birth (mm/dd/yyyy)") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    trailingIcon = {
+                        Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                    }
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = mobileNo,
+                    onValueChange = { mobileNo = it },
+                    label = { Text("Mobile No") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    label = { Text("Address") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+            }
+
+            item {
+                Button(
+                    onClick = {
+                        val updatedFields = mapOf(
+                            "firstName" to firstName,
+                            "lastName" to lastName,
+                            "email" to email,
+                            "gender" to gender,
+                            "dateOfBirth" to dateOfBirth,
+                            "mobileNo" to mobileNo,
+                            "address" to address
+                        )
+
+                        val personRef = if (personType == "student") {
+                            FirestoreDatabase.studentsCollection.document(personId)
+                        } else {
+                            FirestoreDatabase.teachersCollection.document(personId)
+                        }
+
+                        personRef.update(updatedFields)
+                            .addOnSuccessListener {
+                                Toast.makeText(navController.context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                                navController.popBackStack()
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(navController.context, "Failed to update profile: $e", Toast.LENGTH_SHORT).show()
+                            }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
+                ) {
+                    Text("Update", color = Color.White)
+                }
+            }
         }
-    )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 fun ProfileScreenPreview() {
-    // Sample NavController for preview
     val navController = NavController(androidx.compose.ui.platform.LocalContext.current)
-
     ProfileScreen(navController, "1", "student")
 }

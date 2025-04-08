@@ -11,23 +11,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.R
 import com.ecorvi.schmng.ui.data.model.Person
 
 @Composable
 fun StudentListItem(
     student: Person,
-    onViewClick: () -> Unit,
+    navController: androidx.navigation.NavController,
     onDeleteClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
     ) {
@@ -35,14 +38,14 @@ fun StudentListItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Person,
+                    Icons.Default.Person,
                     contentDescription = "Student Icon",
                     modifier = Modifier.size(40.dp)
                 )
@@ -54,24 +57,50 @@ fun StudentListItem(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "ID NO: ${student.id}, Class: ${student.className}, Sex: ${student.sex}",
+                        text = "ID NO: ${student.id}, Class: ${student.className}, Gender: ${student.gender}",
                         fontSize = 14.sp,
                         color = Color.Gray
                     )
                 }
             }
-            Row {
-                IconButton(onClick = onViewClick) {
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(
+                    onClick = {
+                        if (student.id.isNotBlank()) {
+                            navController.navigate("profile/${student.id}/student")
+                        }
+                    }
+                ) {
                     Image(
                         painter = painterResource(id = R.drawable.visibility),
                         contentDescription = "View",
                         modifier = Modifier.size(24.dp)
                     )
                 }
+
                 IconButton(onClick = onDeleteClick) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = Color.Red
+                    )
                 }
             }
         }
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun StudentListItemPreview() {
+    val navController = rememberNavController()
+    val sampleStudent = Person(
+        id = "2023-001",
+        firstName = "John",
+        lastName = "Doe",
+        className = "Form 1",
+        gender = "Male" // ✅ updated
+    )
+    StudentListItem(student = sampleStudent, navController = navController, onDeleteClick = {})
 }

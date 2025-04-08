@@ -6,4 +6,5 @@ plugins {
     alias(libs.plugins.google.firebase.crashlytics) apply false
     alias(libs.plugins.google.firebase.firebase.perf) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.play.publisher) apply false
 }

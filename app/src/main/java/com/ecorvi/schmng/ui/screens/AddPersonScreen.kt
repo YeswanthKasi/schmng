@@ -239,7 +239,6 @@ fun AddPersonScreen(
                                 mobileNo = mobileNo,
                                 address = address,
                                 className = className,  // Ensure className is a String
-                                sex = gender
                             )
                             if (personType == "student") {
                                 FirestoreDatabase.addStudent(

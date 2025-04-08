@@ -10,12 +10,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.components.StudentListItem
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
@@ -30,7 +32,7 @@ fun StudentsScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
 
-    // Start listening for real-time updates when screen loads
+    // Firestore real-time listener
     LaunchedEffect(Unit) {
         listenerRegistration = FirestoreDatabase.listenForStudentUpdates(
             onUpdate = { fetchedStudents ->
@@ -45,7 +47,6 @@ fun StudentsScreen(navController: NavController) {
         )
     }
 
-    // Stop listening when the composable is removed from the screen
     DisposableEffect(Unit) {
         onDispose {
             listenerRegistration?.remove()
@@ -68,7 +69,7 @@ fun StudentsScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Future: Add Filters */ }) {
+                    IconButton(onClick = { /* Optional: Add filters */ }) {
                         Icon(Icons.Default.FilterList, contentDescription = "Filter")
                     }
                 },
@@ -90,7 +91,6 @@ fun StudentsScreen(navController: NavController) {
                     .background(Color.White)
                     .padding(padding)
             ) {
-                // Search Bar
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -110,22 +110,24 @@ fun StudentsScreen(navController: NavController) {
                     )
                 )
 
-                // Student List
                 if (isLoading) {
-                    CircularProgressIndicator(
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = 50.dp),
-                        color = Color(0xFF1F41BB)
-                    )
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFF1F41BB))
+                    }
                 } else if (filteredStudents.isEmpty()) {
-                    Text(
-                        text = "No students found",
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = 50.dp),
-                        color = Color.Gray
-                    )
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No students found", color = Color.Gray)
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier
@@ -137,12 +139,12 @@ fun StudentsScreen(navController: NavController) {
                         items(filteredStudents) { student ->
                             StudentListItem(
                                 student = student,
-                                onViewClick = { navController.navigate("profile/${student.id}/student") },
+                                navController = navController,
                                 onDeleteClick = {
                                     FirestoreDatabase.deleteStudent(
                                         student.id,
                                         onSuccess = {
-                                            studentsList = studentsList.filter { it.id != student.id } // Update list
+                                            Log.d("Firestore", "Student deleted")
                                         },
                                         onFailure = { exception ->
                                             Log.e("Firestore", "Failed to delete student: ${exception.message}")
@@ -158,10 +160,8 @@ fun StudentsScreen(navController: NavController) {
     )
 }
 
-
-
 @Preview
 @Composable
 fun PreviewStudentsScreen() {
-    StudentsScreen(navController = NavController(LocalContext.current))
+    StudentsScreen(navController = NavHostController(LocalContext.current))
 }

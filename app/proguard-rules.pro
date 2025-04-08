@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Prevent obfuscation of model classes used by Firestore
+-keep class com.ecorvi.schmng.ui.data.model.Person {
+    public <init>();
+}
+

@@ -32,9 +32,11 @@ class MainActivity : ComponentActivity() {
         checkForUpdates()
 
         setContent {
-            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 if (isUpdating) {
-                    // 🔄 Show a progress indicator when update is in progress
                     CircularProgressIndicator(modifier = Modifier.padding(16.dp))
                     Text("Updating... Please wait")
                 }
@@ -66,11 +68,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkForUpdates() {
+        val packageManager = applicationContext.packageManager
+        val installer = packageManager.getInstallerPackageName(packageName)
+
+        // 🚀 Skip update check if app is sideloaded (not installed from Play Store)
+        if (installer != "com.android.vending") {
+            Toast.makeText(
+                this,
+                "Updates disabled: App not installed from Play Store.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
         val appUpdateInfoTask = appUpdateManager.appUpdateInfo
 
         appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
             when {
-                // Handle IMMEDIATE update if required
+                // IMMEDIATE UPDATE
                 appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
                         appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE) -> {
                     try {
@@ -81,11 +96,15 @@ class MainActivity : ComponentActivity() {
                             MY_REQUEST_CODE
                         )
                     } catch (e: Exception) {
-                        Toast.makeText(this, "Immediate update error: ${e.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this,
+                            "Immediate update error: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
 
-                // Handle FLEXIBLE update with PROGRESS
+                // FLEXIBLE UPDATE
                 appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
                         appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE) -> {
                     try {
@@ -99,7 +118,11 @@ class MainActivity : ComponentActivity() {
                         appUpdateManager.registerListener(installStateListener) // 🔄 Listen for update progress
                     } catch (e: Exception) {
                         isUpdating = false
-                        Toast.makeText(this, "Flexible update error: ${e.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this,
+                            "Flexible update error: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             }
@@ -114,18 +137,22 @@ class MainActivity : ComponentActivity() {
             InstallStatus.DOWNLOADING -> {
                 isUpdating = true // ✅ Show progress
             }
+
             InstallStatus.DOWNLOADED -> {
                 isUpdating = false
                 showUpdateDialog = true // ✅ Show "Restart Now" popup
             }
+
             InstallStatus.INSTALLED -> {
                 isUpdating = false
                 Toast.makeText(this, "Update installed!", Toast.LENGTH_SHORT).show()
             }
+
             InstallStatus.FAILED -> {
                 isUpdating = false
                 Toast.makeText(this, "Update failed! Try again later.", Toast.LENGTH_LONG).show()
             }
+
             else -> {}
         }
     }

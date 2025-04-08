@@ -1,2 +1,8 @@
-json_key_file("C:\Users\Yeswanth\Ecorvi_Important_Keys\schmng\schoolmanagement-450904-a659375ef355.json") # Path to the json secret file - Follow https://docs.fastlane.tools/actions/supply/#setup to get one
-package_name("com.ecorvi.schmng") # e.g. com.krausefx.app
+release_notes_path = File.join(Dir.pwd, "release-notes.txt")
+
+supply(
+  json_key: "C:/Users/Yeswanth/Ecorvi_Important_Keys/schmng/schoolmanagement-450904-a659375ef355.json",
+  package_name: "com.ecorvi.schmng",
+  track: "production",
+  changelog: File.read(release_notes_path)
+)

@@ -12,17 +12,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.Devices
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Devices
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.components.TeacherListItem
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
 import com.google.firebase.firestore.ListenerRegistration
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,8 +40,6 @@ fun TeachersScreen(navController: NavController) {
         )
     }
 
-
-
     val filteredTeachers = teachersList.filter { teacher ->
         (selectedClass == "All Classes" || teacher.className == selectedClass) &&
                 (teacher.firstName.contains(searchQuery, ignoreCase = true) ||
@@ -59,7 +56,7 @@ fun TeachersScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Future: Add Filters */ }) {
+                    IconButton(onClick = { /* Future filter */ }) {
                         Icon(Icons.Default.FilterList, contentDescription = "Filter")
                     }
                 },
@@ -82,7 +79,7 @@ fun TeachersScreen(navController: NavController) {
                     .padding(padding),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Search Bar
+                // Search bar
                 item {
                     OutlinedTextField(
                         value = searchQuery,
@@ -104,7 +101,7 @@ fun TeachersScreen(navController: NavController) {
                     )
                 }
 
-                // Class Dropdown
+                // Dropdown
                 item {
                     var expanded by remember { mutableStateOf(false) }
                     ExposedDropdownMenuBox(
@@ -118,8 +115,7 @@ fun TeachersScreen(navController: NavController) {
                             readOnly = true,
                             label = { Text("Select Class") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            modifier = Modifier
-                                .fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth()
                         )
 
                         ExposedDropdownMenu(
@@ -139,16 +135,16 @@ fun TeachersScreen(navController: NavController) {
                     }
                 }
 
-                // Teachers List
+                // List Items
                 items(filteredTeachers) { teacher ->
                     TeacherListItem(
                         teacher = teacher,
-                        onViewClick = { navController.navigate("profile/${teacher.id}/teacher") },
+                        navController = navController,
                         onDeleteClick = {
                             FirestoreDatabase.deleteTeacher(
                                 teacher.id,
                                 onSuccess = {
-                                    teachersList = teachersList.filter { it.id != teacher.id } // Update list
+                                    teachersList = teachersList.filter { it.id != teacher.id }
                                 },
                                 onFailure = { exception ->
                                     Log.e("Firestore", "Failed to delete teacher: ${exception.message}")
@@ -175,5 +171,3 @@ fun TeachersScreenPreview() {
     val navController = NavController(context)
     TeachersScreen(navController)
 }
-
-

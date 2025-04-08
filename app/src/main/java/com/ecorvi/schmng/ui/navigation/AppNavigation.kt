@@ -59,13 +59,14 @@ fun AppNavigation() {
         composable(
             route = "profile/{personId}/{personType}",
             arguments = listOf(
-                navArgument("personId") { type = NavType.IntType },
+                navArgument("personId") { type = NavType.StringType }, // ✅ Changed to String
                 navArgument("personType") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val personId = backStackEntry.arguments?.getInt("personId") ?: 0
+            val personId = backStackEntry.arguments?.getString("personId") ?: ""
             val personType = backStackEntry.arguments?.getString("personType") ?: "student"
-            ProfileScreen(navController, personId.toString(), personType)
+            ProfileScreen(navController, personId, personType)
         }
+
     }
 }

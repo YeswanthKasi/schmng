@@ -2,14 +2,16 @@ package com.ecorvi.schmng.ui.data.model
 
 data class Person(
     var id: String = "",
-    val firstName: String = "",
-    val lastName: String = "",
-    val email: String = "",
-    val gender: String = "",
-    val dateOfBirth: String = "",
-    val mobileNo: String = "",
-    val address: String = "",
-    val className: String = "",
-    val sex: String = "",
-    val age: Int = 0
-)
+    var firstName: String = "",
+    var lastName: String = "",
+    var email: String = "",
+    var gender: String = "",
+    var dateOfBirth: String = "",
+    var mobileNo: String = "",
+    var address: String = "",
+    var className: String = "",
+    var age: Int = 0
+) {
+    constructor() : this("", "", "", "", "", "", "", "", "", 0)
+}
+
