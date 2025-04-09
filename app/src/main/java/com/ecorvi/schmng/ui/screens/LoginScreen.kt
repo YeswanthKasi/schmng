@@ -1,5 +1,8 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -11,22 +14,26 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.*
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.ecorvi.schmng.R
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
-import com.ecorvi.schmng.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +42,10 @@ fun LoginScreen(navController: NavController) {
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf("") }
+
+    val context = LocalContext.current
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showRollbackDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -48,6 +59,101 @@ fun LoginScreen(navController: NavController) {
             contentScale = ContentScale.FillBounds
         )
 
+        // Top Right Help Icon with Dropdown Menu Properly Aligned
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            contentAlignment = Alignment.TopEnd
+        ) {
+            var iconOffset by remember { mutableStateOf(Offset.Zero) }
+
+            Box(modifier = Modifier
+                .onGloballyPositioned { coordinates ->
+                    iconOffset = coordinates.localToWindow(Offset.Zero)
+                }
+            ) {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_help),
+                        contentDescription = "Help",
+                        modifier = Modifier.size(28.dp),
+                        tint = Color(0xFF777C8D)
+                    )
+                }
+            }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                offset = DpOffset(x = 0.dp, y = 8.dp)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Help") },
+                    onClick = {
+                        menuExpanded = false
+                        val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:")
+                            putExtra(Intent.EXTRA_EMAIL, arrayOf("info@ecorvi.com"))
+                            putExtra(Intent.EXTRA_SUBJECT, "Support Request")
+                        }
+                        ContextCompat.startActivity(context, emailIntent, null)
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = { Text("Rollback") },
+                    onClick = {
+                        menuExpanded = false
+                        showRollbackDialog = true
+                    }
+                )
+            }
+        }
+
+        // Rollback Confirmation Dialog
+        if (showRollbackDialog) {
+            AlertDialog(
+                onDismissRequest = { showRollbackDialog = false },
+                title = { Text("Switch to Beta Version?") },
+                text = { Text("You will be redirected to the beta version of the app on the Play Store.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showRollbackDialog = false
+                        try {
+                            val playStoreIntent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("market://details?id=com.ecorvi.schmng")
+                            )
+                            ContextCompat.startActivity(context, playStoreIntent, null)
+                        } catch (e: ActivityNotFoundException) {
+                            try {
+                                val webIntent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://play.google.com/store/apps/details?id=com.ecorvi.schmng")
+                                )
+                                ContextCompat.startActivity(context, webIntent, null)
+                            } catch (ex: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "Unable to open Play Store or browser. Please try again later.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }) {
+                        Text("Continue")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRollbackDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // Login Form
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -58,18 +164,17 @@ fun LoginScreen(navController: NavController) {
 
             Text(
                 text = "Login",
-                style = TextStyle(
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1F41BB)
-                )
+                style = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F41BB))
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
             OutlinedTextField(
                 value = email,
-                onValueChange = { email = it },
+                onValueChange = {
+                    email = it
+                    errorMessage = ""
+                },
                 placeholder = { Text("Email", color = Color.Gray, fontSize = 16.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -87,7 +192,10 @@ fun LoginScreen(navController: NavController) {
 
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it },
+                onValueChange = {
+                    password = it
+                    errorMessage = ""
+                },
                 placeholder = { Text("Password", color = Color.Gray, fontSize = 16.sp) },
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
@@ -114,11 +222,7 @@ fun LoginScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             if (errorMessage.isNotEmpty()) {
-                Text(
-                    text = errorMessage,
-                    color = Color.Red,
-                    fontSize = 14.sp
-                )
+                Text(text = errorMessage, color = Color.Red, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -153,22 +257,14 @@ fun LoginScreen(navController: NavController) {
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
             ) {
-                Text(
-                    text = "Sign in",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(text = "Sign in", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "Or continue with",
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1F41BB)
-                )
+                style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F41BB))
             )
 
             Spacer(modifier = Modifier.height(16.dp))
