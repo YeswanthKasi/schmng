@@ -82,11 +82,12 @@ jobs:
       - name: Download Previous AAB from GitHub Release
         run: |
           mkdir -p ./previous
-          ROLLBACK_TAG=$(gh release list --limit 2 | tail -n 1 | awk '{print $1}')
-          echo "Trying to download rollback AAB from: $ROLLBACK_TAG"
-          gh release download "$ROLLBACK_TAG" -p "*.aab" -D ./previous || {
-            echo "Failed to download from $ROLLBACK_TAG. Falling back to v65."
-            gh release download "v65" -p "*.aab" -D ./previous || {
+          # Try latest previous release
+          LATEST_TAG=$(gh release list --limit 2 | tail -n 1 | awk '{print $1}')
+          echo "Trying to download rollback AAB from: $LATEST_TAG"
+          gh release download "$LATEST_TAG" -p "app-release.aab" -D ./previous || {
+            echo "Failed to download from $LATEST_TAG. Falling back to v65."
+            gh release download "v65" -p "app-release.aab" -D ./previous || {
               echo "Fallback to v65 failed. Rollback download failed."
               exit 1
             }
