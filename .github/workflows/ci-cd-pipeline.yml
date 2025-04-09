@@ -45,14 +45,6 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew test
 
-      - name: Modify Version Code for Rollback
-        if: env.TAG_NAME == 'v65'
-        run: |
-            VERSION_CODE=1065
-            VERSION_NAME="1.0.0-rollback"
-            sed -i "s/versionCode = [0-9]\+/versionCode = $VERSION_CODE/" app/build.gradle.kts
-            sed -i 's/versionName = "[^"]*"/versionName = "'"$VERSION_NAME"'"/' app/build.gradle.kts
-
       - name: Build AAB
         run: ./gradlew bundleRelease
         env:
@@ -83,36 +75,6 @@ jobs:
           files: app/build/outputs/bundle/release/app-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install GitHub CLI
-        run: sudo apt install gh -y
-
-      - name: Download Previous AAB from GitHub Release
-        run: |
-          mkdir -p ./previous
-          # Try latest previous release
-          LATEST_TAG=$(gh release list --limit 2 | tail -n 1 | awk '{print $1}')
-          echo "Trying to download rollback AAB from: $LATEST_TAG"
-          gh release download "$LATEST_TAG" -p "app-release.aab" -D ./previous || {
-            echo "Failed to download from $LATEST_TAG. Falling back to v65."
-            gh release download "v65" -p "app-release.aab" -D ./previous || {
-              echo "Fallback to v65 failed. Rollback download failed."
-              exit 1
-            }
-          }
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Previous Version to Beta Track
-        if: success()
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON }}
-          packageName: com.ecorvi.schmng
-          releaseFiles: ./previous/app-release.aab
-          track: beta
-          status: completed
-          inAppUpdatePriority: 2
 
       - name: Upload New Version to Production
         uses: r0adkll/upload-google-play@v1
