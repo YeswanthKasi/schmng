@@ -101,7 +101,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON }}
           packageName: com.ecorvi.schmng
           releaseFiles: ./previous/app-release.aab
-          track: openTesting
+          track: beta
           status: completed
           inAppUpdatePriority: 2
 
