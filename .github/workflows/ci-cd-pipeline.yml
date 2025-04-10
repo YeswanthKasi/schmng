@@ -74,7 +74,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Download Previous AAB From Last Release
+        id: fetch_old_aab
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: android-cicd.yml
+          name: Release artifact
+          path: ./previous
 
+      - name: Upload Previous Version to Beta Track
+        if: success()
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON }}
+          packageName: com.ecorvi.schmng
+          releaseFiles: ./previous/app-release.aab
+          track: beta
+          status: completed
+          inAppUpdatePriority: 2
 
       - name: Upload New Version to Production
         uses: r0adkll/upload-google-play@v1
