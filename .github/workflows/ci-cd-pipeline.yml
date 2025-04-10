@@ -1,147 +1,95 @@
 name: CI/CD Pipeline for Android App
 
-# Define when the workflow should run
 on:
-  # Trigger on push events
   push:
-    # Run only when pushing to the master branch
     branches:
       - master
-  # Trigger on pull request events
-  pull_request:
-    # Run only when pull requests target the master branch
-    branches:
-      - master
+      - rollback-v65
 
-# Define permissions for the workflow
 permissions:
-  # Grant write access to the repository contents
   contents: write
 
-# Define the jobs to run in the workflow
 jobs:
-  # Define the build job
-  build:
-    # Job name
-    name: Build & Deploy to Play Store
-    # Define the runner to use
+  build-and-deploy:
+    name: Build, Deploy & Rollback Setup
     runs-on: ubuntu-latest
 
-    # Define the steps within the build job
     steps:
-      # Step 1: Checkout the repository code
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up JDK (Java 21)
       - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
-          # Specify Java version 21
           java-version: '21'
-          # Use Zulu distribution
           distribution: 'zulu'
 
-      # Step 3: Set up Android SDK environment
       - name: Set up Android SDK
         uses: android-actions/setup-android@v2
         with:
-          # Specify required Android SDK components
           components: |
             cmdline-tools;latest
             platform-tools
-            platforms;android-35 
-            build-tools;33.0.0  
+            platforms;android-35
+            build-tools;33.0.0
 
-      # Step 4: Grant execute permission to the Gradle Wrapper (gradlew)
-      - name: Grant execute permission to gradlew
-        # Run command to change the permissions
+      - name: Grant gradlew permissions
         run: chmod +x ./gradlew
 
-      # Step 5: Decode keystore from GitHub secrets and place it in the correct directory
-      - name: Decode keystore from GitHub secrets
+      - name: Decode Keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}  # Ensure this secret is added in GitHub
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           mkdir -p ./app/KEY_STORE
           echo "${KEYSTORE_BASE64}" | base64 --decode > ./app/KEY_STORE/schmng.jks
 
-      # Step 6: Verify the keystore file is present in the directory
-      - name: Verify keystore file
-        # List files to verify keystore presence
-        run: ls -la ./app/KEY_STORE
-
-      # Step 7: Run unit tests
-      - name: Run unit tests
-        # Run gradle task 'test'
+      - name: Run Unit Tests
         run: ./gradlew test
 
-      # Step 8: Build the Release AAB (changed from assembleRelease to bundleRelease)
-      - name: Build the project
-        # Run gradle task 'bundleRelease' to generate the AAB
+      - name: Build AAB
         run: ./gradlew bundleRelease
-        # Set environment variables for signing configurations
         env:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
 
-      # Step 9: Verify the AAB file exists
-      - name: Verify AAB file
-        run: ls -la app/build/outputs/bundle/release/
-
-      # Step 10: Create Git tag
       - name: Create Tag
-        # Step id
         id: create_tag
-        # Set the tag name
         run: |
-          TAG_NAME="v${{ github.run_number }}"  
-          echo "Creating tag: $TAG_NAME"
-          git tag -d $TAG_NAME || true  
-          git push origin :refs/tags/$TAG_NAME || true  
+          TAG_NAME="v${{ github.run_number }}"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          git tag -d $TAG_NAME || true
+          git push origin :refs/tags/$TAG_NAME || true
           git tag $TAG_NAME
           git push origin $TAG_NAME
-        # Set environment variable for git token
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 11: Create GitHub Release and Upload APK to the release
-      # Note: This step expects an APK, but we're now building an AAB.
-      # If you still want to upload an APK to the release, you can add './gradlew assembleRelease' back in.
-      # For now, let's skip this step or modify it to upload the AAB instead.
-      - name: Create Release
-        # Step id
-        id: create_release
-        # Use the softprops action to create a release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          # Use the created tag
-          tag_name: v${{ github.run_number }}
-          # Name of the release
-          name: Release v${{ github.run_number }}
-          # Description of the release
-          body: "Release of AAB version v${{ github.run_number }}"
-          # Path to the AAB file (changed from APK to AAB)
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
+          body: "Release of version ${{ env.TAG_NAME }}"
           files: app/build/outputs/bundle/release/app-release.aab
-        # Set environment variable for the token
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 12: Upload App Bundle to Play Store
-      - name: Upload App Bundle to Play Store
-        # Use the r0adkll action to upload to google play
+      - name: Download Previous AAB From Last Release
+        id: fetch_old_aab
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: android-cicd.yml
+          name: Release artifact
+          path: ./previous
+
+      - name: Upload Rollback Version to Beta Track
+        if: success()
         uses: r0adkll/upload-google-play@v1
         with:
-          # Service account credentials from GitHub Secrets
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON }}
-          # Package name of the app
           packageName: com.ecorvi.schmng
-          # Path of the App Bundle file
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          # Production track of google play
-          track: production
-          # Release status set to completed to send for review
+          track: beta
           status: completed
-          # App update priority
           inAppUpdatePriority: 0
