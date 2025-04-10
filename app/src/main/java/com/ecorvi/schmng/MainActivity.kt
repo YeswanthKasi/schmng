@@ -1,12 +1,16 @@
 package com.ecorvi.schmng
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.app.ActivityCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +29,7 @@ import com.google.firebase.auth.FirebaseAuth
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
     private val MY_REQUEST_CODE = 100
+    private val NOTIFICATION_PERMISSION_REQUEST_CODE = 200
 
     private var showUpdateDialog by mutableStateOf(false)
     private var isUpdating by mutableStateOf(false)
@@ -47,6 +52,8 @@ class MainActivity : ComponentActivity() {
         }
 
         isUserLoggedIn = FirebaseAuth.getInstance().currentUser != null
+
+        // 🔹 REMOVED: Don't request permission here. We'll do it after login.
 
         setContent {
             SchmngTheme {
@@ -191,5 +198,38 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         appUpdateManager.unregisterListener(installStateListener)
+    }
+
+    // ✅ NOW PUBLIC
+    fun checkAndRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    NOTIFICATION_PERMISSION_REQUEST_CODE
+                )
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Notification permission granted", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 }

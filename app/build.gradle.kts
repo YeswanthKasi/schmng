@@ -17,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 35
-        versionCode = 16
-        versionName = "1.14"
+        versionCode = 17
+        versionName = "1.15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -77,6 +77,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx:24.0.0")
     implementation(libs.firebase.analytics.ktx)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.inappmessaging.display)
     testImplementation(libs.junit)
     implementation(libs.google.play.app.update) // Keep only one instance
     implementation(libs.google.play.app.update.ktx) // Keep only one instance
