@@ -23,6 +23,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+
     signingConfigs {
         create("release") {
             keyAlias = System.getenv("KEY_ALIAS") ?: "defaultAlias"
