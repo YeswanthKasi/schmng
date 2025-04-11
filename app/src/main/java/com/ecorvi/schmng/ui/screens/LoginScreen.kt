@@ -298,7 +298,6 @@ fun LoginUser(
         }
     }
 }
-
 @Preview(showBackground = true)
 @Composable
 fun LoginScreenPreview() {
