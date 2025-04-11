@@ -34,6 +34,10 @@ import com.ecorvi.schmng.R
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.messaging.FirebaseMessaging
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,11 +48,11 @@ fun LoginScreen(navController: NavController) {
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            Toast.makeText(context, "Notification permission granted", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "Notification permission denied", Toast.LENGTH_SHORT).show()
-        }
+        Toast.makeText(
+            context,
+            if (isGranted) "Notification permission granted" else "Notification permission denied",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     var email by rememberSaveable { mutableStateOf("") }
@@ -140,11 +144,7 @@ fun LoginScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             if (errorMessage.isNotEmpty()) {
-                Text(
-                    text = errorMessage,
-                    color = Color.Red,
-                    fontSize = 14.sp
-                )
+                Text(text = errorMessage, color = Color.Red, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -153,9 +153,7 @@ fun LoginScreen(navController: NavController) {
                 color = Color(0xFF1F41BB),
                 modifier = Modifier
                     .align(Alignment.End)
-                    .clickable {
-                        // TODO: Forgot Password logic
-                    }
+                    .clickable { /* TODO: Forgot Password */ }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -169,16 +167,17 @@ fun LoginScreen(navController: NavController) {
                         LoginUser(
                             email = email,
                             password = password,
-                            navController = navController
-                        ) { success, message ->
-                            if (success) {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            navController = navController,
+                            onLoginResult = { success, message ->
+                                if (success) {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                } else {
+                                    errorMessage = message ?: "Authentication failed"
                                 }
-                            } else {
-                                errorMessage = message ?: "Authentication failed"
                             }
-                        }
+                        )
                     }
                 },
                 modifier = Modifier
@@ -187,22 +186,14 @@ fun LoginScreen(navController: NavController) {
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
             ) {
-                Text(
-                    text = "Sign in",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Sign in", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "Or continue with",
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1F41BB)
-                )
+                style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F41BB))
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -212,27 +203,13 @@ fun LoginScreen(navController: NavController) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 IconButton(onClick = { /* TODO: Google Sign-In */ }) {
-                    Image(
-                        painter = painterResource(id = R.drawable.google),
-                        contentDescription = "Google Sign-In",
-                        modifier = Modifier.size(60.dp)
-                    )
+                    Image(painter = painterResource(id = R.drawable.google), contentDescription = "Google", modifier = Modifier.size(60.dp))
                 }
-
                 IconButton(onClick = { /* TODO: Facebook Sign-In */ }) {
-                    Image(
-                        painter = painterResource(id = R.drawable.facebook),
-                        contentDescription = "Facebook Sign-In",
-                        modifier = Modifier.size(60.dp)
-                    )
+                    Image(painter = painterResource(id = R.drawable.facebook), contentDescription = "Facebook", modifier = Modifier.size(60.dp))
                 }
-
                 IconButton(onClick = { /* TODO: Apple Sign-In */ }) {
-                    Image(
-                        painter = painterResource(id = R.drawable.apple),
-                        contentDescription = "Apple Sign-In",
-                        modifier = Modifier.size(60.dp)
-                    )
+                    Image(painter = painterResource(id = R.drawable.apple), contentDescription = "Apple", modifier = Modifier.size(60.dp))
                 }
             }
         }
@@ -246,22 +223,80 @@ fun LoginUser(
     onLoginResult: (Boolean, String?) -> Unit
 ) {
     val auth = FirebaseAuth.getInstance()
-    auth.signInWithEmailAndPassword(email, password)
-        .addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                navController.navigate("adminDashboard") {
-                    popUpTo("login") { inclusive = true }
-                }
-                onLoginResult(true, null)
-            } else {
-                val errorMsg = when (task.exception) {
-                    is FirebaseAuthInvalidUserException -> "User not found. Check your email."
-                    is FirebaseAuthInvalidCredentialsException -> "Invalid password. Try again."
-                    else -> "Authentication failed. Please try again."
-                }
-                onLoginResult(false, errorMsg)
+    val db = FirebaseFirestore.getInstance()
+
+    auth.signInWithEmailAndPassword(email, password).addOnCompleteListener { task ->
+        if (task.isSuccessful) {
+            val userId = auth.currentUser?.uid ?: return@addOnCompleteListener
+
+            // Get FCM token
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { fcmToken ->
+                val deviceName = "${Build.BRAND} ${Build.MODEL}"
+                val tokenMap = mapOf(
+                    "fcmTokens.$deviceName" to fcmToken,
+                    "lastTokenUpdate" to com.google.firebase.Timestamp.now()
+                )
+
+                // Upload token
+                db.collection("users")
+                    .document(userId)
+                    .set(tokenMap, SetOptions.merge())
+                    .addOnSuccessListener {
+                        // Fetch user role
+                        db.collection("users").document(userId).get()
+                            .addOnSuccessListener { document ->
+                                val role = document.getString("role")?.lowercase(Locale.ROOT)
+
+                                when (role) {
+                                    "admin" -> {
+                                        FirebaseMessaging.getInstance().subscribeToTopic("admins")
+                                        navController.navigate("adminDashboard") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
+                                    }
+
+                                    "student" -> {
+                                        // TODO: Navigate to student dashboard
+                                        FirebaseMessaging.getInstance().subscribeToTopic("students")
+                                        navController.navigate("studentDashboard") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
+                                    }
+
+                                    "parent" -> {
+                                        // TODO: Navigate to parent dashboard
+                                        FirebaseMessaging.getInstance().subscribeToTopic("parents")
+                                        navController.navigate("parentDashboard") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
+                                    }
+
+                                    else -> {
+                                        onLoginResult(false, "User role not found or unknown.")
+                                    }
+                                }
+
+                                onLoginResult(true, null)
+                            }
+                            .addOnFailureListener {
+                                onLoginResult(false, "Failed to fetch user role: ${it.localizedMessage}")
+                            }
+                    }
+                    .addOnFailureListener { e ->
+                        onLoginResult(false, "Token upload failed: ${e.localizedMessage}")
+                    }
+            }.addOnFailureListener {
+                onLoginResult(false, "Failed to get FCM token")
             }
+        } else {
+            val errorMsg = when (task.exception) {
+                is FirebaseAuthInvalidUserException -> "User not found. Check your email."
+                is FirebaseAuthInvalidCredentialsException -> "Invalid password. Try again."
+                else -> "Authentication failed. Please try again."
+            }
+            onLoginResult(false, errorMsg)
         }
+    }
 }
 
 @Preview(showBackground = true)

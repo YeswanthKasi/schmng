@@ -22,23 +22,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         super.onNewToken(token)
         Log.d("FCM", "New Token: $token")
 
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
-        if (userId != null) {
-            val db = FirebaseFirestore.getInstance()
-            val tokenMap = hashMapOf("fcmToken" to token)
+        val sharedPref = getSharedPreferences("fcm_prefs", MODE_PRIVATE)
+        sharedPref.edit().putString("fcm_token", token).apply()
+        Log.d("FCM", "Token saved locally: $token")
 
-            db.collection("users")
-                .document(userId)
-                .set(tokenMap, SetOptions.merge()) // Merge with existing user data
-                .addOnSuccessListener {
-                    Log.d("FCM", "Token uploaded successfully.")
-                }
-                .addOnFailureListener { e ->
-                    Log.e("FCM", "Failed to upload token", e)
-                }
-        } else {
-            Log.w("FCM", "User not logged in. Token not uploaded.")
-        }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
