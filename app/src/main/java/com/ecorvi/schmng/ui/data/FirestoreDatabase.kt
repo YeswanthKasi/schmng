@@ -46,6 +46,30 @@ object FirestoreDatabase {
             }
     }
 
+    fun fetchStudentCount(onComplete: (Int) -> Unit) {
+        FirebaseFirestore.getInstance().collection("students")
+            .get()
+            .addOnSuccessListener { result ->
+                onComplete(result.size()) // returns the number of documents
+            }
+            .addOnFailureListener {
+                onComplete(0) // fallback if error
+            }
+    }
+
+    fun fetchTeacherCount(onComplete: (Int) -> Unit) {
+        FirebaseFirestore.getInstance().collection("teachers")
+            .get()
+            .addOnSuccessListener { result ->
+                onComplete(result.size())
+            }
+            .addOnFailureListener {
+                onComplete(0)
+            }
+    }
+
+
+
     // Add a schedule to Firestore
     fun addSchedule(schedule: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
         schedulesCollection.add(mapOf("schedule" to schedule))

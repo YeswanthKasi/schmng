@@ -17,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.16"
+        versionCode = 20
+        versionName = "1.17"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -60,7 +60,9 @@ android {
 
 
 dependencies {
-    implementation("androidx.compose.material3:material3:1.3.1") // Ensure you use the latest stable version
+    implementation("com.google.accompanist:accompanist-placeholder-material:0.32.0")
+    implementation("com.google.accompanist:accompanist-placeholder-material:0.32.0")
+    implementation("androidx.compose.material3:material3:1.3.2") // Ensure you use the latest stable version
     implementation ("com.google.android.play:app-update:2.1.0")
     implementation ("com.google.android.play:app-update-ktx:2.1.0")
     implementation(libs.androidx.core.ktx)

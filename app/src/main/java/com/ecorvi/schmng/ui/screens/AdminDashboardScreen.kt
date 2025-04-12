@@ -1,6 +1,9 @@
 package com.ecorvi.schmng.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,11 +13,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -24,7 +30,7 @@ import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun AdminDashboardScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
@@ -32,6 +38,7 @@ fun AdminDashboardScreen(navController: NavController) {
     val expandedStates = remember { mutableStateMapOf<String, Boolean>().apply {
         manageItems.forEach { this[it] = false }
     } }
+
     var selectedTab by remember { mutableIntStateOf(0) }
     var showDialog by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("") }
@@ -45,6 +52,9 @@ fun AdminDashboardScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
+    var studentCount by remember { mutableStateOf(0) }
+    var teacherCount by remember { mutableStateOf(0) }
+
     fun showMessage(message: String) {
         coroutineScope.launch {
             snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
@@ -52,61 +62,31 @@ fun AdminDashboardScreen(navController: NavController) {
     }
 
     LaunchedEffect(Unit) {
+        isLoading = true
         FirestoreDatabase.fetchSchedules(
-            onComplete = { fetchedSchedules ->
-                schedules = fetchedSchedules
-                isLoading = false
-            },
-            onFailure = { e ->
-                errorMessage = "Failed to load schedules: ${e.message}"
-                isLoading = false
-            }
+            onComplete = { fetchedSchedules -> schedules = fetchedSchedules; isLoading = false },
+            onFailure = { e -> errorMessage = "Failed to load schedules: ${e.message}"; isLoading = false }
         )
         FirestoreDatabase.fetchPendingFees(
-            onComplete = { fetchedFees ->
-                pendingFees = fetchedFees
-                isLoading = false
-            },
-            onFailure = { e ->
-                errorMessage = "Failed to load pending fees: ${e.message}"
-                isLoading = false
-            }
+            onComplete = { fetchedFees -> pendingFees = fetchedFees; isLoading = false },
+            onFailure = { e -> errorMessage = "Failed to load pending fees: ${e.message}"; isLoading = false }
         )
+        FirestoreDatabase.fetchStudentCount { studentCount = it }
+        FirestoreDatabase.fetchTeacherCount { teacherCount = it }
     }
 
     fun addItem(category: String, item: String) {
         if (item.isBlank()) return
         when (category) {
-            "SCHEDULE" -> {
-                FirestoreDatabase.addSchedule(
-                    schedule = item,
-                    onSuccess = {
-                        showMessage("Schedule added successfully")
-                        FirestoreDatabase.fetchSchedules(
-                            onComplete = { schedules = it },
-                            onFailure = { showMessage("Failed to refresh schedules") }
-                        )
-                    },
-                    onFailure = { e ->
-                        showMessage("Error adding schedule: ${e.message}")
-                    }
-                )
-            }
-            "PENDING FEES" -> {
-                FirestoreDatabase.addPendingFee(
-                    fee = item,
-                    onSuccess = {
-                        showMessage("Pending fee added successfully")
-                        FirestoreDatabase.fetchPendingFees(
-                            onComplete = { pendingFees = it },
-                            onFailure = { showMessage("Failed to refresh fees") }
-                        )
-                    },
-                    onFailure = { e ->
-                        showMessage("Error adding fee: ${e.message}")
-                    }
-                )
-            }
+            "SCHEDULE" -> FirestoreDatabase.addSchedule(item, {
+                showMessage("Schedule added successfully")
+                FirestoreDatabase.fetchSchedules({ schedules = it }, { showMessage("Failed to refresh schedules") })
+            }, { e -> showMessage("Error adding schedule: ${e.message}") })
+
+            "PENDING FEES" -> FirestoreDatabase.addPendingFee(item, {
+                showMessage("Pending fee added successfully")
+                FirestoreDatabase.fetchPendingFees({ pendingFees = it }, { showMessage("Failed to refresh fees") })
+            }, { e -> showMessage("Error adding fee: ${e.message}") })
         }
     }
 
@@ -154,7 +134,7 @@ fun AdminDashboardScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Notifications */ }) {
+                    IconButton(onClick = { }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notifications")
                     }
                     IconButton(onClick = {
@@ -209,46 +189,24 @@ fun AdminDashboardScreen(navController: NavController) {
                         }
                     }
                     item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SummaryCard(
-                                title = "TOTAL STUDENTS",
-                                icon = Icons.Default.Person,
-                                modifier = Modifier.weight(1f),
-                                onClick = { navController.navigate("students") }
-                            )
-                            SummaryCard(
-                                title = "TOTAL TEACHERS",
-                                icon = Icons.Default.Person,
-                                modifier = Modifier.weight(1f),
-                                onClick = { navController.navigate("teachers") }
-                            )
-                        }
+                        AnimatedSummaryRow(
+                            leftTitle = "TOTAL STUDENTS\n$studentCount",
+                            rightTitle = "TOTAL TEACHERS\n$teacherCount",
+                            leftIcon = Icons.Default.Person,
+                            rightIcon = Icons.Default.Person,
+                            leftClick = { navController.navigate("students") },
+                            rightClick = { navController.navigate("teachers") }
+                        )
                     }
                     item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SummaryCard(
-                                title = "SCHEDULE",
-                                icon = Icons.Default.Schedule,
-                                modifier = Modifier.weight(1f),
-                                onClick = { selectedCategory = "SCHEDULE"; showDialog = true }
-                            )
-                            SummaryCard(
-                                title = "PENDING FEES",
-                                icon = Icons.Default.Money,
-                                modifier = Modifier.weight(1f),
-                                onClick = { selectedCategory = "PENDING FEES"; showDialog = true }
-                            )
-                        }
+                        AnimatedSummaryRow(
+                            leftTitle = "SCHEDULE",
+                            rightTitle = "PENDING FEES",
+                            leftIcon = Icons.Default.Schedule,
+                            rightIcon = Icons.Default.Money,
+                            leftClick = { selectedCategory = "SCHEDULE"; showDialog = true },
+                            rightClick = { selectedCategory = "PENDING FEES"; showDialog = true }
+                        )
                     }
                     item {
                         Text(
@@ -259,10 +217,11 @@ fun AdminDashboardScreen(navController: NavController) {
                         )
                     }
                     items(manageItems) { item ->
+                        val isExpanded = expandedStates[item] == true
                         ExpandableItem(
                             title = item,
-                            isExpanded = expandedStates[item] == true,
-                            onExpandClick = { expandedStates[item] = !(expandedStates[item] == true) },
+                            isExpanded = isExpanded,
+                            onExpandClick = { expandedStates[item] = !isExpanded },
                             onItemClick = {
                                 when (item) {
                                     "Students" -> navController.navigate("students")
@@ -278,11 +237,67 @@ fun AdminDashboardScreen(navController: NavController) {
     )
 }
 
+@Composable
+fun AnimatedSummaryRow(
+    leftTitle: String,
+    rightTitle: String,
+    leftIcon: ImageVector,
+    rightIcon: ImageVector,
+    leftClick: () -> Unit,
+    rightClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        AnimatedSummaryCard(title = leftTitle, icon = leftIcon, onClick = leftClick, modifier = Modifier.weight(1f))
+        AnimatedSummaryCard(title = rightTitle, icon = rightIcon, onClick = rightClick, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+fun AnimatedSummaryCard(
+    title: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(durationMillis = 100)
+    )
+
+    Card(
+        modifier = modifier
+            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .clickable(
+                onClick = {
+                    isPressed = true
+                    onClick()
+                    isPressed = false
+                }
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+
+
 @Preview(showBackground = true)
 @Composable
 fun PreviewAdminDashboardScreen() {
     AdminDashboardScreen(rememberNavController())
 }
-
-
-
