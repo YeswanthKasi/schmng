@@ -1,18 +1,24 @@
 package com.ecorvi.schmng.ui.data
 
 import android.util.Log
+import com.ecorvi.schmng.ui.data.model.AttendanceRecord
 import com.ecorvi.schmng.ui.data.model.Person
+import com.ecorvi.schmng.ui.data.model.Schedule
+import com.ecorvi.schmng.ui.data.model.Fee
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 
 object FirestoreDatabase {
     private val db = FirebaseFirestore.getInstance()
+    private val schedulesCollection = db.collection("schedules")
+    private val feesCollection = db.collection("fees")
 
     val studentsCollection: CollectionReference = db.collection("students")
     val teachersCollection: CollectionReference = db.collection("teachers")
-    val schedulesCollection: CollectionReference = db.collection("schedules")
     val pendingFeesCollection: CollectionReference = db.collection("pending_fees")
+    val attendanceCollection: CollectionReference = db.collection("attendance")
 
     // Add a student to Firestore
     fun addStudent(student: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
@@ -68,17 +74,17 @@ object FirestoreDatabase {
             }
     }
 
-
-
     // Add a schedule to Firestore
-    fun addSchedule(schedule: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-        schedulesCollection.add(mapOf("schedule" to schedule))
-            .addOnSuccessListener { documentReference ->
-                Log.d("Firestore", "Schedule added with ID: ${documentReference.id}")
+    fun addSchedule(
+        schedule: Schedule,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        schedulesCollection.add(schedule)
+            .addOnSuccessListener { 
                 onSuccess()
             }
             .addOnFailureListener { e ->
-                Log.e("Firestore", "Error adding schedule: ${e.message}")
                 onFailure(e)
             }
     }
@@ -96,26 +102,39 @@ object FirestoreDatabase {
             }
     }
 
-
     // Fetch schedules from Firestore
-    fun fetchSchedules(onComplete: (List<String>) -> Unit, onFailure: (Exception) -> Unit) {
+    fun fetchSchedules(onComplete: (List<Schedule>) -> Unit, onFailure: (Exception) -> Unit) {
         schedulesCollection.get()
             .addOnSuccessListener { snapshot ->
-                val schedulesList = snapshot.documents.mapNotNull { it.getString("schedule") }
+                val schedulesList = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        doc.toObject(Schedule::class.java)?.apply { id = doc.id }
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error converting document to Schedule: ${e.message}")
+                        null
+                    }
+                }
                 Log.d("Firestore", "Fetched Schedules: $schedulesList")
                 onComplete(schedulesList)
             }
             .addOnFailureListener { e ->
-                Log.e("Firestore", "Error fetching schedules: Error fetching schedules: ${e.message}")
+                Log.e("Firestore", "Error fetching schedules: ${e.message}")
                 onFailure(e)
             }
     }
 
     // Fetch pending fees from Firestore
-    fun fetchPendingFees(onComplete: (List<String>) -> Unit, onFailure: (Exception) -> Unit) {
+    fun fetchPendingFees(onComplete: (List<Fee>) -> Unit, onFailure: (Exception) -> Unit) {
         pendingFeesCollection.get()
             .addOnSuccessListener { snapshot ->
-                val feesList = snapshot.documents.mapNotNull { it.getString("fee") }
+                val feesList = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        doc.toObject(Fee::class.java)?.apply { id = doc.id }
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error converting document to Fee: ${e.message}")
+                        null
+                    }
+                }
                 Log.d("Firestore", "Fetched Pending Fees: $feesList")
                 onComplete(feesList)
             }
@@ -199,4 +218,188 @@ object FirestoreDatabase {
                 onFailure(e)
             }
     }
+
+    // Add attendance record to Firestore
+    fun addAttendanceRecord(personId: String, attendanceOption: String, date: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        val newAttendanceRef = attendanceCollection.document()
+        val attendanceRecord = AttendanceRecord(personId, attendanceOption, date)
+
+        newAttendanceRef.set(attendanceRecord)
+            .addOnSuccessListener {
+                Log.d("Firestore", "Attendance record added with ID: ${newAttendanceRef.id}")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error adding attendance record: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // In FirestoreDatabase.kt
+    fun fetchAttendanceForPerson(personId: String, onComplete: (List<AttendanceRecord>) -> Unit, onFailure: (Exception) -> Unit) {
+        // Assuming you have a collection for attendance records
+        val attendanceCollection = db.collection("attendance")
+
+        attendanceCollection.whereEqualTo("personId", personId)
+            .get()
+            .addOnSuccessListener { result ->
+                val attendanceRecords = result.documents.mapNotNull { doc ->
+                    doc.toObject(AttendanceRecord::class.java)
+                }
+                onComplete(attendanceRecords)
+            }
+            .addOnFailureListener { e ->
+                onFailure(e)
+            }
+    }
+
+    // Fetch all attendance records
+    fun fetchAllAttendanceRecords(onComplete: (List<AttendanceRecord>) -> Unit, onFailure: (Exception) -> Unit) {
+        attendanceCollection.get()
+            .addOnSuccessListener { snapshot ->
+                val attendanceRecords = snapshot.documents.mapNotNull { it.toObject(AttendanceRecord::class.java) }
+                onComplete(attendanceRecords)
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching attendance records: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Fetch schedule with ID
+    fun fetchScheduleWithId(onComplete: (Map<String, String>) -> Unit, onFailure: (Exception) -> Unit) {
+        schedulesCollection.get()
+            .addOnSuccessListener { snapshot ->
+                val schedulesMap = snapshot.documents.associate { 
+                    it.id to (it.getString("schedule") ?: "")
+                }
+                onComplete(schedulesMap)
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching schedules: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Delete schedule by ID
+    fun deleteSchedule(
+        scheduleId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        schedulesCollection.document(scheduleId)
+            .delete()
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { onFailure }
+    }
+
+    // Fetch pending fees with ID
+    fun fetchPendingFeesWithId(onComplete: (Map<String, String>) -> Unit, onFailure: (Exception) -> Unit) {
+        pendingFeesCollection.get()
+            .addOnSuccessListener { snapshot ->
+                val feesMap = snapshot.documents.associate { 
+                    it.id to (it.getString("fee") ?: "")
+                }
+                onComplete(feesMap)
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching fees: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Delete pending fee by ID
+    fun deletePendingFee(feeId: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        if (feeId.isBlank()) {
+            onFailure(Exception("Invalid fee ID"))
+            return
+        }
+        pendingFeesCollection.document(feeId)
+            .delete()
+            .addOnSuccessListener {
+                Log.d("Firestore", "Pending fee deleted successfully")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error deleting fee: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Add real-time listener for schedules
+    fun listenForScheduleUpdates(
+        onUpdate: (List<Schedule>) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration {
+        return schedulesCollection
+            .orderBy("date", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
+
+                val schedules = snapshot?.documents?.mapNotNull { doc ->
+                    try {
+                        doc.toObject(Schedule::class.java)?.apply { id = doc.id }
+                    } catch (e: Exception) {
+                        onError(e)
+                        null
+                    }
+                } ?: emptyList()
+                onUpdate(schedules)
+            }
+    }
+
+    // Add real-time listener for fees
+    fun listenForFeeUpdates(
+        onUpdate: (List<Fee>) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration {
+        return feesCollection
+            .orderBy("dueDate", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
+
+                val fees = snapshot?.documents?.mapNotNull { doc ->
+                    try {
+                        doc.toObject(Fee::class.java)?.apply { id = doc.id }
+                    } catch (e: Exception) {
+                        onError(e)
+                        null
+                    }
+                } ?: emptyList()
+                onUpdate(fees)
+            }
+    }
+
+    // Delete fee by ID
+    fun deleteFee(
+        feeId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        feesCollection.document(feeId)
+            .delete()
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { onFailure }
+    }
+
+    fun addFee(
+        fee: Fee,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        feesCollection.add(fee)
+            .addOnSuccessListener { 
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                onFailure(e)
+            }
+    }
+
 }

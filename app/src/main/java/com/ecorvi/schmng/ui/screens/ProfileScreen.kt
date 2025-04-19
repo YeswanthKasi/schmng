@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -14,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -21,7 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
-import com.google.firebase.firestore.DocumentSnapshot
+import com.ecorvi.schmng.ui.data.model.AttendanceRecord
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +39,9 @@ fun ProfileScreen(
     var dateOfBirth by remember { mutableStateOf("") }
     var mobileNo by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var className by remember { mutableStateOf("") }
+    var attendanceRecords by remember { mutableStateOf<List<AttendanceRecord>>(emptyList()) }
+    val context = LocalContext.current
 
     // Load profile data
     LaunchedEffect(personId) {
@@ -46,7 +51,7 @@ fun ProfileScreen(
             FirestoreDatabase.teachersCollection.document(personId)
         }
 
-        personRef.get().addOnSuccessListener { documentSnapshot: DocumentSnapshot ->
+        personRef.get().addOnSuccessListener { documentSnapshot ->
             if (documentSnapshot.exists()) {
                 val person = documentSnapshot.toObject(Person::class.java)
                 person?.let {
@@ -57,13 +62,21 @@ fun ProfileScreen(
                     dateOfBirth = it.dateOfBirth
                     mobileNo = it.mobileNo
                     address = it.address
+                    className = it.className
                 }
             } else {
-                Toast.makeText(navController.context, "Person not found", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Person not found", Toast.LENGTH_SHORT).show()
             }
         }.addOnFailureListener {
-            Toast.makeText(navController.context, "Error fetching data", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Error fetching data", Toast.LENGTH_SHORT).show()
         }
+
+        // Load attendance records
+        FirestoreDatabase.fetchAttendanceForPerson(
+            personId = personId,
+            onComplete = { records -> attendanceRecords = records },
+            onFailure = { /* Handle error */ }
+        )
     }
 
     Scaffold(
@@ -196,6 +209,18 @@ fun ProfileScreen(
             }
 
             item {
+                OutlinedTextField(
+                    value = className,
+                    onValueChange = { className = it },
+                    label = { Text("Class") },
+                    readOnly = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+            }
+
+            item {
                 Button(
                     onClick = {
                         val updatedFields = mapOf(
@@ -205,7 +230,8 @@ fun ProfileScreen(
                             "gender" to gender,
                             "dateOfBirth" to dateOfBirth,
                             "mobileNo" to mobileNo,
-                            "address" to address
+                            "address" to address,
+                            "className" to className
                         )
 
                         val personRef = if (personType == "student") {
@@ -216,11 +242,11 @@ fun ProfileScreen(
 
                         personRef.update(updatedFields)
                             .addOnSuccessListener {
-                                Toast.makeText(navController.context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
                                 navController.popBackStack()
                             }
                             .addOnFailureListener { e ->
-                                Toast.makeText(navController.context, "Failed to update profile: $e", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Failed to update profile: $e", Toast.LENGTH_SHORT).show()
                             }
                     },
                     modifier = Modifier
@@ -229,6 +255,27 @@ fun ProfileScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
                 ) {
                     Text("Update", color = Color.White)
+                }
+            }
+
+            if (attendanceRecords.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Attendance History",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+                
+                items(attendanceRecords) { record ->
+                    ListItem(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        leadingContent = {
+                            Icon(Icons.Default.CalendarToday, contentDescription = null)
+                        },
+                        headlineContent = { Text(record.date) },
+                        supportingContent = { Text(record.attendanceOption) }
+                    )
                 }
             }
         }

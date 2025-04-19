@@ -1,5 +1,7 @@
 package com.ecorvi.schmng.ui.data.model
 
+import com.ecorvi.schmng.ui.data.model.AttendanceOption
+
 data class Person(
     var id: String = "",
     var firstName: String = "",
@@ -10,8 +12,8 @@ data class Person(
     var mobileNo: String = "",
     var address: String = "",
     var className: String = "",
-    var age: Int = 0
+    var age: Int = 0,
+    var attendance: AttendanceOption = AttendanceOption.NONE
 ) {
     constructor() : this("", "", "", "", "", "", "", "", "", 0)
 }
-

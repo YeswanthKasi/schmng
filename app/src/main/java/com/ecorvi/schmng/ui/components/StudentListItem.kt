@@ -1,39 +1,41 @@
 package com.ecorvi.schmng.ui.components
 
-import androidx.compose.foundation.Image
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.compose.rememberNavController
-import com.ecorvi.schmng.R
 import com.ecorvi.schmng.ui.data.model.Person
-import androidx.compose.material.icons.filled.Edit
 
 @Composable
 fun StudentListItem(
     student: Person,
-    navController: androidx.navigation.NavController,
+    onItemClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable(onClick = onItemClick)
+            .animateContentSize(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFF5F5F5)
+        )
     ) {
         Row(
             modifier = Modifier
@@ -41,70 +43,73 @@ fun StudentListItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
+            // Student Icon
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF1F41BB).copy(alpha = 0.1f),
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
-                    Icons.Default.Person,
-                    contentDescription = "Student Icon",
-                    modifier = Modifier.size(40.dp)
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Student",
+                    tint = Color(0xFF1F41BB),
+                    modifier = Modifier.padding(8.dp)
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text(
-                        text = "${student.firstName} ${student.lastName}",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "ID NO: ${student.id}, Class: ${student.className}, Gender: ${student.gender}",
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-                }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(
-                    onClick = {
-                        if (student.id.isNotBlank()) {
-                            navController.navigate("profile/${student.id}/student")
-                        } else {
-                            // Optional: handle empty ID case
-                        }
-                    }
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.visibility),
-                        contentDescription = "View",
-                        modifier = Modifier.size(24.dp)
+            // Student Info
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "${student.firstName} ${student.lastName}",
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold
                     )
-                }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Class: ${student.className}",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color.Gray
+                    )
+                )
+            }
 
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = Color.Red
-                    )
-                }
+            // Delete Button
+            IconButton(
+                onClick = onDeleteClick,
+                colors = IconButtonDefaults.iconButtonColors(
+                    contentColor = Color.Red
+                )
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete Student"
+                )
             }
         }
     }
 }
 
-@Preview(showBackground = true)
+@Preview
 @Composable
 fun StudentListItemPreview() {
-    val navController = rememberNavController()
-    val context = LocalContext.current
-    val sampleStudent = Person(
-        id = "2023-001",
+    val student = Person(
+        id = "1",
         firstName = "John",
         lastName = "Doe",
-        className = "Form 1",
-        gender = "Male" // ✅ updated
+        className = "Class A"
     )
-    StudentListItem(student = sampleStudent, navController = navController, onDeleteClick = {})
+    MaterialTheme {
+        StudentListItem(
+            student = student,
+            onItemClick = {},
+            onDeleteClick = {}
+        )
+    }
 }
+
+

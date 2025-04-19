@@ -1,12 +1,16 @@
 package com.ecorvi.schmng.ui.screens
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -14,12 +18,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,13 +34,49 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.ui.components.*
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
+import com.ecorvi.schmng.ui.data.model.Fee
+import com.ecorvi.schmng.ui.data.model.Schedule
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusState
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.layout.ContentScale
+import com.ecorvi.schmng.R
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Help
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material.icons.filled.Update
+import android.content.pm.PackageManager
+
+private val PrimaryBlue = Color(0xFF1F41BB)
+private val StudentGreen = Color(0xFF00C853)
+private val TeacherBlue = Color(0xFF2979FF)
+private val ScheduleOrange = Color(0xFFFF9100)
+private val FeesRed = Color(0xFFFF1744)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun AdminDashboardScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
+    val context = LocalContext.current
     val manageItems = listOf("Students", "Teachers")
     val expandedStates = remember { mutableStateMapOf<String, Boolean>().apply {
         manageItems.forEach { this[it] = false }
@@ -45,8 +88,8 @@ fun AdminDashboardScreen(navController: NavController) {
     var showAddInput by remember { mutableStateOf(false) }
     var showViewList by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
-    var schedules by remember { mutableStateOf<List<String>>(emptyList()) }
-    var pendingFees by remember { mutableStateOf<List<String>>(emptyList()) }
+    var schedules by remember { mutableStateOf<List<Schedule>>(emptyList()) }
+    var pendingFees by remember { mutableStateOf<List<Fee>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -54,6 +97,11 @@ fun AdminDashboardScreen(navController: NavController) {
 
     var studentCount by remember { mutableStateOf(0) }
     var teacherCount by remember { mutableStateOf(0) }
+    var showDropdownMenu by remember { mutableStateOf(false) }
+    var showNavigationDrawer by remember { mutableStateOf(false) }
+    
+    // Drawer state
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
     fun showMessage(message: String) {
         coroutineScope.launch {
@@ -62,38 +110,120 @@ fun AdminDashboardScreen(navController: NavController) {
     }
 
     LaunchedEffect(Unit) {
-        isLoading = true
-        FirestoreDatabase.fetchSchedules(
-            onComplete = { fetchedSchedules -> schedules = fetchedSchedules; isLoading = false },
-            onFailure = { e -> errorMessage = "Failed to load schedules: ${e.message}"; isLoading = false }
-        )
-        FirestoreDatabase.fetchPendingFees(
-            onComplete = { fetchedFees -> pendingFees = fetchedFees; isLoading = false },
-            onFailure = { e -> errorMessage = "Failed to load pending fees: ${e.message}"; isLoading = false }
-        )
-        FirestoreDatabase.fetchStudentCount { studentCount = it }
-        FirestoreDatabase.fetchTeacherCount { teacherCount = it }
+        try {
+            FirestoreDatabase.fetchStudentCount { count ->
+                studentCount = count
+            }
+            FirestoreDatabase.fetchTeacherCount { count ->
+                teacherCount = count
+            }
+            isLoading = false
+        } catch (e: Exception) {
+            errorMessage = e.message
+            isLoading = false
+        }
     }
 
     fun addItem(category: String, item: String) {
         if (item.isBlank()) return
         when (category) {
-            "SCHEDULE" -> FirestoreDatabase.addSchedule(item, {
-                showMessage("Schedule added successfully")
-                FirestoreDatabase.fetchSchedules({ schedules = it }, { showMessage("Failed to refresh schedules") })
-            }, { e -> showMessage("Error adding schedule: ${e.message}") })
+            "SCHEDULE" -> {
+                val schedule = Schedule(
+                    title = item,
+                    description = "",
+                    date = "",
+                    time = "",
+                    className = ""
+                )
+                FirestoreDatabase.addSchedule(
+                    schedule = schedule,
+                    onSuccess = {
+                        showMessage("Schedule added successfully")
+                        FirestoreDatabase.fetchSchedules(
+                            onComplete = { schedules = it },
+                            onFailure = { e -> showMessage("Failed to refresh schedules: ${e.message}") }
+                        )
+                    },
+                    onFailure = { e -> showMessage("Error adding schedule: ${e.message}") }
+                )
+            }
+            "PENDING FEES" -> {
+                val fee = Fee(
+                    studentName = item,
+                    amount = 0.0,
+                    dueDate = "",
+                    description = ""
+                )
+                FirestoreDatabase.addFee(
+                    fee = fee,
+                    onSuccess = {
+                        showMessage("Fee added successfully")
+                        FirestoreDatabase.fetchPendingFees(
+                            onComplete = { pendingFees = it },
+                            onFailure = { e -> showMessage("Failed to refresh fees: ${e.message}") }
+                        )
+                    },
+                    onFailure = { e -> showMessage("Error adding fee: ${e.message}") }
+                )
+            }
+        }
+    }
 
-            "PENDING FEES" -> FirestoreDatabase.addPendingFee(item, {
-                showMessage("Pending fee added successfully")
-                FirestoreDatabase.fetchPendingFees({ pendingFees = it }, { showMessage("Failed to refresh fees") })
-            }, { e -> showMessage("Error adding fee: ${e.message}") })
+    // Function to handle help option - open email client
+    fun handleHelpClick() {
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:info@ecorvi.com")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(
+                context,
+                "No email app found. Please email us at info@ecorvi.com",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    // Function to handle logout
+    fun handleLogout() {
+        auth.signOut()
+        navController.navigate("login") {
+            popUpTo("adminDashboard") { inclusive = true }
+        }
+    }
+
+    // Function to handle update check
+    fun checkForUpdates() {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("market://details?id=${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            // If Play Store app is not installed, open in browser
+            val webIntent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                context.startActivity(webIntent)
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    "Unable to open Play Store",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
     if (showDialog) {
         val dataList = when (selectedCategory) {
-            "SCHEDULE" -> schedules
-            "PENDING FEES" -> pendingFees
+            "SCHEDULE" -> schedules.map { it.title }
+            "PENDING FEES" -> pendingFees.map { "${it.studentName} - ₹${it.amount}" }
             else -> emptyList()
         }
         OptionsDialog(
@@ -116,125 +246,418 @@ fun AdminDashboardScreen(navController: NavController) {
                 showDialog = false
                 inputText = ""
             },
+            onDelete = { item ->
+                when (selectedCategory) {
+                    "SCHEDULE" -> {
+                        val scheduleToDelete = schedules.find { it.title == item }
+                        if (scheduleToDelete != null) {
+                            FirestoreDatabase.deleteSchedule(
+                                scheduleId = scheduleToDelete.id,
+                                onSuccess = {
+                                    showMessage("Schedule deleted successfully")
+                                    FirestoreDatabase.fetchSchedules(
+                                        onComplete = { schedules = it },
+                                        onFailure = { e -> showMessage("Failed to refresh schedules: ${e.message}") }
+                                    )
+                                },
+                                onFailure = { e -> showMessage("Error deleting schedule: ${e.message}") }
+                            )
+                        }
+                    }
+                    "PENDING FEES" -> {
+                        val feeToDelete = pendingFees.find { "${it.studentName} - ₹${it.amount}" == item }
+                        if (feeToDelete != null) {
+                            FirestoreDatabase.deleteFee(
+                                feeId = feeToDelete.id,
+                                onSuccess = {
+                                    showMessage("Fee deleted successfully")
+                                    FirestoreDatabase.fetchPendingFees(
+                                        onComplete = { pendingFees = it },
+                                        onFailure = { e -> showMessage("Failed to refresh fees: ${e.message}") }
+                                    )
+                                },
+                                onFailure = { e -> showMessage("Error deleting fee: ${e.message}") }
+                            )
+                        }
+                    }
+                }
+            },
             dataList = dataList
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("DASHBOARD", color = Color.Black, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications")
-                    }
-                    IconButton(onClick = {
-                        auth.signOut()
-                        navController.navigate("login") {
-                            popUpTo("adminDashboard") { inclusive = true }
-                        }
-                    }) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-            )
-        },
-        bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home") }
-                )
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        content = { padding ->
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (errorMessage != null) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(errorMessage ?: "Unknown error", color = Color.Red)
-                }
-            } else {
-                LazyColumn(
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.width(300.dp),
+                drawerContainerColor = Color.White.copy(alpha = 0.95f)
+            ) {
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // App Logo and Name
+                Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.White)
-                        .padding(padding),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    item {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                            OutlinedTextField(
-                                value = "",
-                                onValueChange = {},
-                                placeholder = { Text("Search") },
-                                modifier = Modifier.width(355.dp),
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") }
+                    Image(
+                        painter = painterResource(id = R.drawable.ecorvilogo),
+                        contentDescription = "App Logo",
+                        modifier = Modifier
+                            .size(80.dp)
+                            .padding(8.dp)
+                    )
+                    Text(
+                        text = "Ecorvi School Management",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = PrimaryBlue,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Divider(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = Color.Gray.copy(alpha = 0.2f)
+                )
+
+                // Navigation Items
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                    label = { Text("Home") },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                    }
+                )
+
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
+                    label = { Text("Profile") },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        // Navigate to profile
+                    }
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Version and Update Section
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                    Text(
+                        text = "Version ${packageInfo.versionName}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { checkForUpdates() },
+                        color = Color.Transparent
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Update,
+                                contentDescription = "Check for updates",
+                                tint = PrimaryBlue
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                "Check for Updates",
+                                color = PrimaryBlue,
+                                style = MaterialTheme.typography.bodyMedium
                             )
                         }
-                    }
-                    item {
-                        AnimatedSummaryRow(
-                            leftTitle = "TOTAL STUDENTS\n$studentCount",
-                            rightTitle = "TOTAL TEACHERS\n$teacherCount",
-                            leftIcon = Icons.Default.Person,
-                            rightIcon = Icons.Default.Person,
-                            leftClick = { navController.navigate("students") },
-                            rightClick = { navController.navigate("teachers") }
-                        )
-                    }
-                    item {
-                        AnimatedSummaryRow(
-                            leftTitle = "SCHEDULE",
-                            rightTitle = "PENDING FEES",
-                            leftIcon = Icons.Default.Schedule,
-                            rightIcon = Icons.Default.Money,
-                            leftClick = { selectedCategory = "SCHEDULE"; showDialog = true },
-                            rightClick = { selectedCategory = "PENDING FEES"; showDialog = true }
-                        )
-                    }
-                    item {
-                        Text(
-                            text = "MANAGE",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-                    items(manageItems) { item ->
-                        val isExpanded = expandedStates[item] == true
-                        ExpandableItem(
-                            title = item,
-                            isExpanded = isExpanded,
-                            onExpandClick = { expandedStates[item] = !isExpanded },
-                            onItemClick = {
-                                when (item) {
-                                    "Students" -> navController.navigate("students")
-                                    "Teachers" -> navController.navigate("teachers")
-                                }
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
                     }
                 }
             }
         }
-    )
+    ) {
+        CommonBackground {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                containerColor = Color.Transparent,
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    "DASHBOARD",
+                                    color = PrimaryBlue,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        if (drawerState.isClosed) drawerState.open()
+                                        else drawerState.close()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.Menu,
+                                    contentDescription = "Menu",
+                                    tint = PrimaryBlue
+                                )
+                            }
+                        },
+                        actions = {
+                            Box {
+                                IconButton(onClick = { showDropdownMenu = true }) {
+                                    Icon(
+                                        Icons.Default.AccountCircle,
+                                        contentDescription = "Profile Menu",
+                                        tint = PrimaryBlue
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = showDropdownMenu,
+                                    onDismissRequest = { showDropdownMenu = false },
+                                    modifier = Modifier
+                                        .background(Color.White)
+                                        .width(160.dp)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Help,
+                                                    contentDescription = "Help",
+                                                    tint = PrimaryBlue
+                                                )
+                                                Text(
+                                                    "Help",
+                                                    color = PrimaryBlue
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            showDropdownMenu = false
+                                            handleHelpClick()
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Logout,
+                                                    contentDescription = "Logout",
+                                                    tint = PrimaryBlue
+                                                )
+                                                Text(
+                                                    "Logout",
+                                                    color = PrimaryBlue
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            showDropdownMenu = false
+                                            handleLogout()
+                                        }
+                                    )
+                                }
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.White.copy(alpha = 0.95f)
+                        )
+                    )
+                },
+                bottomBar = {
+                    NavigationBar(containerColor = Color.White) {
+                        NavigationBarItem(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                            label = { Text("Home") }
+                        )
+                    }
+                },
+                snackbarHost = { SnackbarHost(snackbarHostState) },
+                content = { padding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                    ) {
+                        when {
+                            isLoading -> {
+                                ShimmerLoading()
+                            }
+                            errorMessage != null -> {
+                                ErrorMessage(errorMessage!!)
+                            }
+                            else -> {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(
+                                        top = 12.dp,
+                                        bottom = 16.dp
+                                    )
+                                ) {
+                                    item {
+                                        SearchBar()
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                    }
+
+                                    item {
+                                        AnimatedSummaryRow(
+                                            leftTitle = "TOTAL STUDENTS\n$studentCount",
+                                            rightTitle = "TOTAL TEACHERS\n$teacherCount",
+                                            leftIcon = Icons.Default.Person,
+                                            rightIcon = Icons.Default.Person,
+                                            leftClick = { navController.navigate("students") },
+                                            rightClick = { navController.navigate("teachers") },
+                                            leftColor = StudentGreen,
+                                            rightColor = TeacherBlue
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                    }
+
+                                    item {
+                                        AnimatedSummaryRow(
+                                            leftTitle = "SCHEDULE",
+                                            rightTitle = "PENDING FEES",
+                                            leftIcon = Icons.Default.Schedule,
+                                            rightIcon = Icons.Default.Money,
+                                            leftClick = { navController.navigate("schedules") },
+                                            rightClick = { navController.navigate("pending_fees") },
+                                            leftColor = ScheduleOrange,
+                                            rightColor = FeesRed
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+
+                                    item {
+                                        Text(
+                                            text = "MANAGE",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PrimaryBlue,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                        )
+                                    }
+
+                                    items(manageItems) { item ->
+                                        val isExpanded = expandedStates[item] == true
+                                        EnhancedExpandableItem(
+                                            title = item,
+                                            isExpanded = isExpanded,
+                                            onExpandClick = { expandedStates[item] = !isExpanded },
+                                            onItemClick = {
+                                                when (item) {
+                                                    "Students" -> navController.navigate("students")
+                                                    "Teachers" -> navController.navigate("teachers")
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchBar() {
+    var searchText by remember { mutableStateOf("") }
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(8.dp),
+        shadowElevation = if (isFocused) 4.dp else 2.dp,
+        color = Color.White.copy(alpha = 0.95f)
+    ) {
+        OutlinedTextField(
+            value = searchText,
+            onValueChange = { searchText = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .onFocusChanged { state ->
+                    isFocused = state.isFocused
+                },
+            placeholder = {
+                Text(
+                    text = "Search...",
+                    fontSize = 14.sp,
+                    color = if (isFocused) PrimaryBlue.copy(alpha = 0.6f) else Color.Gray
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = if (isFocused) PrimaryBlue else Color.Gray,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .padding(start = 4.dp)
+                )
+            },
+            shape = RoundedCornerShape(8.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = PrimaryBlue,
+                unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f),
+                cursorColor = PrimaryBlue,
+                focusedLeadingIconColor = PrimaryBlue,
+                unfocusedLeadingIconColor = Color.Gray.copy(alpha = 0.7f)
+            ),
+            singleLine = true,
+            interactionSource = interactionSource,
+            textStyle = TextStyle(fontSize = 14.sp)
+        )
+    }
+}
+
+@Composable
+private fun ErrorMessage(message: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = message,
+            color = Color.Red,
+            style = MaterialTheme.typography.bodyLarge
+        )
+    }
 }
 
 @Composable
@@ -244,7 +667,9 @@ fun AnimatedSummaryRow(
     leftIcon: ImageVector,
     rightIcon: ImageVector,
     leftClick: () -> Unit,
-    rightClick: () -> Unit
+    rightClick: () -> Unit,
+    leftColor: Color,
+    rightColor: Color
 ) {
     Row(
         modifier = Modifier
@@ -252,8 +677,20 @@ fun AnimatedSummaryRow(
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        AnimatedSummaryCard(title = leftTitle, icon = leftIcon, onClick = leftClick, modifier = Modifier.weight(1f))
-        AnimatedSummaryCard(title = rightTitle, icon = rightIcon, onClick = rightClick, modifier = Modifier.weight(1f))
+        AnimatedSummaryCard(
+            title = leftTitle,
+            icon = leftIcon,
+            onClick = leftClick,
+            backgroundColor = leftColor,
+            modifier = Modifier.weight(1f)
+        )
+        AnimatedSummaryCard(
+            title = rightTitle,
+            icon = rightIcon,
+            onClick = rightClick,
+            backgroundColor = rightColor,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
@@ -262,42 +699,226 @@ fun AnimatedSummaryCard(
     title: String,
     icon: ImageVector,
     onClick: () -> Unit,
+    backgroundColor: Color,
     modifier: Modifier = Modifier
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(durationMillis = 100)
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = ""
     )
 
-    Card(
+    Surface(
         modifier = modifier
-            .graphicsLayer(scaleX = scale, scaleY = scale)
-            .clickable(
-                onClick = {
+            .height(120.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(12.dp),
+        shadowElevation = if (isPressed) 2.dp else 4.dp,
+        color = backgroundColor
+    ) {
+        Column(
+            modifier = Modifier
+                .clickable {
                     isPressed = true
                     onClick()
                     isPressed = false
                 }
-            ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(12.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .size(32.dp)
+                    .graphicsLayer {
+                        scaleX = if (isPressed) 0.9f else 1f
+                        scaleY = if (isPressed) 0.9f else 1f
+                    }
+            )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, textAlign = TextAlign.Center)
+            Text(
+                title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.graphicsLayer {
+                    alpha = if (isPressed) 0.8f else 1f
+                }
+            )
         }
     }
 }
 
+@Composable
+fun OptionsDialog(
+    category: String,
+    onDismiss: () -> Unit,
+    onAddClick: () -> Unit,
+    onViewClick: () -> Unit,
+    showAddInput: Boolean,
+    showViewList: Boolean,
+    inputText: String,
+    onInputChange: (String) -> Unit,
+    onConfirmAdd: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    dataList: List<String>
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(category) },
+        text = {
+            Column {
+                if (!showAddInput && !showViewList) {
+                    Button(
+                        onClick = onAddClick,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Add")
+                    }
+                    Button(
+                        onClick = onViewClick,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("View")
+                    }
+                }
 
+                if (showAddInput) {
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = onInputChange,
+                        label = { Text("Enter ${category.lowercase()}") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (showViewList) {
+                    LazyColumn {
+                        items(dataList) { item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = item,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { onDelete(item) }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = Color.Red
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (showAddInput) {
+                TextButton(onClick = { onConfirmAdd(inputText) }) {
+                    Text("Add")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun EnhancedExpandableItem(
+    title: String,
+    isExpanded: Boolean,
+    onExpandClick: () -> Unit,
+    onItemClick: () -> Unit
+) {
+    var isPressed by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        shape = RoundedCornerShape(8.dp),
+        shadowElevation = if (isPressed) 1.dp else 2.dp,
+        color = Color.White.copy(alpha = 0.95f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    isPressed = true
+                    onItemClick()
+                    isPressed = false
+                }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = PrimaryBlue,
+                fontWeight = FontWeight.Medium
+            )
+            IconButton(
+                onClick = onExpandClick,
+                modifier = Modifier
+                    .size(32.dp)
+                    .scale(if (isPressed) 0.9f else 1f)
+            ) {
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = PrimaryBlue,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
 
 @Preview(showBackground = true)
 @Composable
 fun PreviewAdminDashboardScreen() {
     AdminDashboardScreen(rememberNavController())
+}
+
+@Composable
+fun CommonBackground(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.bg_ui),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.FillBounds
+        )
+        content()
+    }
 }

@@ -1,10 +1,14 @@
 package com.ecorvi.schmng.ui.screens
 
-import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -21,6 +26,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
+import com.ecorvi.schmng.ui.utils.Constants
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,7 +34,6 @@ fun AddPersonScreen(
     navController: NavController,
     personType: String
 ) {
-    // State for new person fields
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -36,10 +41,9 @@ fun AddPersonScreen(
     var dateOfBirth by remember { mutableStateOf("") }
     var mobileNo by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var className by remember { mutableStateOf("Class 1") }
-
-    // List of class options
-    val classOptions = listOf("Class 1", "Class 2", "Class 3", "Class 4", "Class 5")
+    var selectedClass by remember { mutableStateOf(Constants.CLASS_OPTIONS.first()) }
+    var showClassDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -187,40 +191,64 @@ fun AddPersonScreen(
                     )
                 }
 
-                // Class Dropdown
+                // Add class selection
                 item {
-                    ExposedDropdownMenuBox(
-                        expanded = false,
-                        onExpandedChange = { /* Handle dropdown expansion if needed */ },
+                    OutlinedTextField(
+                        value = selectedClass,
+                        onValueChange = { },
+                        label = { Text("Class") },
+                        readOnly = true,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = className,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Select Class") },
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = false)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = false,
-                            onDismissRequest = {}
-                        ) {
-                            classOptions.forEach { classOption ->
-                                DropdownMenuItem(
-                                    text = { Text(classOption) },
-                                    onClick = {
-                                        className = classOption
-                                    }
-                                )
-                            }
+                            .height(56.dp),
+                        trailingIcon = {
+                            Icon(Icons.Default.ArrowDropDown, "Select Class")
                         }
+                    )
+                }
+
+                if (showClassDialog) {
+                    item {
+                        AlertDialog(
+                            onDismissRequest = { showClassDialog = false },
+                            title = { Text("Select Class") },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                ) {
+                                    Constants.CLASS_OPTIONS.forEach { classOption ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedClass = classOption
+                                                    showClassDialog = false
+                                                }
+                                                .padding(vertical = 12.dp, horizontal = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(
+                                                selected = selectedClass == classOption,
+                                                onClick = {
+                                                    selectedClass = classOption
+                                                    showClassDialog = false
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(classOption)
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showClassDialog = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
                     }
                 }
 
@@ -228,9 +256,7 @@ fun AddPersonScreen(
                 item {
                     Button(
                         onClick = {
-                            // Generate a new ID (for simplicity, use a random ID or Firestore's automatic ID generation)
-                            val newPerson = Person(
-                                id = "",  // Firestore will automatically generate an ID
+                            val person = Person(
                                 firstName = firstName,
                                 lastName = lastName,
                                 email = email,
@@ -238,39 +264,39 @@ fun AddPersonScreen(
                                 dateOfBirth = dateOfBirth,
                                 mobileNo = mobileNo,
                                 address = address,
-                                className = className,  // Ensure className is a String
+                                className = selectedClass
                             )
+
                             if (personType == "student") {
                                 FirestoreDatabase.addStudent(
-                                    newPerson,
+                                    person,
                                     onSuccess = {
-                                        Log.d("Firestore", "Student successfully added!")
+                                        Toast.makeText(context, "Student added successfully", Toast.LENGTH_SHORT).show()
                                         navController.popBackStack()
                                     },
-                                    onFailure = { exception ->
-                                        Log.e("Firestore", "Failed to add student: ${exception.message}")
+                                    onFailure = { e ->
+                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 )
                             } else {
                                 FirestoreDatabase.addTeacher(
-                                    newPerson,
+                                    person,
                                     onSuccess = {
-                                        Log.d("Firestore", "Teacher successfully added!")
+                                        Toast.makeText(context, "Teacher added successfully", Toast.LENGTH_SHORT).show()
                                         navController.popBackStack()
                                     },
-                                    onFailure = { exception ->
-                                        Log.e("Firestore", "Failed to add teacher: ${exception.message}")
+                                    onFailure = { e ->
+                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 )
                             }
-
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
                     ) {
-                        Text("Save", color = Color.White)
+                        Text("Add ${personType.capitalize()}", color = Color.White)
                     }
                 }
             }
