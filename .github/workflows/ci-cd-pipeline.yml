@@ -42,6 +42,10 @@ jobs:
           mkdir -p ./app/KEY_STORE
           echo "${KEYSTORE_BASE64}" | base64 --decode > ./app/KEY_STORE/schmng.jks
 
+      # Optional: Check Kotlin compiler errors before full build
+      - name: Debug Kotlin Compiler Errors (Optional but very useful)
+        run: ./gradlew compileDebugKotlin --stacktrace --info
+
       - name: Run Unit Tests
         run: ./gradlew test
 
@@ -73,9 +77,6 @@ jobs:
           files: app/build/outputs/bundle/release/app-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-
 
       - name: Upload New Version to Production
         uses: r0adkll/upload-google-play@v1
