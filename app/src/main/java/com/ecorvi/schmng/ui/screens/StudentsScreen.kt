@@ -51,26 +51,36 @@ fun StudentsScreen(navController: NavController) {
     var showAttendanceButton by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf<Person?>(null) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Update showAttendanceButton when class is selected
+    LaunchedEffect(selectedClass) {
+        showAttendanceButton = selectedClass != "All Classes"
+    }
 
     // Firestore real-time listener
     LaunchedEffect(Unit) {
-        listenerRegistration = FirestoreDatabase.listenForStudentUpdates(
-            onUpdate = { fetchedStudents ->
-                studentsList = fetchedStudents
-                isLoading = false
-                Log.d("StudentsScreen", "Real-time student updates: $fetchedStudents")
-            },
-            onError = { exception ->
-                Log.e("Firestore", "Error fetching students in real-time", exception)
-                isLoading = false
+        try {
+            listenerRegistration = FirestoreDatabase.listenForStudentUpdates(
+                onUpdate = { fetchedStudents ->
+                    studentsList = fetchedStudents
+                    isLoading = false
+                    Log.d("StudentsScreen", "Real-time student updates: $fetchedStudents")
+                },
+                onError = { exception ->
+                    Log.e("Firestore", "Error fetching students in real-time", exception)
+                    isLoading = false
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Error loading students: ${exception.message}")
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error setting up student listener", e)
+            scope.launch {
+                snackbarHostState.showSnackbar("Error: ${e.message}")
             }
-        )
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            listenerRegistration?.remove()
-            Log.d("StudentsScreen", "Stopped listening for real-time student updates")
         }
     }
 
@@ -138,7 +148,13 @@ fun StudentsScreen(navController: NavController) {
             Column {
                 if (showAttendanceButton) {
                     FloatingActionButton(
-                        onClick = { navController.navigate("student_attendance") },
+                        onClick = { 
+                            if (selectedClass != "All Classes") {
+                                navController.navigate("student_attendance/$selectedClass")
+                            } else {
+                                Toast.makeText(context, "Please select a class first", Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
                         Icon(Icons.Default.CalendarToday, "Take Attendance")
@@ -151,6 +167,7 @@ fun StudentsScreen(navController: NavController) {
                 }
             }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         content = { padding ->
             Image(
                 painter = painterResource(id = R.drawable.bg_ui),
@@ -202,7 +219,7 @@ fun StudentsScreen(navController: NavController) {
                             StudentListItem(
                                 student = student,
                                 onItemClick = {
-                                    navController.navigate("profile/${student.id}/student")
+                                    navController.navigate("view_profile/student/${student.id}")
                                 },
                                 onDeleteClick = {
                                     showDeleteDialog = student
@@ -260,18 +277,19 @@ fun StudentsScreen(navController: NavController) {
         )
     }
 
-    if (showDeleteDialog != null) {
+    // Delete Confirmation Dialog
+    showDeleteDialog?.let { student ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
             title = { Text("Confirm Delete") },
-            text = { 
-                Text("Are you sure you want to delete ${showDeleteDialog!!.firstName} ${showDeleteDialog!!.lastName}?") 
+            text = {
+                Text("Are you sure you want to delete ${student.firstName} ${student.lastName}?")
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         FirestoreDatabase.deleteStudent(
-                            showDeleteDialog!!.id,
+                            student.id,
                             onSuccess = {
                                 Toast.makeText(context, "Student deleted successfully", Toast.LENGTH_SHORT).show()
                                 showDeleteDialog = null

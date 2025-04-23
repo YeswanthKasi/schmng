@@ -17,7 +17,6 @@ import androidx.navigation.navArgument
 import com.ecorvi.schmng.ui.screens.*
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
-import com.ecorvi.schmng.ui.screens.attendance.StudentAttendanceScreen
 import com.ecorvi.schmng.ui.utils.getCurrentDate
 
 @Composable
@@ -26,75 +25,55 @@ fun AppNavigation(
     isUserLoggedIn: Boolean,
     isFirstLaunch: Boolean
 ) {
-    val startDestination = when {
-        isFirstLaunch -> "welcome"
-        isUserLoggedIn -> "adminDashboard"
-        else -> "login"
-    }
-
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = if (isFirstLaunch) "welcome" else if (isUserLoggedIn) "admin_dashboard" else "login"
     ) {
         composable("welcome") { WelcomeScreen(navController) }
         composable("login") { LoginScreen(navController) }
-        composable("adminDashboard") { AdminDashboardScreen(navController) }
+        composable("admin_dashboard") { AdminDashboardScreen(navController) }
+        composable("student_dashboard") { StudentDashboardScreen(navController) }
         composable("students") { StudentsScreen(navController) }
         composable("teachers") { TeachersScreen(navController) }
+        composable("schedules") { SchedulesScreen(navController) }
+        composable("pending_fees") { PendingFeesScreen(navController) }
         composable("add_student") { AddPersonScreen(navController, "student") }
         composable("add_teacher") { AddPersonScreen(navController, "teacher") }
-        composable("student_attendance") {
-            var students by remember { mutableStateOf<List<Person>>(emptyList()) }
-            var isLoading by remember { mutableStateOf(true) }
-
-            LaunchedEffect(Unit) {
-                FirestoreDatabase.listenForStudentUpdates(
-                    onUpdate = { 
-                        students = it
-                        isLoading = false
-                    },
-                    onError = { 
-                        Log.e("StudentAttendance", "Error loading students: ${it.message}")
-                        isLoading = false
-                    }
-                )
-            }
-
-            StudentAttendanceScreen(
-                students = students,
-                isLoading = isLoading,
-                onSubmit = { updatedStudents ->
-                    updatedStudents.forEach { student ->
-                        FirestoreDatabase.addAttendanceRecord(
-                            student.id,
-                            student.attendance.name,
-                            getCurrentDate(),
-                            onSuccess = {
-                                Log.d("Attendance", "Recorded attendance for student: ${student.id}")
-                            },
-                            onFailure = { e ->
-                                Log.e("Attendance", "Failed to record attendance: ${e.message}")
-                            }
-                        )
-                    }
-                    navController.popBackStack()
-                }
-            )
-        }
+        composable("add_schedule") { AddScheduleScreen(navController) }
+        composable("add_fee") { AddFeeScreen(navController) }
+        
+        // Add edit routes
         composable(
-            route = "profile/{personId}/{personType}",
+            route = "add_student/{personId}",
             arguments = listOf(
-                navArgument("personId") { type = NavType.StringType },
-                navArgument("personType") { type = NavType.StringType }
+                navArgument("personId") { type = NavType.StringType }
             )
         ) { backStackEntry ->
             val personId = backStackEntry.arguments?.getString("personId") ?: ""
-            val personType = backStackEntry.arguments?.getString("personType") ?: ""
-            ProfileScreen(navController, personId, personType)
+            AddPersonScreen(navController, "student", personId)
         }
-        composable("schedules") { SchedulesScreen(navController) }
-        composable("add_schedule") { AddScheduleScreen(navController) }
-        composable("pending_fees") { PendingFeesScreen(navController) }
-        composable("add_fee") { AddFeeScreen(navController) }
+        
+        composable(
+            route = "add_teacher/{personId}",
+            arguments = listOf(
+                navArgument("personId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val personId = backStackEntry.arguments?.getString("personId") ?: ""
+            AddPersonScreen(navController, "teacher", personId)
+        }
+
+        // Add view profile routes
+        composable(
+            route = "view_profile/{type}/{id}",
+            arguments = listOf(
+                navArgument("type") { type = NavType.StringType },
+                navArgument("id") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val type = backStackEntry.arguments?.getString("type") ?: ""
+            val id = backStackEntry.arguments?.getString("id") ?: ""
+            ProfileScreen(navController, id, type)
+        }
     }
 }

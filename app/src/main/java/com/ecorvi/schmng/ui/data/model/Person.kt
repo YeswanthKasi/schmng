@@ -1,19 +1,33 @@
 package com.ecorvi.schmng.ui.data.model
 
-import com.ecorvi.schmng.ui.data.model.AttendanceOption
-
 data class Person(
-    var id: String = "",
-    var firstName: String = "",
-    var lastName: String = "",
-    var email: String = "",
+    val id: String = "",
+    val firstName: String = "",
+    val lastName: String = "",
+    val email: String = "",
+    val phone: String = "",
+    val type: String = "",
+    val className: String = "",
+    val rollNumber: String = "",
     var gender: String = "",
     var dateOfBirth: String = "",
     var mobileNo: String = "",
     var address: String = "",
-    var className: String = "",
-    var age: Int = 0,
-    var attendance: AttendanceOption = AttendanceOption.NONE
+    var age: Int = 0
 ) {
-    constructor() : this("", "", "", "", "", "", "", "", "", 0)
+    constructor() : this(
+        id = "",
+        firstName = "",
+        lastName = "",
+        email = "",
+        phone = "",
+        type = "",
+        className = "",
+        rollNumber = "",
+        gender = "",
+        dateOfBirth = "",
+        mobileNo = "",
+        address = "",
+        age = 0
+    )
 }

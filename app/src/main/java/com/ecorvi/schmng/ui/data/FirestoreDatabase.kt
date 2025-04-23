@@ -1,7 +1,6 @@
 package com.ecorvi.schmng.ui.data
 
 import android.util.Log
-import com.ecorvi.schmng.ui.data.model.AttendanceRecord
 import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.data.model.Schedule
 import com.ecorvi.schmng.ui.data.model.Fee
@@ -9,6 +8,7 @@ import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.tasks.await
 
 object FirestoreDatabase {
     private val db = FirebaseFirestore.getInstance()
@@ -18,7 +18,9 @@ object FirestoreDatabase {
     val studentsCollection: CollectionReference = db.collection("students")
     val teachersCollection: CollectionReference = db.collection("teachers")
     val pendingFeesCollection: CollectionReference = db.collection("pending_fees")
-    val attendanceCollection: CollectionReference = db.collection("attendance")
+
+    private var teacherListener: ListenerRegistration? = null
+    private var studentListener: ListenerRegistration? = null
 
     // Add a student to Firestore
     fun addStudent(student: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
@@ -149,20 +151,34 @@ object FirestoreDatabase {
         onUpdate: (List<Person>) -> Unit,
         onError: (Exception) -> Unit
     ): ListenerRegistration {
-        return studentsCollection.addSnapshotListener { snapshot, exception ->
-            if (exception != null) {
-                Log.e("Firestore", "Error fetching students: ${exception.message}")
-                onError(exception)
-                return@addSnapshotListener
-            }
-            if (snapshot != null) {
-                val students = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(Person::class.java)?.copy(id = doc.id)
+        studentListener?.remove()
+        return studentsCollection
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
                 }
-                Log.d("Firestore", "Fetched Students: $students")
-                onUpdate(students)
-            }
-        }
+
+                if (snapshot != null) {
+                    val students = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            Person(
+                                id = doc.id,
+                                firstName = doc.getString("firstName") ?: "",
+                                lastName = doc.getString("lastName") ?: "",
+                                email = doc.getString("email") ?: "",
+                                phone = doc.getString("phone") ?: "",
+                                type = "student",
+                                className = doc.getString("className") ?: "",
+                                rollNumber = doc.getString("rollNumber") ?: ""
+                            )
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    onUpdate(students)
+                }
+            }.also { studentListener = it }
     }
 
     // Real-time updates for teachers
@@ -170,20 +186,40 @@ object FirestoreDatabase {
         onUpdate: (List<Person>) -> Unit,
         onError: (Exception) -> Unit
     ): ListenerRegistration {
-        return teachersCollection.addSnapshotListener { snapshot, exception ->
-            if (exception != null) {
-                Log.e("Firestore", "Error fetching teachers: ${exception.message}")
-                onError(exception)
-                return@addSnapshotListener
-            }
-            if (snapshot != null) {
-                val teachers = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(Person::class.java)?.copy(id = doc.id)
+        teacherListener?.remove()
+        return teachersCollection
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
                 }
-                Log.d("Firestore", "Fetched Teachers: $teachers")
-                onUpdate(teachers)
-            }
-        }
+
+                if (snapshot != null) {
+                    val teachers = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            Person(
+                                id = doc.id,
+                                firstName = doc.getString("firstName") ?: "",
+                                lastName = doc.getString("lastName") ?: "",
+                                email = doc.getString("email") ?: "",
+                                phone = doc.getString("phone") ?: "",
+                                type = "teacher",
+                                className = doc.getString("className") ?: "",
+                                rollNumber = "",
+                                gender = doc.getString("gender") ?: "",
+                                dateOfBirth = doc.getString("dateOfBirth") ?: "",
+                                mobileNo = doc.getString("mobileNo") ?: "",
+                                address = doc.getString("address") ?: "",
+                                age = doc.getLong("age")?.toInt() ?: 0
+                            )
+                        } catch (e: Exception) {
+                            Log.e("Firestore", "Error mapping teacher document: ${e.message}")
+                            null
+                        }
+                    }
+                    onUpdate(teachers)
+                }
+            }.also { teacherListener = it }
     }
 
     // Delete student by ID
@@ -215,53 +251,6 @@ object FirestoreDatabase {
             }
             .addOnFailureListener { e ->
                 Log.e("Firestore", "Error deleting teacher: ${e.message}")
-                onFailure(e)
-            }
-    }
-
-    // Add attendance record to Firestore
-    fun addAttendanceRecord(personId: String, attendanceOption: String, date: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-        val newAttendanceRef = attendanceCollection.document()
-        val attendanceRecord = AttendanceRecord(personId, attendanceOption, date)
-
-        newAttendanceRef.set(attendanceRecord)
-            .addOnSuccessListener {
-                Log.d("Firestore", "Attendance record added with ID: ${newAttendanceRef.id}")
-                onSuccess()
-            }
-            .addOnFailureListener { e ->
-                Log.e("Firestore", "Error adding attendance record: ${e.message}")
-                onFailure(e)
-            }
-    }
-
-    // In FirestoreDatabase.kt
-    fun fetchAttendanceForPerson(personId: String, onComplete: (List<AttendanceRecord>) -> Unit, onFailure: (Exception) -> Unit) {
-        // Assuming you have a collection for attendance records
-        val attendanceCollection = db.collection("attendance")
-
-        attendanceCollection.whereEqualTo("personId", personId)
-            .get()
-            .addOnSuccessListener { result ->
-                val attendanceRecords = result.documents.mapNotNull { doc ->
-                    doc.toObject(AttendanceRecord::class.java)
-                }
-                onComplete(attendanceRecords)
-            }
-            .addOnFailureListener { e ->
-                onFailure(e)
-            }
-    }
-
-    // Fetch all attendance records
-    fun fetchAllAttendanceRecords(onComplete: (List<AttendanceRecord>) -> Unit, onFailure: (Exception) -> Unit) {
-        attendanceCollection.get()
-            .addOnSuccessListener { snapshot ->
-                val attendanceRecords = snapshot.documents.mapNotNull { it.toObject(AttendanceRecord::class.java) }
-                onComplete(attendanceRecords)
-            }
-            .addOnFailureListener { e ->
-                Log.e("Firestore", "Error fetching attendance records: ${e.message}")
                 onFailure(e)
             }
     }
@@ -402,4 +391,66 @@ object FirestoreDatabase {
             }
     }
 
+    // Get a student by ID
+    suspend fun getStudent(studentId: String): Person? {
+        return try {
+            val doc = studentsCollection.document(studentId).get().await()
+            doc.toObject(Person::class.java)?.copy(id = doc.id)
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting student: ${e.message}")
+            null
+        }
+    }
+
+    // Get a teacher by ID
+    suspend fun getTeacher(teacherId: String): Person? {
+        return try {
+            val doc = teachersCollection.document(teacherId).get().await()
+            doc.toObject(Person::class.java)?.copy(id = doc.id)
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting teacher: ${e.message}")
+            null
+        }
+    }
+
+    // Update student by ID
+    fun updateStudent(student: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        if (student.id.isBlank()) {
+            onFailure(Exception("Invalid student ID"))
+            return
+        }
+        studentsCollection.document(student.id)
+            .set(student)
+            .addOnSuccessListener {
+                Log.d("Firestore", "Student with ID: ${student.id} updated successfully")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error updating student: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Update teacher by ID
+    fun updateTeacher(teacher: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        if (teacher.id.isBlank()) {
+            onFailure(Exception("Invalid teacher ID"))
+            return
+        }
+        teachersCollection.document(teacher.id)
+            .set(teacher)
+            .addOnSuccessListener {
+                Log.d("Firestore", "Teacher with ID: ${teacher.id} updated successfully")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error updating teacher: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    fun cleanup() {
+        teacherListener?.remove()
+        studentListener?.remove()
+    }
 }

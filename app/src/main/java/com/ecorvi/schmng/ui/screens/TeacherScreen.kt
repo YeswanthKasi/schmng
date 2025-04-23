@@ -43,6 +43,8 @@ fun TeachersScreen(navController: NavController) {
     var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
     var showDeleteDialog by remember { mutableStateOf<Person?>(null) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Firestore real-time listener
     LaunchedEffect(Unit) {
@@ -50,19 +52,21 @@ fun TeachersScreen(navController: NavController) {
             onUpdate = { fetchedTeachers ->
                 teachersList = fetchedTeachers
                 isLoading = false
-                Log.d("TeachersScreen", "Real-time teacher updates: $fetchedTeachers")
             },
             onError = { exception ->
-                Log.e("Firestore", "Error fetching teachers in real-time", exception)
+                Log.e("TeacherScreen", "Error fetching teachers", exception)
                 isLoading = false
+                scope.launch {
+                    snackbarHostState.showSnackbar("Error loading teachers: ${exception.message}")
+                }
             }
         )
     }
 
+    // Cleanup listener when the composable is disposed
     DisposableEffect(Unit) {
         onDispose {
             listenerRegistration?.remove()
-            Log.d("TeachersScreen", "Stopped listening for real-time teacher updates")
         }
     }
 
@@ -175,7 +179,7 @@ fun TeachersScreen(navController: NavController) {
                             TeacherListItem(
                                 teacher = teacher,
                                 onItemClick = {
-                                    navController.navigate("profile/${teacher.id}/teacher")
+                                    navController.navigate("view_profile/teacher/${teacher.id}")
                                 },
                                 onDeleteClick = {
                                     showDeleteDialog = teacher

@@ -25,6 +25,8 @@ import com.google.android.play.core.appupdate.*
 import com.google.android.play.core.install.model.*
 import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import java.util.*
 
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
@@ -105,11 +107,38 @@ class MainActivity : ComponentActivity() {
 
         if (user != null && ::navController.isInitialized) {
             val currentRoute = navController.currentBackStackEntry?.destination?.route
-            if (currentRoute != "adminDashboard") {
-                navController.navigate("adminDashboard") {
-                    popUpTo("login") { inclusive = true }
+            
+            // Fetch user role from Firestore
+            FirebaseFirestore.getInstance().collection("users")
+                .document(user.uid)
+                .get()
+                .addOnSuccessListener { document ->
+                    val role = document.getString("role")?.lowercase(Locale.ROOT)
+                    
+                    when (role) {
+                        "admin" -> {
+                            if (currentRoute != "admin_dashboard") {
+                                navController.navigate("admin_dashboard") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
+                        }
+                        "student" -> {
+                            if (currentRoute != "student_dashboard") {
+                                navController.navigate("student_dashboard") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
+                        }
+                        "parent" -> {
+                            if (currentRoute != "parent_dashboard") {
+                                navController.navigate("parent_dashboard") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
+                        }
+                    }
                 }
-            }
         }
     }
 

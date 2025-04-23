@@ -1,29 +1,22 @@
 package com.ecorvi.schmng.ui.screens
 
-import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
-import com.ecorvi.schmng.ui.data.model.AttendanceRecord
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,259 +25,261 @@ fun ProfileScreen(
     personId: String,
     personType: String
 ) {
-    var firstName by remember { mutableStateOf("") }
-    var lastName by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var gender by remember { mutableStateOf("Male") }
-    var dateOfBirth by remember { mutableStateOf("") }
-    var mobileNo by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
-    var className by remember { mutableStateOf("") }
-    var attendanceRecords by remember { mutableStateOf<List<AttendanceRecord>>(emptyList()) }
-    val context = LocalContext.current
+    var person by remember { mutableStateOf<Person?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    // Load profile data
+    // Fetch person data
     LaunchedEffect(personId) {
-        val personRef = if (personType == "student") {
-            FirestoreDatabase.studentsCollection.document(personId)
-        } else {
-            FirestoreDatabase.teachersCollection.document(personId)
-        }
-
-        personRef.get().addOnSuccessListener { documentSnapshot ->
-            if (documentSnapshot.exists()) {
-                val person = documentSnapshot.toObject(Person::class.java)
-                person?.let {
-                    firstName = it.firstName
-                    lastName = it.lastName
-                    email = it.email
-                    gender = it.gender
-                    dateOfBirth = it.dateOfBirth
-                    mobileNo = it.mobileNo
-                    address = it.address
-                    className = it.className
-                }
+        isLoading = true
+        error = null
+        try {
+            val fetchedPerson = if (personType == "student") {
+                FirestoreDatabase.getStudent(personId)
             } else {
-                Toast.makeText(context, "Person not found", Toast.LENGTH_SHORT).show()
+                FirestoreDatabase.getTeacher(personId)
             }
-        }.addOnFailureListener {
-            Toast.makeText(context, "Error fetching data", Toast.LENGTH_SHORT).show()
+            person = fetchedPerson
+            isLoading = false
+        } catch (e: Exception) {
+            error = e.message
+            isLoading = false
         }
-
-        // Load attendance records
-        FirestoreDatabase.fetchAttendanceForPerson(
-            personId = personId,
-            onComplete = { records -> attendanceRecords = records },
-            onFailure = { /* Handle error */ }
-        )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text("${personType.replaceFirstChar { if (it.isLowerCase()) it.uppercase() else it.toString() }} Profile")
-                },
+                title = { Text(if (personType == "student") "Student Profile" else "Teacher Profile") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                actions = {
+                    // Edit button
+                    IconButton(
+                        onClick = { 
+                            navController.navigate("add_${personType.lowercase()}/${personId}") {
+                                launchSingleTop = true
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Edit, "Edit Profile")
+                    }
+                    // Delete button
+                    IconButton(onClick = { showDeleteDialog = true }) {
+                        Icon(Icons.Default.Delete, "Delete")
+                    }
+                }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
-                .padding(padding),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(padding)
         ) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .background(Color(0xFF1F41BB), shape = CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile Picture",
-                        tint = Color.White,
-                        modifier = Modifier.size(60.dp)
+            when {
+                isLoading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
-            }
+                error != null -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Error loading profile",
+                            color = Color.Red,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = error!!,
+                            color = Color.Gray
+                        )
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    isLoading = true
+                                    error = null
+                                    try {
+                                        val fetchedPerson = if (personType == "student") {
+                                            FirestoreDatabase.getStudent(personId)
+                                        } else {
+                                            FirestoreDatabase.getTeacher(personId)
+                                        }
+                                        person = fetchedPerson
+                                        isLoading = false
+                                    } catch (e: Exception) {
+                                        error = e.message
+                                        isLoading = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Text("Retry")
+                        }
+                    }
+                }
+                person != null -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Basic Information Section
+                        ProfileSection(
+                            title = "Basic Information",
+                            items = listOf(
+                                "Full Name" to "${person!!.firstName} ${person!!.lastName}",
+                                "Age" to "${person!!.age} years",
+                                "Gender" to (person!!.gender.ifEmpty { "Not specified" }),
+                                "Date of Birth" to (person!!.dateOfBirth.ifEmpty { "Not specified" })
+                            )
+                        )
 
-            item {
+                        // Role-specific Information Section
+                        if (personType == "student") {
+                            ProfileSection(
+                                title = "Academic Information",
+                                items = listOf(
+                                    "Class" to (person!!.className.ifEmpty { "Not assigned" }),
+                                    "Roll Number" to (person!!.rollNumber.ifEmpty { "Not assigned" }),
+                                    "Student Type" to person!!.type
+                                )
+                            )
+                        } else {
+                            ProfileSection(
+                                title = "Professional Information",
+                                items = listOf(
+                                    "Assigned Class" to (person!!.className.ifEmpty { "Not assigned" }),
+                                    "Teacher Type" to person!!.type
+                                )
+                            )
+                        }
+
+                        // Contact Information Section
+                        ProfileSection(
+                            title = "Contact Information",
+                            items = listOf(
+                                "Email" to (person!!.email.ifEmpty { "Not provided" }),
+                                "Mobile Number" to (person!!.mobileNo.ifEmpty { "Not provided" }),
+                                "Phone" to (person!!.phone.ifEmpty { "Not provided" }),
+                                "Address" to (person!!.address.ifEmpty { "Not provided" })
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text("Delete Profile") },
+                text = { Text("Are you sure you want to delete this profile? This action cannot be undone.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (personType == "student") {
+                                FirestoreDatabase.deleteStudent(
+                                    personId,
+                                    onSuccess = {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Profile deleted successfully")
+                                            navController.navigateUp()
+                                        }
+                                    },
+                                    onFailure = { e ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Failed to delete profile: ${e.message}")
+                                        }
+                                    }
+                                )
+                            } else {
+                                FirestoreDatabase.deleteTeacher(
+                                    personId,
+                                    onSuccess = {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Profile deleted successfully")
+                                            navController.navigateUp()
+                                        }
+                                    },
+                                    onFailure = { e ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Failed to delete profile: ${e.message}")
+                                        }
+                                    }
+                                )
+                            }
+                            showDeleteDialog = false
+                        }
+                    ) {
+                        Text("Delete", color = Color.Red)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileSection(
+    title: String,
+    items: List<Pair<String, String>>
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = Color.White,
+        shadowElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1F41BB)
+            )
+            items.forEach { (label, value) ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    OutlinedTextField(
-                        value = firstName,
-                        onValueChange = { firstName = it },
-                        label = { Text("First Name") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = lastName,
-                        onValueChange = { lastName = it },
-                        label = { Text("Last Name") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            item {
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("Email ID") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                )
-            }
-
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    Text("Gender", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = gender == "Male", onClick = { gender = "Male" })
-                            Text("Male")
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = gender == "Female", onClick = { gender = "Female" })
-                            Text("Female")
-                        }
-                    }
-                }
-            }
-
-            item {
-                OutlinedTextField(
-                    value = dateOfBirth,
-                    onValueChange = { dateOfBirth = it },
-                    label = { Text("Date of Birth (mm/dd/yyyy)") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    trailingIcon = {
-                        Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
-                    }
-                )
-            }
-
-            item {
-                OutlinedTextField(
-                    value = mobileNo,
-                    onValueChange = { mobileNo = it },
-                    label = { Text("Mobile No") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                )
-            }
-
-            item {
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    label = { Text("Address") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                )
-            }
-
-            item {
-                OutlinedTextField(
-                    value = className,
-                    onValueChange = { className = it },
-                    label = { Text("Class") },
-                    readOnly = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                )
-            }
-
-            item {
-                Button(
-                    onClick = {
-                        val updatedFields = mapOf(
-                            "firstName" to firstName,
-                            "lastName" to lastName,
-                            "email" to email,
-                            "gender" to gender,
-                            "dateOfBirth" to dateOfBirth,
-                            "mobileNo" to mobileNo,
-                            "address" to address,
-                            "className" to className
-                        )
-
-                        val personRef = if (personType == "student") {
-                            FirestoreDatabase.studentsCollection.document(personId)
-                        } else {
-                            FirestoreDatabase.teachersCollection.document(personId)
-                        }
-
-                        personRef.update(updatedFields)
-                            .addOnSuccessListener {
-                                Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
-                                navController.popBackStack()
-                            }
-                            .addOnFailureListener { e ->
-                                Toast.makeText(context, "Failed to update profile: $e", Toast.LENGTH_SHORT).show()
-                            }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
-                ) {
-                    Text("Update", color = Color.White)
-                }
-            }
-
-            if (attendanceRecords.isNotEmpty()) {
-                item {
                     Text(
-                        text = "Attendance History",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(16.dp)
+                        text = label,
+                        color = Color.Gray,
+                        fontSize = 14.sp
                     )
-                }
-                
-                items(attendanceRecords) { record ->
-                    ListItem(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        leadingContent = {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null)
-                        },
-                        headlineContent = { Text(record.date) },
-                        supportingContent = { Text(record.attendanceOption) }
+                    Text(
+                        text = value,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp
                     )
                 }
             }
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun ProfileScreenPreview() {
-    val navController = NavController(androidx.compose.ui.platform.LocalContext.current)
-    ProfileScreen(navController, "1", "student")
 }

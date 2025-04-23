@@ -41,6 +41,7 @@ import java.util.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -89,244 +90,247 @@ fun LoginScreen(navController: NavController) {
             )
         }
 
-        // Content
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
-                .systemBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // App Logo or Icon
-            Image(
-                painter = painterResource(id = R.drawable.ecorvilogo), // Make sure to add your app logo
-                contentDescription = "App Logo",
+        // Content wrapped in ScrollView
+        androidx.compose.foundation.rememberScrollState().let { scrollState ->
+            Column(
                 modifier = Modifier
-                    .size(80.dp)
-                    .padding(8.dp)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Welcome Text
-            Text(
-                text = "Ecorvi School Management",
-                style = TextStyle(
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1F41BB)
-                )
-            )
-
-            Text(
-                text = "Sign in to continue",
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    color = Color.Gray
-                ),
-                modifier = Modifier.padding(top = 8.dp, bottom = 32.dp)
-            )
-
-            // Login Card
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White.copy(alpha = 0.95f),
-                shadowElevation = 4.dp
+                    .fillMaxSize()
+                    .padding(24.dp)
+                    .systemBarsPadding()
+                    .verticalScroll(scrollState),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
+                Spacer(modifier = Modifier.height(48.dp))
+
+                // App Logo or Icon
+                Image(
+                    painter = painterResource(id = R.drawable.ecorvilogo), // Make sure to add your app logo
+                    contentDescription = "App Logo",
                     modifier = Modifier
-                        .padding(24.dp)
-                ) {
-                    // Email Field
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = {
-                            email = it
-                            errorMessage = ""
-                        },
-                        label = { Text("Email") },
-                        placeholder = { Text("Enter your email") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White,
-                            focusedBorderColor = Color(0xFF1F41BB),
-                            focusedLabelColor = Color(0xFF1F41BB)
-                        ),
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Email,
-                                contentDescription = "Email",
-                                tint = Color(0xFF1F41BB)
-                            )
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Email,
-                            imeAction = ImeAction.Next
-                        )
+                        .size(80.dp)
+                        .padding(8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Welcome Text
+                Text(
+                    text = "Ecorvi School Management",
+                    style = TextStyle(
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1F41BB)
                     )
+                )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Sign in to continue",
+                    style = TextStyle(
+                        fontSize = 16.sp,
+                        color = Color.Gray
+                    ),
+                    modifier = Modifier.padding(top = 8.dp, bottom = 32.dp)
+                )
 
-                    // Password Field
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = {
-                            password = it
-                            errorMessage = ""
-                        },
-                        label = { Text("Password") },
-                        placeholder = { Text("Enter your password") },
-                        visualTransformation = if (passwordVisible) 
-                            VisualTransformation.None 
-                        else 
-                            PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White,
-                            focusedBorderColor = Color(0xFF1F41BB),
-                            focusedLabelColor = Color(0xFF1F41BB)
-                        ),
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = "Password",
-                                tint = Color(0xFF1F41BB)
-                            )
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                // Login Card
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.95f),
+                    shadowElevation = 4.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                    ) {
+                        // Email Field
+                        OutlinedTextField(
+                            value = email,
+                            onValueChange = {
+                                email = it
+                                errorMessage = ""
+                            },
+                            label = { Text("Email") },
+                            placeholder = { Text("Enter your email") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                focusedBorderColor = Color(0xFF1F41BB),
+                                focusedLabelColor = Color(0xFF1F41BB)
+                            ),
+                            leadingIcon = {
                                 Icon(
-                                    imageVector = if (passwordVisible) 
-                                        Icons.Default.Visibility 
-                                    else 
-                                        Icons.Default.VisibilityOff,
-                                    contentDescription = if (passwordVisible) 
-                                        "Hide password" 
-                                    else 
-                                        "Show password",
+                                    imageVector = Icons.Default.Email,
+                                    contentDescription = "Email",
                                     tint = Color(0xFF1F41BB)
                                 )
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Next
+                            )
                         )
-                    )
 
-                    if (errorMessage.isNotEmpty()) {
-                        Text(
-                            text = errorMessage,
-                            color = Color.Red,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Forgot Password
-                    Text(
-                        text = "Forgot Password?",
-                        color = Color(0xFF1F41BB),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .clickable { /* TODO: Implement forgot password */ }
-                            .padding(top = 16.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Login Button
-                    Button(
-                        onClick = {
-                            isLoading = true
-                            if (email.isBlank() || password.isBlank()) {
-                                errorMessage = "Please enter email and password"
-                                isLoading = false
-                            } else {
+                        // Password Field
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = {
+                                password = it
                                 errorMessage = ""
-                                LoginUser(
-                                    email = email,
-                                    password = password,
-                                    navController = navController
-                                ) { success, message ->
+                            },
+                            label = { Text("Password") },
+                            placeholder = { Text("Enter your password") },
+                            visualTransformation = if (passwordVisible) 
+                                VisualTransformation.None 
+                            else 
+                                PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                focusedBorderColor = Color(0xFF1F41BB),
+                                focusedLabelColor = Color(0xFF1F41BB)
+                            ),
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Password",
+                                    tint = Color(0xFF1F41BB)
+                                )
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) 
+                                            Icons.Default.Visibility 
+                                        else 
+                                            Icons.Default.VisibilityOff,
+                                        contentDescription = if (passwordVisible) 
+                                            "Hide password" 
+                                        else 
+                                            "Show password",
+                                        tint = Color(0xFF1F41BB)
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            )
+                        )
+
+                        if (errorMessage.isNotEmpty()) {
+                            Text(
+                                text = errorMessage,
+                                color = Color.Red,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+
+                        // Forgot Password
+                        Text(
+                            text = "Forgot Password?",
+                            color = Color(0xFF1F41BB),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .clickable { /* TODO: Implement forgot password */ }
+                                .padding(top = 16.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Login Button
+                        Button(
+                            onClick = {
+                                isLoading = true
+                                if (email.isBlank() || password.isBlank()) {
+                                    errorMessage = "Please enter email and password"
                                     isLoading = false
-                                    if (success) {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    errorMessage = ""
+                                    LoginUser(
+                                        email = email,
+                                        password = password,
+                                        navController = navController
+                                    ) { success, message ->
+                                        isLoading = false
+                                        if (success) {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                            }
+                                        } else {
+                                            errorMessage = message ?: "Authentication failed"
                                         }
-                                    } else {
-                                        errorMessage = message ?: "Authentication failed"
                                     }
                                 }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF1F41BB)
+                            ),
+                            enabled = !isLoading
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            } else {
+                                Text(
+                                    "Sign In",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF1F41BB)
-                        ),
-                        enabled = !isLoading
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        } else {
-                            Text(
-                                "Sign In",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(32.dp))
 
-            // Social Login Section
-            Text(
-                text = "Or continue with",
-                style = TextStyle(
-                    fontSize = 14.sp,
-                    color = Color.Gray
+                // Social Login Section
+                Text(
+                    text = "Or continue with",
+                    style = TextStyle(
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
                 )
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            // Social Login Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                SocialLoginButton(
-                    icon = R.drawable.google,
-                    onClick = { /* TODO: Implement Google login */ }
-                )
-                SocialLoginButton(
-                    icon = R.drawable.facebook,
-                    onClick = { /* TODO: Implement Facebook login */ }
-                )
-                SocialLoginButton(
-                    icon = R.drawable.apple,
-                    onClick = { /* TODO: Implement Apple login */ }
-                )
+                // Social Login Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    SocialLoginButton(
+                        icon = R.drawable.google,
+                        onClick = { /* TODO: Implement Google login */ }
+                    )
+                    SocialLoginButton(
+                        icon = R.drawable.facebook,
+                        onClick = { /* TODO: Implement Facebook login */ }
+                    )
+                    SocialLoginButton(
+                        icon = R.drawable.apple,
+                        onClick = { /* TODO: Implement Apple login */ }
+                    )
+                }
             }
         }
     }
@@ -395,23 +399,21 @@ fun LoginUser(
                                 when (role) {
                                     "admin" -> {
                                         FirebaseMessaging.getInstance().subscribeToTopic("admins")
-                                        navController.navigate("adminDashboard") {
+                                        navController.navigate("admin_dashboard") {
                                             popUpTo("login") { inclusive = true }
                                         }
                                     }
 
                                     "student" -> {
-                                        // TODO: Navigate to student dashboard
                                         FirebaseMessaging.getInstance().subscribeToTopic("students")
-                                        navController.navigate("studentDashboard") {
+                                        navController.navigate("student_dashboard") {
                                             popUpTo("login") { inclusive = true }
                                         }
                                     }
 
                                     "parent" -> {
-                                        // TODO: Navigate to parent dashboard
                                         FirebaseMessaging.getInstance().subscribeToTopic("parents")
-                                        navController.navigate("parentDashboard") {
+                                        navController.navigate("parent_dashboard") {
                                             popUpTo("login") { inclusive = true }
                                         }
                                     }

@@ -4,6 +4,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
@@ -13,12 +17,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,12 +72,27 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material.icons.filled.Update
 import android.content.pm.PackageManager
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+import java.text.SimpleDateFormat
+import java.util.*
 
 private val PrimaryBlue = Color(0xFF1F41BB)
-private val StudentGreen = Color(0xFF00C853)
-private val TeacherBlue = Color(0xFF2979FF)
-private val ScheduleOrange = Color(0xFFFF9100)
-private val FeesRed = Color(0xFFFF1744)
+private val StudentGreen = Color(0xFF4CAF50)
+private val TeacherBlue = Color(0xFF2196F3)
+private val ScheduleOrange = Color(0xFFFF9800)
+private val FeesRed = Color(0xFFE91E63)
+private val BackgroundColor = Color.White.copy(alpha = 0.95f)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
@@ -110,6 +132,7 @@ fun AdminDashboardScreen(navController: NavController) {
     }
 
     LaunchedEffect(Unit) {
+        isLoading = true
         try {
             FirestoreDatabase.fetchStudentCount { count ->
                 studentCount = count
@@ -117,6 +140,8 @@ fun AdminDashboardScreen(navController: NavController) {
             FirestoreDatabase.fetchTeacherCount { count ->
                 teacherCount = count
             }
+            
+            delay(1000) // Give time for data to load
             isLoading = false
         } catch (e: Exception) {
             errorMessage = e.message
@@ -284,6 +309,134 @@ fun AdminDashboardScreen(navController: NavController) {
             },
             dataList = dataList
         )
+    }
+
+    @Composable
+    fun DashboardShimmer() {
+        val transition = rememberInfiniteTransition(label = "shimmer")
+        val translateAnim = transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1000f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "shimmer"
+        )
+
+        val shimmerColorShades = listOf(
+            Color.LightGray.copy(alpha = 0.9f),
+            Color.LightGray.copy(alpha = 0.2f),
+            Color.LightGray.copy(alpha = 0.9f)
+        )
+
+        val brush = Brush.linearGradient(
+            colors = shimmerColorShades,
+            start = Offset(translateAnim.value - 1000f, translateAnim.value - 1000f),
+            end = Offset(translateAnim.value, translateAnim.value)
+        )
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
+        ) {
+            // Search bar shimmer
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(brush)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            // Distribution Analysis shimmer
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = BackgroundColor,
+                    shadowElevation = 2.dp
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .width(180.dp)
+                                .height(24.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(brush)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(brush)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Summary Row shimmer
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(brush)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(brush)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Manage section shimmer
+            item {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .width(80.dp)
+                        .height(20.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Manage items shimmer
+            items(3) { _ ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(brush)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
     }
 
     ModalNavigationDrawer(
@@ -507,80 +660,137 @@ fun AdminDashboardScreen(navController: NavController) {
                             .fillMaxSize()
                             .padding(padding)
                     ) {
-                        when {
-                            isLoading -> {
-                                ShimmerLoading()
-                            }
-                            errorMessage != null -> {
-                                ErrorMessage(errorMessage!!)
-                            }
-                            else -> {
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxSize(),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    contentPadding = PaddingValues(
-                                        top = 12.dp,
-                                        bottom = 16.dp
-                                    )
+                        if (isLoading) {
+                            DashboardShimmer()
+                        } else if (errorMessage != null) {
+                            // Error state
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "Error loading dashboard",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.Red
+                                )
+                                Text(
+                                    text = errorMessage ?: "Unknown error occurred",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.Gray
+                                )
+                                Button(
+                                    onClick = {
+                                        isLoading = true
+                                        errorMessage = null
+                                        // Retry loading data
+                                        FirestoreDatabase.fetchStudentCount { count ->
+                                            studentCount = count
+                                        }
+                                        FirestoreDatabase.fetchTeacherCount { count ->
+                                            teacherCount = count
+                                        }
+                                        isLoading = false
+                                    },
+                                    modifier = Modifier.padding(top = 8.dp)
                                 ) {
-                                    item {
-                                        SearchBar()
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                    }
+                                    Text("Retry")
+                                }
+                            }
+                        } else {
+                            // Dashboard content
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(
+                                    top = 12.dp,
+                                    bottom = 16.dp
+                                )
+                            ) {
+                                item {
+                                    SearchBar()
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
 
-                                    item {
-                                        AnimatedSummaryRow(
-                                            leftTitle = "TOTAL STUDENTS\n$studentCount",
-                                            rightTitle = "TOTAL TEACHERS\n$teacherCount",
-                                            leftIcon = Icons.Default.Person,
-                                            rightIcon = Icons.Default.Person,
-                                            leftClick = { navController.navigate("students") },
-                                            rightClick = { navController.navigate("teachers") },
-                                            leftColor = StudentGreen,
-                                            rightColor = TeacherBlue
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                    }
-
-                                    item {
-                                        AnimatedSummaryRow(
-                                            leftTitle = "SCHEDULE",
-                                            rightTitle = "PENDING FEES",
-                                            leftIcon = Icons.Default.Schedule,
-                                            rightIcon = Icons.Default.Money,
-                                            leftClick = { navController.navigate("schedules") },
-                                            rightClick = { navController.navigate("pending_fees") },
-                                            leftColor = ScheduleOrange,
-                                            rightColor = FeesRed
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                    }
-
-                                    item {
-                                        Text(
-                                            text = "MANAGE",
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = PrimaryBlue,
-                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                                        )
-                                    }
-
-                                    items(manageItems) { item ->
-                                        val isExpanded = expandedStates[item] == true
-                                        EnhancedExpandableItem(
-                                            title = item,
-                                            isExpanded = isExpanded,
-                                            onExpandClick = { expandedStates[item] = !isExpanded },
-                                            onItemClick = {
-                                                when (item) {
-                                                    "Students" -> navController.navigate("students")
-                                                    "Teachers" -> navController.navigate("teachers")
-                                                }
+                                item {
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = BackgroundColor,
+                                        shadowElevation = 2.dp
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp)
+                                        ) {
+                                            Text(
+                                                text = "Distribution Analysis",
+                                                style = TextStyle(
+                                                    fontSize = 20.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = PrimaryBlue
+                                                ),
+                                                modifier = Modifier.padding(bottom = 16.dp)
+                                            )
+                                            
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(220.dp)
+                                                    .padding(8.dp)
+                                            ) {
+                                                PieChart(
+                                                    studentCount = studentCount,
+                                                    teacherCount = teacherCount,
+                                                    onStudentClick = { navController.navigate("students") },
+                                                    onTeacherClick = { navController.navigate("teachers") }
+                                                )
                                             }
-                                        )
+                                        }
                                     }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
+
+                                item {
+                                    AnimatedSummaryRow(
+                                        leftTitle = "SCHEDULE",
+                                        rightTitle = "PENDING FEES",
+                                        leftIcon = Icons.Default.Schedule,
+                                        rightIcon = Icons.Default.CurrencyRupee,
+                                        leftClick = { navController.navigate("schedules") },
+                                        rightClick = { navController.navigate("pending_fees") },
+                                        leftColor = ScheduleOrange,
+                                        rightColor = FeesRed
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
+
+                                item {
+                                    Text(
+                                        text = "MANAGE",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PrimaryBlue,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                    )
+                                }
+
+                                items(manageItems) { item ->
+                                    val isExpanded = expandedStates[item] == true
+                                    EnhancedExpandableItem(
+                                        title = item,
+                                        isExpanded = isExpanded,
+                                        onExpandClick = { expandedStates[item] = !isExpanded },
+                                        onItemClick = {
+                                            when (item) {
+                                                "Students" -> navController.navigate("students")
+                                                "Teachers" -> navController.navigate("teachers")
+                                            }
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -920,5 +1130,221 @@ fun CommonBackground(content: @Composable () -> Unit) {
             contentScale = ContentScale.FillBounds
         )
         content()
+    }
+}
+
+@Composable
+fun PieChart(
+    studentCount: Int,
+    teacherCount: Int,
+    onStudentClick: () -> Unit,
+    onTeacherClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val total = studentCount + teacherCount
+    if (total == 0) return // prevent division by zero
+
+    val studentAngle = 360f * (studentCount.toFloat() / total)
+    val teacherAngle = 360f * (teacherCount.toFloat() / total)
+
+    var studentPressed by remember { mutableStateOf(false) }
+    var teacherPressed by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        val canvasWidth = size.width
+                        val canvasHeight = size.height
+                        val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
+                        val centerX = canvasWidth / 2
+                        val centerY = canvasHeight / 2
+                        val strokeWidth = radius * 0.4f
+
+                        val dx = offset.x - centerX
+                        val dy = offset.y - centerY
+
+                        val distanceFromCenter = kotlin.math.sqrt((dx * dx + dy * dy).toDouble())
+                        var touchAngle = (Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble()) + 360) % 360
+                        touchAngle = (450 - touchAngle) % 360 // Start from top
+
+                        val outerRadius = radius
+                        val innerRadius = radius - strokeWidth
+
+                        val gapAngle = 4f
+
+                        if (distanceFromCenter <= outerRadius && distanceFromCenter >= innerRadius) {
+                            val studentStart = 0f
+                            val studentEnd = studentAngle - gapAngle
+
+                            val teacherStart = studentAngle + gapAngle / 2
+                            val teacherEnd = 360f
+
+                            when {
+                                touchAngle in studentStart..studentEnd -> {
+                                    studentPressed = true
+                                    onStudentClick()
+                                }
+                                touchAngle in teacherStart..teacherEnd -> {
+                                    teacherPressed = true
+                                    onTeacherClick()
+                                }
+                            }
+                        }
+                    }
+                }
+        ) {
+            val canvasWidth = size.width
+            val canvasHeight = size.height
+            val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
+            val centerX = canvasWidth / 2
+            val centerY = canvasHeight / 2
+            val strokeWidth = radius * 0.4f
+
+            val gapAngle = 4f
+
+            drawArc(
+                color = StudentGreen.copy(
+                    alpha = if (studentPressed) 0.7f else 0.85f
+                ),
+                startAngle = 0f,
+                sweepAngle = studentAngle - gapAngle,
+                useCenter = false,
+                style = Stroke(width = strokeWidth),
+                size = Size(radius * 2, radius * 2),
+                topLeft = Offset(centerX - radius, centerY - radius)
+            )
+
+            drawArc(
+                color = TeacherBlue.copy(
+                    alpha = if (teacherPressed) 0.7f else 0.85f
+                ),
+                startAngle = studentAngle + gapAngle / 2,
+                sweepAngle = teacherAngle - gapAngle,
+                useCenter = false,
+                style = Stroke(width = strokeWidth),
+                size = Size(radius * 2, radius * 2),
+                topLeft = Offset(centerX - radius, centerY - radius)
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 16.dp, top = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.clickable { onStudentClick() }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(StudentGreen, RoundedCornerShape(2.dp))
+                )
+                Column {
+                    Text(
+                        text = "Students",
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.DarkGray
+                        )
+                    )
+                    Text(
+                        text = "$studentCount",
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.DarkGray
+                        )
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.clickable { onTeacherClick() }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(TeacherBlue, RoundedCornerShape(2.dp))
+                )
+                Column {
+                    Text(
+                        text = "Teachers",
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.DarkGray
+                        )
+                    )
+                    Text(
+                        text = "$teacherCount",
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.DarkGray
+                        )
+                    )
+                }
+            }
+        }
+
+        LaunchedEffect(studentPressed, teacherPressed) {
+            if (studentPressed || teacherPressed) {
+                delay(100)
+                studentPressed = false
+                teacherPressed = false
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun AttendanceCountRow(
+    label: String,
+    count: Int,
+    color: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(color, RoundedCornerShape(2.dp))
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.DarkGray
+            )
+        }
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = color
+        )
     }
 }
