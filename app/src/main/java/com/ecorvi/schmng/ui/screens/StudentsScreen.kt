@@ -155,15 +155,17 @@ fun StudentsScreen(navController: NavController) {
                                 Toast.makeText(context, "Please select a class first", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        containerColor = Color(0xFF1F41BB)
                     ) {
-                        Icon(Icons.Default.CalendarToday, "Take Attendance")
+                        Icon(Icons.Default.CalendarToday, "Take Attendance", tint = Color.White)
                     }
                 }
                 FloatingActionButton(
-                    onClick = { navController.navigate("add_student") }
+                    onClick = { navController.navigate("add_student") },
+                    containerColor = Color(0xFF1F41BB)
                 ) {
-                    Icon(Icons.Default.Add, "Add Student")
+                    Icon(Icons.Default.Add, "Add Student", tint = Color.White)
                 }
             }
         },

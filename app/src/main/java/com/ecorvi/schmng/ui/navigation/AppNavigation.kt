@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.navigation
 
+
 import android.util.Log
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -18,16 +19,20 @@ import com.ecorvi.schmng.ui.screens.*
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.utils.getCurrentDate
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import java.util.*
 
 @Composable
 fun AppNavigation(
     navController: NavHostController,
     isUserLoggedIn: Boolean,
-    isFirstLaunch: Boolean
+    isFirstLaunch: Boolean,
+    initialRoute: String
 ) {
     NavHost(
         navController = navController,
-        startDestination = if (isFirstLaunch) "welcome" else if (isUserLoggedIn) "admin_dashboard" else "login"
+        startDestination = initialRoute
     ) {
         composable("welcome") { WelcomeScreen(navController) }
         composable("login") { LoginScreen(navController) }
@@ -41,6 +46,33 @@ fun AppNavigation(
         composable("add_teacher") { AddPersonScreen(navController, "teacher") }
         composable("add_schedule") { AddScheduleScreen(navController) }
         composable("add_fee") { AddFeeScreen(navController) }
+        
+        // Add timetable management routes
+        composable("timetable_management") { TimetableManagementScreen(navController) }
+        composable("view_timetable") { ViewTimetableScreen(navController) }
+        composable("add_timetable") { 
+            AddTimetableScreen(navController, null)
+        }
+        composable(
+            route = "add_timetable/{timetableId}",
+            arguments = listOf(
+                navArgument("timetableId") { 
+                    type = NavType.StringType 
+                }
+            )
+        ) { backStackEntry ->
+            val timetableId = backStackEntry.arguments?.getString("timetableId")
+            AddTimetableScreen(navController, timetableId)
+        }
+        
+        // Add student-specific routes
+        composable("student_schedule") { StudentScheduleScreen(navController) }
+        composable("student_fees") { StudentFeesScreen(navController) }
+        composable("student_announcements") { AnnouncementsScreen(navController) }
+        composable("student_teacher_info") { ClassTeacherInfoScreen(navController) }
+        composable("student_timetable") {
+            StudentTimetableScreen(navController)
+        }
         
         // Add edit routes
         composable(

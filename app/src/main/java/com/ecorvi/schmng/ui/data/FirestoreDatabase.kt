@@ -4,6 +4,7 @@ import android.util.Log
 import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.data.model.Schedule
 import com.ecorvi.schmng.ui.data.model.Fee
+import com.ecorvi.schmng.ui.data.model.Timetable
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -14,6 +15,7 @@ object FirestoreDatabase {
     private val db = FirebaseFirestore.getInstance()
     private val schedulesCollection = db.collection("schedules")
     private val feesCollection = db.collection("fees")
+    private val timetablesCollection = db.collection("timetables")
 
     val studentsCollection: CollectionReference = db.collection("students")
     val teachersCollection: CollectionReference = db.collection("teachers")
@@ -21,6 +23,115 @@ object FirestoreDatabase {
 
     private var teacherListener: ListenerRegistration? = null
     private var studentListener: ListenerRegistration? = null
+
+    // Add a timetable entry (Reverted signature)
+    fun addTimetable(
+        timetable: Timetable,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timetablesCollection.add(timetable)
+            .addOnSuccessListener { 
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error adding timetable: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Fetch timetables for a specific class
+    fun fetchTimetablesForClass(
+        classGrade: String,
+        onComplete: (List<Timetable>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timetablesCollection
+            .whereEqualTo("classGrade", classGrade)
+            .whereEqualTo("active", true)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val timetables = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val timetable = Timetable()
+                        timetable.id = doc.id
+                        timetable.classGrade = doc.getString("classGrade") ?: ""
+                        timetable.dayOfWeek = doc.getString("dayOfWeek") ?: ""
+                        timetable.timeSlot = doc.getString("timeSlot") ?: ""
+                        timetable.subject = doc.getString("subject") ?: ""
+                        timetable.teacher = doc.getString("teacher") ?: ""
+                        timetable.roomNumber = doc.getString("roomNumber") ?: ""
+                        timetable.isActive = doc.getBoolean("active") ?: true
+                        timetable
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error converting document to Timetable: ${e.message}")
+                        null
+                    }
+                }
+                Log.d("Firestore", "Fetched ${timetables.size} timetables for class $classGrade")
+                onComplete(timetables)
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching timetables: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Delete a timetable entry (Reverted signature)
+    fun deleteTimetable(
+        timetableId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timetablesCollection.document(timetableId)
+            .delete()
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error deleting timetable: ${e.message}")
+                onFailure(e) 
+            }
+    }
+
+    // Update a timetable entry (Reverted signature)
+    fun updateTimetable(
+        timetable: Timetable,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timetablesCollection.document(timetable.id)
+            .set(timetable)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error updating timetable: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Get a single timetable by ID
+    fun getTimetableById(
+        timetableId: String,
+        onComplete: (Timetable?) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timetablesCollection.document(timetableId).get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.exists()) {
+                    try {
+                        val timetable = document.toObject(Timetable::class.java)?.apply { id = document.id }
+                        onComplete(timetable)
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error converting document to Timetable: ${e.message}")
+                        onComplete(null) // Treat conversion error as not found for simplicity
+                    }
+                } else {
+                    onComplete(null) // Not found
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching timetable by ID: ${e.message}")
+                onFailure(e)
+            }
+    }
 
     // Add a student to Firestore
     fun addStudent(student: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
@@ -279,7 +390,7 @@ object FirestoreDatabase {
         schedulesCollection.document(scheduleId)
             .delete()
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { onFailure }
+            .addOnFailureListener { onFailure(it) } // Keep original failure logic for this one
     }
 
     // Fetch pending fees with ID
@@ -374,7 +485,7 @@ object FirestoreDatabase {
         feesCollection.document(feeId)
             .delete()
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { onFailure }
+            .addOnFailureListener { onFailure(it) } // Keep original failure logic
     }
 
     fun addFee(
@@ -452,5 +563,58 @@ object FirestoreDatabase {
     fun cleanup() {
         teacherListener?.remove()
         studentListener?.remove()
+    }
+
+    // Get user role
+    fun getUserRole(
+        userId: String,
+        onComplete: (String?) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        db.collection("users")
+            .document(userId)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.exists()) {
+                    onComplete(document.getString("role"))
+                } else {
+                    onComplete(null)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error getting user role: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Create user with role
+    fun createUserWithRole(
+        userId: String,
+        userData: Map<String, Any>,
+        person: Person,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        // First create the user document
+        db.collection("users")
+            .document(userId)
+            .set(userData)
+            .addOnSuccessListener {
+                // Then add the person data to appropriate collection
+                if (userData["role"] == "student") {
+                    studentsCollection.document(userId)
+                        .set(person)
+                        .addOnSuccessListener { onSuccess() }
+                        .addOnFailureListener { onFailure(it) }
+                } else if (userData["role"] == "teacher") {
+                    teachersCollection.document(userId)
+                        .set(person)
+                        .addOnSuccessListener { onSuccess() }
+                        .addOnFailureListener { onFailure(it) }
+                } else {
+                    onFailure(Exception("Invalid role specified"))
+                }
+            }
+            .addOnFailureListener { onFailure(it) }
     }
 }

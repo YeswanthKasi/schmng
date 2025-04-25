@@ -21,12 +21,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.ui.navigation.AppNavigation
 import com.ecorvi.schmng.ui.theme.SchmngTheme
+import com.ecorvi.schmng.ui.components.CommonBackground
 import com.google.android.play.core.appupdate.*
 import com.google.android.play.core.install.model.*
 import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.FirebaseApp
 import java.util.*
+import com.ecorvi.schmng.ui.data.FirestoreDatabase
 
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
@@ -38,107 +41,164 @@ class MainActivity : ComponentActivity() {
 
     private var isUserLoggedIn by mutableStateOf(false)
     private var isFirstLaunch by mutableStateOf(true)
+    private var isLoading by mutableStateOf(true)
+    private var initialRoute by mutableStateOf("login")
 
     private lateinit var navController: NavHostController
+
+    private val PREFS_NAME = "app_prefs"
+    private val KEY_USER_ROLE = "user_role"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize Firebase if not already initialized
+        if (FirebaseApp.getApps(this).isEmpty()) {
+            FirebaseApp.initializeApp(this)
+        }
+
         appUpdateManager = AppUpdateManagerFactory.create(this)
         checkForUpdates()
 
-        val sharedPrefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         isFirstLaunch = sharedPrefs.getBoolean("is_first_launch", true)
         if (isFirstLaunch) {
             sharedPrefs.edit().putBoolean("is_first_launch", false).apply()
         }
 
-        isUserLoggedIn = FirebaseAuth.getInstance().currentUser != null
+        // Check initial authentication state
+        val auth = FirebaseAuth.getInstance()
+        isUserLoggedIn = auth.currentUser != null
 
-        // 🔹 REMOVED: Don't request permission here. We'll do it after login.
+        // Determine initial route
+        if (isFirstLaunch) {
+            initialRoute = "welcome"
+            isLoading = false
+        } else if (isUserLoggedIn) {
+            val userId = auth.currentUser?.uid
+            val cachedRole = sharedPrefs.getString(KEY_USER_ROLE, null)
+
+            if (userId != null && cachedRole != null) {
+                // Role found in cache, use it immediately
+                initialRoute = getRouteFromRole(cachedRole)
+                isLoading = false
+                // Optional: Fetch role in background to verify/update cache if needed
+                // verifyRoleInBackground(userId, sharedPrefs)
+            } else if (userId != null) {
+                // Role not cached, fetch from Firestore
+                FirebaseFirestore.getInstance().collection("users")
+                    .document(userId)
+                    .get()
+                    .addOnSuccessListener { document ->
+                        val role = document.getString("role")?.lowercase(Locale.ROOT)
+                        if (role != null) {
+                            // Save fetched role to cache
+                            sharedPrefs.edit().putString(KEY_USER_ROLE, role).apply()
+                            initialRoute = getRouteFromRole(role)
+                        } else {
+                            initialRoute = "login" // Fallback if role is null
+                            sharedPrefs.edit().remove(KEY_USER_ROLE).apply() // Clear potentially invalid cache
+                        }
+                        isLoading = false
+                    }
+                    .addOnFailureListener {
+                        initialRoute = "login" // Fallback on failure
+                        isLoading = false
+                        sharedPrefs.edit().remove(KEY_USER_ROLE).apply() // Clear cache on failure
+                    }
+            } else {
+                // User ID is null, should not happen if logged in, but handle defensively
+                initialRoute = "login"
+                isLoading = false
+                sharedPrefs.edit().remove(KEY_USER_ROLE).apply() // Clear cache
+            }
+        } else {
+            // User not logged in
+            initialRoute = "login"
+            isLoading = false
+            sharedPrefs.edit().remove(KEY_USER_ROLE).apply() // Clear cache
+        }
 
         setContent {
             SchmngTheme {
                 navController = rememberNavController()
-
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (isUpdating) {
-                        CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-                        Text("Updating... Please wait")
-                    }
-
-                    if (showUpdateDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showUpdateDialog = false },
-                            title = { Text("Update Ready") },
-                            text = { Text("A new version has been downloaded. Restart to install.") },
-                            confirmButton = {
-                                Button(onClick = {
-                                    showUpdateDialog = false
-                                    appUpdateManager.completeUpdate()
-                                }) {
-                                    Text("Restart Now")
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showUpdateDialog = false }) {
-                                    Text("Later")
-                                }
-                            }
-                        )
-                    }
-
+                
+                // Only compose AppNavigation once the initial route is determined
+                if (!isLoading) {
                     AppNavigation(
                         navController = navController,
-                        isUserLoggedIn = if (isFirstLaunch) false else isUserLoggedIn,
-                        isFirstLaunch = isFirstLaunch
+                        isUserLoggedIn = isUserLoggedIn,
+                        isFirstLaunch = isFirstLaunch,
+                        initialRoute = initialRoute
                     )
+                } else {
+                    // Show the CommonBackground while determining the initial route
+                    CommonBackground { 
+                        // Display nothing inside the background during this phase
+                        Box(modifier = Modifier.fillMaxSize()) 
+                    }
                 }
             }
         }
+
+        // Set up auth state listener - IMPORTANT for clearing cache on logout
+        auth.addAuthStateListener { firebaseAuth ->
+            val loggedIn = firebaseAuth.currentUser != null
+            if (!loggedIn && isUserLoggedIn) { // User just logged out
+                // Clear the cached role when the user logs out
+                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .remove(KEY_USER_ROLE)
+                    .apply()
+                // Optional: Navigate to login screen immediately if needed
+                // if (::navController.isInitialized) { 
+                //     navController.navigate("login") { popUpTo(0) { inclusive = true } } 
+                // }
+            }
+            isUserLoggedIn = loggedIn
+        }
     }
 
-    override fun onStart() {
-        super.onStart()
-        val user = FirebaseAuth.getInstance().currentUser
-
-        if (user != null && ::navController.isInitialized) {
-            val currentRoute = navController.currentBackStackEntry?.destination?.route
-            
-            // Fetch user role from Firestore
+    private fun navigateToDashboard(userId: String) {
+        try {
             FirebaseFirestore.getInstance().collection("users")
-                .document(user.uid)
+                .document(userId)
                 .get()
                 .addOnSuccessListener { document ->
-                    val role = document.getString("role")?.lowercase(Locale.ROOT)
-                    
-                    when (role) {
-                        "admin" -> {
-                            if (currentRoute != "admin_dashboard") {
+                    if (document.exists()) {
+                        val role = document.getString("role")?.lowercase(Locale.ROOT)
+                        when (role) {
+                            "admin" -> {
                                 navController.navigate("admin_dashboard") {
                                     popUpTo("login") { inclusive = true }
                                 }
                             }
-                        }
-                        "student" -> {
-                            if (currentRoute != "student_dashboard") {
+                            "student" -> {
                                 navController.navigate("student_dashboard") {
                                     popUpTo("login") { inclusive = true }
                                 }
                             }
-                        }
-                        "parent" -> {
-                            if (currentRoute != "parent_dashboard") {
+                            "parent" -> {
                                 navController.navigate("parent_dashboard") {
                                     popUpTo("login") { inclusive = true }
                                 }
                             }
+                            else -> {
+                                Toast.makeText(this, "Unknown user role", Toast.LENGTH_SHORT).show()
+                            }
                         }
+                    } else {
+                        Toast.makeText(this, "User data not found", Toast.LENGTH_SHORT).show()
                     }
+                    isLoading = false
                 }
+                .addOnFailureListener {
+                    isLoading = false
+                    Toast.makeText(this, "Failed to fetch user role", Toast.LENGTH_SHORT).show()
+                }
+        } catch (e: Exception) {
+            isLoading = false
+            Toast.makeText(this, "Navigation error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -227,6 +287,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         appUpdateManager.unregisterListener(installStateListener)
+        FirestoreDatabase.cleanup()
     }
 
     // ✅ NOW PUBLIC
@@ -261,4 +322,36 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // Helper function to map role to route
+    private fun getRouteFromRole(role: String): String {
+        return when (role) {
+            "admin" -> "admin_dashboard"
+            "student" -> "student_dashboard"
+            "parent" -> "parent_dashboard" // Add other roles if needed
+            else -> "login" // Fallback for unknown roles
+        }
+    }
+
+    // Optional: Background verification function (Example)
+    /*
+    private fun verifyRoleInBackground(userId: String, prefs: SharedPreferences) {
+        FirebaseFirestore.getInstance().collection("users")
+            .document(userId)
+            .get()
+            .addOnSuccessListener { document ->
+                val freshRole = document.getString("role")?.lowercase(Locale.ROOT)
+                val cachedRole = prefs.getString(KEY_USER_ROLE, null)
+                if (freshRole != null && freshRole != cachedRole) {
+                    prefs.edit().putString(KEY_USER_ROLE, freshRole).apply()
+                    // Optional: Force navigation if role changed drastically?
+                    // Or just update cache for next time.
+                } else if (freshRole == null) {
+                     prefs.edit().remove(KEY_USER_ROLE).apply()
+                }
+            }
+            // No need to handle failure explicitly for background check
+            // unless you want to log it.
+    }
+    */
 }

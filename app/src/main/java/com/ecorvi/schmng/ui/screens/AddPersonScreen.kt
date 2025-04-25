@@ -21,6 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
@@ -32,6 +35,9 @@ import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.utils.Constants
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +49,8 @@ fun AddPersonScreen(
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
     var gender by remember { mutableStateOf("Male") }
     var dateOfBirth by remember { mutableStateOf("") }
     var mobileNo by remember { mutableStateOf("") }
@@ -57,6 +65,7 @@ fun AddPersonScreen(
     var isLoading by remember { mutableStateOf(personId != null) }
     val context = LocalContext.current
     val isEditMode = personId != null
+    val coroutineScope = rememberCoroutineScope()
 
     // Define person type options
     val typeOptions = if (personType == "student") {
@@ -69,39 +78,8 @@ fun AddPersonScreen(
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 
-    LaunchedEffect(personId) {
-        if (personId != null) {
-            try {
-                val person = if (personType == "student") {
-                    FirestoreDatabase.getStudent(personId)
-                } else {
-                    FirestoreDatabase.getTeacher(personId)
-                }
-                
-                person?.let {
-                    firstName = it.firstName
-                    lastName = it.lastName
-                    email = it.email
-                    gender = it.gender
-                    dateOfBirth = it.dateOfBirth
-                    mobileNo = it.mobileNo
-                    address = it.address
-                    selectedClass = it.className
-                    rollNumber = it.rollNumber
-                    age = it.age.toString()
-                    phone = it.phone
-                    personTypeValue = it.type.ifEmpty { typeOptions.first() }
-                }
-                isLoading = false
-            } catch (e: Exception) {
-                showMessage("Error loading data: ${e.message}")
-                isLoading = false
-            }
-        }
-    }
-
     fun validateInputs(): Boolean {
-        if (firstName.isBlank() || lastName.isBlank() || email.isBlank()) {
+        if (firstName.isBlank() || lastName.isBlank() || email.isBlank() || (!isEditMode && password.isBlank())) {
             showMessage("Please fill in all required fields")
             return false
         }
@@ -118,6 +96,66 @@ fun AddPersonScreen(
             return false
         }
         return true
+    }
+
+    fun savePerson() {
+        if (validateInputs()) {
+            isLoading = true
+            val auth = FirebaseAuth.getInstance()
+            val db = FirebaseFirestore.getInstance()
+
+            auth.createUserWithEmailAndPassword(email, password)
+                .addOnCompleteListener { authTask ->
+                    if (authTask.isSuccessful) {
+                        val userId = authTask.result?.user?.uid ?: return@addOnCompleteListener
+
+                        val person = Person(
+                            id = userId,
+                            firstName = firstName.trim(),
+                            lastName = lastName.trim(),
+                            email = email.trim(),
+                            password = password,
+                            phone = phone.trim(),
+                            type = personTypeValue,
+                            className = selectedClass,
+                            rollNumber = rollNumber.trim(),
+                            gender = gender,
+                            dateOfBirth = dateOfBirth.trim(),
+                            mobileNo = mobileNo.trim(),
+                            address = address.trim(),
+                            age = age.toIntOrNull() ?: 0
+                        )
+
+                        val userData = mapOf(
+                            "role" to personType,
+                            "email" to email,
+                            "name" to "$firstName $lastName",
+                            "createdAt" to com.google.firebase.Timestamp.now(),
+                            "userId" to userId,
+                            "type" to personTypeValue,
+                            "className" to selectedClass
+                        )
+
+                        FirestoreDatabase.createUserWithRole(
+                            userId = userId,
+                            userData = userData,
+                            person = person,
+                            onSuccess = {
+                                isLoading = false
+                                showMessage("${personType.capitalize()} added successfully")
+                                navController.popBackStack()
+                            },
+                            onFailure = { e ->
+                                isLoading = false
+                                showMessage("Error saving ${personType}: ${e.message}")
+                            }
+                        )
+                    } else {
+                        isLoading = false
+                        showMessage("Error creating user: ${authTask.exception?.message}")
+                    }
+                }
+        }
     }
 
     fun validateAndSavePerson() {
@@ -174,101 +212,21 @@ fun AddPersonScreen(
                 )
             }
         } else {
-            if (personType == "student") {
-                FirestoreDatabase.addStudent(
-                    person,
-                    onSuccess = {
-                        isLoading = false
-                        showMessage("Student added successfully")
-                        navController.navigateUp()
-                    },
-                    onFailure = { e ->
-                        isLoading = false
-                        showMessage("Error adding student: ${e.message}")
-                    }
-                )
-            } else {
-                FirestoreDatabase.addTeacher(
-                    person,
-                    onSuccess = {
-                        isLoading = false
-                        showMessage("Teacher added successfully")
-                        navController.navigateUp()
-                    },
-                    onFailure = { e ->
-                        isLoading = false
-                        showMessage("Error adding teacher: ${e.message}")
-                    }
-                )
-            }
+            savePerson()
         }
     }
 
-    fun savePerson() {
-        if (validateInputs()) {
+    LaunchedEffect(personId) {
+        if (personId != null) {
             isLoading = true
-            val auth = FirebaseAuth.getInstance()
-            val db = FirebaseFirestore.getInstance()
-
-            // Create Firebase Auth user first
-            auth.createUserWithEmailAndPassword(email, password.toString())
-                .addOnCompleteListener { authTask ->
-                    if (authTask.isSuccessful) {
-                        val userId = authTask.result?.user?.uid ?: return@addOnCompleteListener
-
-                        // Create person object
-                        val person = Person(
-                            id = userId,
-                            firstName = firstName,
-                            lastName = lastName,
-                            email = email,
-                            phone = phone,
-                            className = selectedClass,
-                            rollNumber = rollNumber,
-                            type = personTypeValue,
-                            address = address
-                        )
-
-                        // Save to appropriate collection
-                        val collection = when (personType) {
-                            "student" -> db.collection("students")
-                            "teacher" -> db.collection("teachers")
-                            else -> return@addOnCompleteListener
-                        }
-
-                        // Save person data
-                        collection.document(userId)
-                            .set(person)
-                            .addOnSuccessListener {
-                                // Create user role document
-                                val userData = mapOf(
-                                    "role" to personType,
-                                    "email" to email,
-                                    "createdAt" to com.google.firebase.Timestamp.now()
-                                )
-
-                                db.collection("users")
-                                    .document(userId)
-                                    .set(userData)
-                                    .addOnSuccessListener {
-                                        isLoading = false
-                                        showMessage("${personType.capitalize()} added successfully")
-                                        navController.popBackStack()
-                                    }
-                                    .addOnFailureListener { e ->
-                                        isLoading = false
-                                        showMessage("Error saving user role: ${e.message}")
-                                    }
-                            }
-                            .addOnFailureListener { e ->
-                                isLoading = false
-                                showMessage("Error saving ${personType}: ${e.message}")
-                            }
-                    } else {
-                        isLoading = false
-                        showMessage("Error creating user: ${authTask.exception?.message}")
-                    }
+            coroutineScope.launch {
+                val person = if (personType == "student") {
+                    FirestoreDatabase.getStudent(personId)
+                } else {
+                    FirestoreDatabase.getTeacher(personId)
                 }
+                // ... (rest of LaunchedEffect)
+            }
         }
     }
 
@@ -348,6 +306,33 @@ fun AddPersonScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp)
                             )
+                        }
+
+                        // Password (only show for new users)
+                        if (!isEditMode) {
+                            item {
+                                OutlinedTextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    label = { Text("Password") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Password
+                                    ),
+                                    trailingIcon = {
+                                        IconButton(onClick = { showPassword = !showPassword }) {
+                                            Icon(
+                                                imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = if (showPassword) "Hide password" else "Show password"
+                                            )
+                                        }
+                                    },
+                                    supportingText = { Text("Minimum 6 characters required") }
+                                )
+                            }
                         }
 
                         // Gender
@@ -532,7 +517,13 @@ fun AddPersonScreen(
                         // Save Button
                         item {
                             Button(
-                                onClick = { validateAndSavePerson() },
+                                onClick = { 
+                                    if (isEditMode) {
+                                        validateAndSavePerson()
+                                    } else {
+                                        savePerson()
+                                    }
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),

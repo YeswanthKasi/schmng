@@ -94,7 +94,7 @@ fun AddFeeScreen(navController: NavController) {
 
                 Button(
                     onClick = {
-                        if (studentName.isBlank() || amount.isBlank() || dueDate.isBlank()) {
+                        if (amount.isBlank() || studentName.isBlank() || dueDate.isBlank()) {
                             Toast.makeText(context, "Please fill all required fields", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
@@ -116,6 +116,7 @@ fun AddFeeScreen(navController: NavController) {
                         FirestoreDatabase.addFee(
                             fee = fee,
                             onSuccess = {
+                                isLoading = false
                                 Toast.makeText(context, "Fee added successfully", Toast.LENGTH_SHORT).show()
                                 navController.popBackStack()
                             },

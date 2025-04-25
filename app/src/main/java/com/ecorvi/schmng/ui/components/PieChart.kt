@@ -97,7 +97,7 @@ fun PieChart(
             val radius = minOf(componentSize.width, componentSize.height) / 2.2f
             val centerX = componentSize.width / 2
             val centerY = componentSize.height / 2
-            val strokeWidth = radius * 0.2f
+            val strokeWidth = radius * 5f
 
             if (total > 0) {
                 // Draw teacher section (top half)
@@ -109,7 +109,7 @@ fun PieChart(
                     sweepAngle = 180f,
                     useCenter = false,
                     style = Stroke(width = strokeWidth),
-                    size = Size(radius * 2f, radius * 2f),
+                    size = Size(radius * 5f, radius * 5f),
                     topLeft = Offset(centerX - radius, centerY - radius)
                 )
 

@@ -372,68 +372,106 @@ fun LoginUser(
     onLoginResult: (Boolean, String?) -> Unit
 ) {
     val auth = FirebaseAuth.getInstance()
-    val db = FirebaseFirestore.getInstance()
-
     auth.signInWithEmailAndPassword(email, password).addOnCompleteListener { task ->
         if (task.isSuccessful) {
-            val userId = auth.currentUser?.uid ?: return@addOnCompleteListener
+            val user = auth.currentUser
+            FirebaseMessaging.getInstance().token.addOnCompleteListener { tokenTask ->
+                if (tokenTask.isSuccessful) {
+                    val token = tokenTask.result
+                    val userDoc = FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(user?.uid ?: "")
 
-            // Get FCM token
-            FirebaseMessaging.getInstance().token.addOnSuccessListener { fcmToken ->
-                val deviceName = "${Build.BRAND} ${Build.MODEL}"
-                val tokenMap = mapOf(
-                    "fcmTokens.$deviceName" to fcmToken,
-                    "lastTokenUpdate" to com.google.firebase.Timestamp.now()
-                )
-
-                // Upload token
-                db.collection("users")
-                    .document(userId)
-                    .set(tokenMap, SetOptions.merge())
-                    .addOnSuccessListener {
-                        // Fetch user role
-                        db.collection("users").document(userId).get()
-                            .addOnSuccessListener { document ->
-                                val role = document.getString("role")?.lowercase(Locale.ROOT)
-
-                                when (role) {
-                                    "admin" -> {
-                                        FirebaseMessaging.getInstance().subscribeToTopic("admins")
-                                        navController.navigate("admin_dashboard") {
-                                            popUpTo("login") { inclusive = true }
+                    userDoc.get()
+                        .addOnSuccessListener { document ->
+                            if (document != null && document.exists()) {
+                                val role = document.getString("role")
+                                if (role != null) {
+                                    // Update FCM token
+                                    userDoc.update("fcmToken", token)
+                                        .addOnSuccessListener {
+                                            // Navigate based on role
+                                            when (role.lowercase()) {
+                                                "admin" -> {
+                                                    onLoginResult(true, null)
+                                                    navController.navigate("admin_dashboard") {
+                                                        popUpTo("login") { inclusive = true }
+                                                    }
+                                                }
+                                                "student" -> {
+                                                    onLoginResult(true, null)
+                                                    navController.navigate("student_dashboard") {
+                                                        popUpTo("login") { inclusive = true }
+                                                    }
+                                                }
+                                                else -> onLoginResult(false, "Invalid user role")
+                                            }
                                         }
-                                    }
-
-                                    "student" -> {
-                                        FirebaseMessaging.getInstance().subscribeToTopic("students")
-                                        navController.navigate("student_dashboard") {
-                                            popUpTo("login") { inclusive = true }
+                                        .addOnFailureListener { e ->
+                                            // Continue with navigation even if token update fails
+                                            when (role.lowercase()) {
+                                                "admin" -> {
+                                                    onLoginResult(true, null)
+                                                    navController.navigate("admin_dashboard") {
+                                                        popUpTo("login") { inclusive = true }
+                                                    }
+                                                }
+                                                "student" -> {
+                                                    onLoginResult(true, null)
+                                                    navController.navigate("student_dashboard") {
+                                                        popUpTo("login") { inclusive = true }
+                                                    }
+                                                }
+                                                else -> onLoginResult(false, "Invalid user role")
+                                            }
                                         }
-                                    }
-
-                                    "parent" -> {
-                                        FirebaseMessaging.getInstance().subscribeToTopic("parents")
-                                        navController.navigate("parent_dashboard") {
-                                            popUpTo("login") { inclusive = true }
-                                        }
-                                    }
-
-                                    else -> {
-                                        onLoginResult(false, "User role not found or unknown.")
-                                    }
+                                } else {
+                                    onLoginResult(false, "User role not found")
                                 }
-
-                                onLoginResult(true, null)
+                            } else {
+                                onLoginResult(false, "User data not found")
                             }
-                            .addOnFailureListener {
-                                onLoginResult(false, "Failed to fetch user role: ${it.localizedMessage}")
+                        }
+                        .addOnFailureListener { e ->
+                            onLoginResult(false, "Failed to fetch user role: ${e.localizedMessage}")
+                        }
+                } else {
+                    // Continue with login even if token fetch fails
+                    val userDoc = FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(user?.uid ?: "")
+                    
+                    userDoc.get()
+                        .addOnSuccessListener { document ->
+                            if (document != null && document.exists()) {
+                                val role = document.getString("role")
+                                if (role != null) {
+                                    when (role.lowercase()) {
+                                        "admin" -> {
+                                            onLoginResult(true, null)
+                                            navController.navigate("admin_dashboard") {
+                                                popUpTo("login") { inclusive = true }
+                                            }
+                                        }
+                                        "student" -> {
+                                            onLoginResult(true, null)
+                                            navController.navigate("student_dashboard") {
+                                                popUpTo("login") { inclusive = true }
+                                            }
+                                        }
+                                        else -> onLoginResult(false, "Invalid user role")
+                                    }
+                                } else {
+                                    onLoginResult(false, "User role not found")
+                                }
+                            } else {
+                                onLoginResult(false, "User data not found")
                             }
-                    }
-                    .addOnFailureListener { e ->
-                        onLoginResult(false, "Token upload failed: ${e.localizedMessage}")
-                    }
-            }.addOnFailureListener {
-                onLoginResult(false, "Failed to get FCM token")
+                        }
+                        .addOnFailureListener { e ->
+                            onLoginResult(false, "Failed to fetch user role: ${e.localizedMessage}")
+                        }
+                }
             }
         } else {
             val errorMsg = when (task.exception) {

@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +17,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,8 +32,25 @@ fun ProfileScreen(
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var isAdmin by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val currentUser = FirebaseAuth.getInstance().currentUser
+
+    // Check if current user is admin
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser?.uid != null) {
+            FirestoreDatabase.getUserRole(
+                userId = currentUser.uid,
+                onComplete = { role ->
+                    isAdmin = role?.lowercase() == "admin"
+                },
+                onFailure = { e ->
+                    Log.e("ProfileScreen", "Error getting user role: ${e.message}")
+                }
+            )
+        }
+    }
 
     // Fetch person data
     LaunchedEffect(personId) {
@@ -60,19 +80,21 @@ fun ProfileScreen(
                     }
                 },
                 actions = {
-                    // Edit button
-                    IconButton(
-                        onClick = { 
-                            navController.navigate("add_${personType.lowercase()}/${personId}") {
-                                launchSingleTop = true
+                    if (isAdmin) {
+                        // Edit button
+                        IconButton(
+                            onClick = { 
+                                navController.navigate("add_${personType.lowercase()}/${personId}") {
+                                    launchSingleTop = true
+                                }
                             }
+                        ) {
+                            Icon(Icons.Default.Edit, "Edit Profile")
                         }
-                    ) {
-                        Icon(Icons.Default.Edit, "Edit Profile")
-                    }
-                    // Delete button
-                    IconButton(onClick = { showDeleteDialog = true }) {
-                        Icon(Icons.Default.Delete, "Delete")
+                        // Delete button
+                        IconButton(onClick = { showDeleteDialog = true }) {
+                            Icon(Icons.Default.Delete, "Delete")
+                        }
                     }
                 }
             )

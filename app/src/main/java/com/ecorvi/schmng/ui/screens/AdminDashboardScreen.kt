@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -99,9 +100,13 @@ private val BackgroundColor = Color.White.copy(alpha = 0.95f)
 fun AdminDashboardScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
-    val manageItems = listOf("Students", "Teachers")
+    val manageItems = listOf(
+        "STUDENTS" to Icons.Default.Person,
+        "TEACHERS" to Icons.Default.School,
+        "TIMETABLE" to Icons.Default.Schedule
+    )
     val expandedStates = remember { mutableStateMapOf<String, Boolean>().apply {
-        manageItems.forEach { this[it] = false }
+        manageItems.forEach { this[it.first] = false }
     } }
 
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -125,40 +130,30 @@ fun AdminDashboardScreen(navController: NavController) {
     // Drawer state
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
-    fun showMessage(message: String) {
-        coroutineScope.launch {
-            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
-        }
-    }
-
     LaunchedEffect(Unit) {
         isLoading = true
-        try {
-            FirestoreDatabase.fetchStudentCount { count ->
-                studentCount = count
-            }
-            FirestoreDatabase.fetchTeacherCount { count ->
-                teacherCount = count
-            }
-            
-            delay(1000) // Give time for data to load
-            isLoading = false
-        } catch (e: Exception) {
-            errorMessage = e.message
-            isLoading = false
+        // Reverted to static calls
+        FirestoreDatabase.fetchStudentCount { count -> studentCount = count }
+        FirestoreDatabase.fetchTeacherCount { count -> teacherCount = count }
+        isLoading = false
+    }
+
+    fun showMessage(msg: String) {
+        errorMessage = msg
+        coroutineScope.launch {
+            delay(3000)
+            errorMessage = null
         }
     }
 
     fun addItem(category: String, item: String) {
         if (item.isBlank()) return
+        // Reverted to static calls
         when (category) {
             "SCHEDULE" -> {
                 val schedule = Schedule(
                     title = item,
-                    description = "",
-                    date = "",
-                    time = "",
-                    className = ""
+                    description = "", date = "", time = "", className = ""
                 )
                 FirestoreDatabase.addSchedule(
                     schedule = schedule,
@@ -175,9 +170,7 @@ fun AdminDashboardScreen(navController: NavController) {
             "PENDING FEES" -> {
                 val fee = Fee(
                     studentName = item,
-                    amount = 0.0,
-                    dueDate = "",
-                    description = ""
+                    amount = 0.0, dueDate = "", description = ""
                 )
                 FirestoreDatabase.addFee(
                     fee = fee,
@@ -214,8 +207,15 @@ fun AdminDashboardScreen(navController: NavController) {
     // Function to handle logout
     fun handleLogout() {
         auth.signOut()
-        navController.navigate("login") {
-            popUpTo("adminDashboard") { inclusive = true }
+        // Clear cached role on logout
+        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .remove("user_role")
+            .apply()
+            
+        navController.navigate("login") { // Navigate to login
+            popUpTo("admin_dashboard") { inclusive = true } // Correct route name
+            launchSingleTop = true // Avoid multiple login screens
         }
     }
 
@@ -272,6 +272,7 @@ fun AdminDashboardScreen(navController: NavController) {
                 inputText = ""
             },
             onDelete = { item ->
+                // Reverted to static calls
                 when (selectedCategory) {
                     "SCHEDULE" -> {
                         val scheduleToDelete = schedules.find { it.title == item }
@@ -354,7 +355,7 @@ fun AdminDashboardScreen(navController: NavController) {
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            // Distribution Analysis shimmer
+            // Pie Chart shimmer
             item {
                 Surface(
                     modifier = Modifier
@@ -367,16 +368,8 @@ fun AdminDashboardScreen(navController: NavController) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Box(
                             modifier = Modifier
-                                .width(180.dp)
-                                .height(24.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(brush)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Box(
-                            modifier = Modifier
                                 .fillMaxWidth()
-                                .height(220.dp)
+                                .height(200.dp) // Updated to match new pie chart height
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(brush)
                         )
@@ -391,19 +384,19 @@ fun AdminDashboardScreen(navController: NavController) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(100.dp)
+                            .height(80.dp) // Updated to match new summary card height
                             .clip(RoundedCornerShape(12.dp))
                             .background(brush)
                     )
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(100.dp)
+                            .height(80.dp) // Updated to match new summary card height
                             .clip(RoundedCornerShape(12.dp))
                             .background(brush)
                     )
@@ -492,6 +485,16 @@ fun AdminDashboardScreen(navController: NavController) {
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                         // Navigate to profile
+                    }
+                )
+
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Schedule, contentDescription = "Timetable") },
+                    label = { Text("Timetable Management") },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("timetable_management")
                     }
                 )
 
@@ -685,7 +688,7 @@ fun AdminDashboardScreen(navController: NavController) {
                                     onClick = {
                                         isLoading = true
                                         errorMessage = null
-                                        // Retry loading data
+                                        // Retry loading data - Reverted to static calls
                                         FirestoreDatabase.fetchStudentCount { count ->
                                             studentCount = count
                                         }
@@ -726,20 +729,10 @@ fun AdminDashboardScreen(navController: NavController) {
                                         Column(
                                             modifier = Modifier.padding(16.dp)
                                         ) {
-                                            Text(
-                                                text = "Distribution Analysis",
-                                                style = TextStyle(
-                                                    fontSize = 20.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = PrimaryBlue
-                                                ),
-                                                modifier = Modifier.padding(bottom = 16.dp)
-                                            )
-                                            
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .height(220.dp)
+                                                    .height(200.dp)
                                                     .padding(8.dp)
                                             ) {
                                                 PieChart(
@@ -755,16 +748,28 @@ fun AdminDashboardScreen(navController: NavController) {
                                 }
 
                                 item {
-                                    AnimatedSummaryRow(
-                                        leftTitle = "SCHEDULE",
-                                        rightTitle = "PENDING FEES",
-                                        leftIcon = Icons.Default.Schedule,
-                                        rightIcon = Icons.Default.CurrencyRupee,
-                                        leftClick = { navController.navigate("schedules") },
-                                        rightClick = { navController.navigate("pending_fees") },
-                                        leftColor = ScheduleOrange,
-                                        rightColor = FeesRed
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(80.dp)
+                                            .padding(horizontal = 16.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        AnimatedSummaryCard(
+                                            title = "SCHEDULE",
+                                            icon = Icons.Default.Schedule,
+                                            onClick = { navController.navigate("schedules") },
+                                            backgroundColor = ScheduleOrange,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        AnimatedSummaryCard(
+                                            title = "PENDING FEES",
+                                            icon = Icons.Default.CurrencyRupee,
+                                            onClick = { navController.navigate("pending_fees") },
+                                            backgroundColor = FeesRed,
+                                            modifier = Modifier.weight(1f)
                                     )
+                                    }
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
 
@@ -778,7 +783,7 @@ fun AdminDashboardScreen(navController: NavController) {
                                     )
                                 }
 
-                                items(manageItems) { item ->
+                                items(manageItems) { (item, icon) ->
                                     val isExpanded = expandedStates[item] == true
                                     EnhancedExpandableItem(
                                         title = item,
@@ -786,8 +791,9 @@ fun AdminDashboardScreen(navController: NavController) {
                                         onExpandClick = { expandedStates[item] = !isExpanded },
                                         onItemClick = {
                                             when (item) {
-                                                "Students" -> navController.navigate("students")
-                                                "Teachers" -> navController.navigate("teachers")
+                                                "STUDENTS" -> navController.navigate("students")
+                                                "TEACHERS" -> navController.navigate("teachers")
+                                                "TIMETABLE" -> navController.navigate("timetable_management")
                                             }
                                         }
                                     )
@@ -1144,8 +1150,21 @@ fun PieChart(
     val total = studentCount + teacherCount
     if (total == 0) return // prevent division by zero
 
-    val studentAngle = 360f * (studentCount.toFloat() / total)
-    val teacherAngle = 360f * (teacherCount.toFloat() / total)
+    val gapAngle = 3.5f
+    val totalGapAngle = gapAngle * 2 // Total gap space to distribute
+    val availableAngle = 360f - totalGapAngle // Available angle for segments
+
+    // Calculate the angle proportions dynamically based on counts
+    val teacherRatio = teacherCount.toFloat() / total
+    val studentRatio = studentCount.toFloat() / total
+    
+    // Dynamically calculate segment angles
+    val teacherAngle = teacherRatio * availableAngle
+    val studentAngle = studentRatio * availableAngle
+
+    // Define the precise start angles for each segment
+    val teacherStartAngle = gapAngle
+    val studentStartAngle = teacherStartAngle + teacherAngle + gapAngle
 
     var studentPressed by remember { mutableStateOf(false) }
     var teacherPressed by remember { mutableStateOf(false) }
@@ -1157,7 +1176,7 @@ fun PieChart(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(end = 100.dp)
                 .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         val canvasWidth = size.width
@@ -1165,35 +1184,44 @@ fun PieChart(
                         val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
                         val centerX = canvasWidth / 2
                         val centerY = canvasHeight / 2
-                        val strokeWidth = radius * 0.4f
+                        val strokeWidth = radius * 0.6f
 
                         val dx = offset.x - centerX
                         val dy = offset.y - centerY
-
                         val distanceFromCenter = kotlin.math.sqrt((dx * dx + dy * dy).toDouble())
-                        var touchAngle = (Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble()) + 360) % 360
-                        touchAngle = (450 - touchAngle) % 360 // Start from top
 
-                        val outerRadius = radius
-                        val innerRadius = radius - strokeWidth
+                        // Only detect touches within the ring
+                        if (distanceFromCenter >= (radius - strokeWidth) && 
+                            distanceFromCenter <= radius) {
+                            
+                            // Calculate angle in degrees from 0-360
+                            // In Canvas, 0 degrees is at 3 o'clock, moving clockwise
+                            var angle = Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble()).toFloat()
+                            if (angle < 0) angle += 360f // Convert negative angles to 0-360 range
 
-                        val gapAngle = 4f
+                            // Define segment boundaries precisely
+                            val teacherEndAngle = teacherStartAngle + teacherAngle
+                            val studentEndAngle = studentStartAngle + studentAngle
 
-                        if (distanceFromCenter <= outerRadius && distanceFromCenter >= innerRadius) {
-                            val studentStart = 0f
-                            val studentEnd = studentAngle - gapAngle
+                            // Debug information
+                            println("Touch at angle: $angle")
+                            println("Teacher segment: $teacherStartAngle to $teacherEndAngle")
+                            println("Student segment: $studentStartAngle to $studentEndAngle")
 
-                            val teacherStart = studentAngle + gapAngle / 2
-                            val teacherEnd = 360f
-
+                            // Determine which segment was clicked
                             when {
-                                touchAngle in studentStart..studentEnd -> {
-                                    studentPressed = true
-                                    onStudentClick()
-                                }
-                                touchAngle in teacherStart..teacherEnd -> {
+                                // Check if angle is within teacher segment
+                                (angle >= teacherStartAngle && angle <= teacherEndAngle) -> {
                                     teacherPressed = true
                                     onTeacherClick()
+                                    println("Teacher segment clicked")
+                                }
+                                // Check if angle is within student segment
+                                (angle >= studentStartAngle && angle <= studentEndAngle || 
+                                 angle >= 0f && angle < gapAngle) -> { // Handle wraparound at 360°
+                                    studentPressed = true
+                                    onStudentClick()
+                                    println("Student segment clicked")
                                 }
                             }
                         }
@@ -1205,28 +1233,24 @@ fun PieChart(
             val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
             val centerX = canvasWidth / 2
             val centerY = canvasHeight / 2
-            val strokeWidth = radius * 0.4f
+            val strokeWidth = radius * 0.6f
 
-            val gapAngle = 4f
-
+            // Draw teacher segment (blue)
             drawArc(
-                color = StudentGreen.copy(
-                    alpha = if (studentPressed) 0.7f else 0.85f
-                ),
-                startAngle = 0f,
-                sweepAngle = studentAngle - gapAngle,
+                color = TeacherBlue.copy(alpha = if (teacherPressed) 0.7f else 0.85f),
+                startAngle = teacherStartAngle,
+                sweepAngle = teacherAngle,
                 useCenter = false,
                 style = Stroke(width = strokeWidth),
                 size = Size(radius * 2, radius * 2),
                 topLeft = Offset(centerX - radius, centerY - radius)
             )
 
+            // Draw student segment (green)
             drawArc(
-                color = TeacherBlue.copy(
-                    alpha = if (teacherPressed) 0.7f else 0.85f
-                ),
-                startAngle = studentAngle + gapAngle / 2,
-                sweepAngle = teacherAngle - gapAngle,
+                color = StudentGreen.copy(alpha = if (studentPressed) 0.7f else 0.85f),
+                startAngle = studentStartAngle,
+                sweepAngle = studentAngle,
                 useCenter = false,
                 style = Stroke(width = strokeWidth),
                 size = Size(radius * 2, radius * 2),
@@ -1236,33 +1260,33 @@ fun PieChart(
 
         Column(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 16.dp, top = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .align(Alignment.CenterEnd)
+                .padding(start = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.clickable { onStudentClick() }
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.clickable { onTeacherClick() }
             ) {
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
-                        .background(StudentGreen, RoundedCornerShape(2.dp))
+                        .size(12.dp)
+                        .background(TeacherBlue, RoundedCornerShape(2.dp))
                 )
                 Column {
                     Text(
-                        text = "Students",
+                        text = "Teachers",
                         style = TextStyle(
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Normal,
                             color = Color.DarkGray
                         )
                     )
                     Text(
-                        text = "$studentCount",
+                        text = "$teacherCount",
                         style = TextStyle(
-                            fontSize = 12.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.DarkGray
                         )
@@ -1272,27 +1296,27 @@ fun PieChart(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.clickable { onTeacherClick() }
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.clickable { onStudentClick() }
             ) {
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
-                        .background(TeacherBlue, RoundedCornerShape(2.dp))
+                        .size(12.dp)
+                        .background(StudentGreen, RoundedCornerShape(2.dp))
                 )
                 Column {
                     Text(
-                        text = "Teachers",
+                        text = "Students",
                         style = TextStyle(
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Normal,
                             color = Color.DarkGray
                         )
                     )
                     Text(
-                        text = "$teacherCount",
+                        text = "$studentCount",
                         style = TextStyle(
-                            fontSize = 12.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.DarkGray
                         )
@@ -1303,7 +1327,7 @@ fun PieChart(
 
         LaunchedEffect(studentPressed, teacherPressed) {
             if (studentPressed || teacherPressed) {
-                delay(100)
+                delay(50)
                 studentPressed = false
                 teacherPressed = false
             }
