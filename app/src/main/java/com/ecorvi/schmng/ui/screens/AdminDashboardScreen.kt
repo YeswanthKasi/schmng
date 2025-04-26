@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
@@ -79,8 +80,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalInspectionMode
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
@@ -126,7 +130,7 @@ fun AdminDashboardScreen(navController: NavController) {
     var teacherCount by remember { mutableStateOf(0) }
     var showDropdownMenu by remember { mutableStateOf(false) }
     var showNavigationDrawer by remember { mutableStateOf(false) }
-    
+
     // Drawer state
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -207,12 +211,13 @@ fun AdminDashboardScreen(navController: NavController) {
     // Function to handle logout
     fun handleLogout() {
         auth.signOut()
-        // Clear cached role on logout
+        // Clear cached role and stay signed in preference on logout
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             .edit()
             .remove("user_role")
+            .remove("stay_signed_in")
             .apply()
-            
+
         navController.navigate("login") { // Navigate to login
             popUpTo("admin_dashboard") { inclusive = true } // Correct route name
             launchSingleTop = true // Avoid multiple login screens
@@ -352,7 +357,7 @@ fun AdminDashboardScreen(navController: NavController) {
                         .clip(RoundedCornerShape(28.dp))
                         .background(brush)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(3.dp))
             }
 
             // Pie Chart shimmer
@@ -440,7 +445,6 @@ fun AdminDashboardScreen(navController: NavController) {
                 drawerContainerColor = Color.White.copy(alpha = 0.95f)
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
-                
                 // App Logo and Name
                 Column(
                     modifier = Modifier
@@ -448,73 +452,95 @@ fun AdminDashboardScreen(navController: NavController) {
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ecorvilogo),
-                        contentDescription = "App Logo",
-                        modifier = Modifier
-                            .size(80.dp)
-                            .padding(8.dp)
-                    )
+                    val isPreview = LocalInspectionMode.current
+                    if (!isPreview) {
+                        Image(
+                            painter = if (isPreview) painterResource(id = android.R.drawable.ic_menu_gallery) else painterResource(id = R.drawable.ecorvilogo),
+                            contentDescription = "App Logo",
+                            modifier = Modifier
+                                .size(80.dp)
+                                .padding(8.dp)
+                        )
+                    }
                     Text(
                         text = "Ecorvi School Management",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                         color = PrimaryBlue,
                         fontWeight = FontWeight.Bold
                     )
                 }
-
-                Divider(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = Color.Gray.copy(alpha = 0.2f)
-                )
-
+                Spacer(modifier = Modifier.height(12.dp))
                 // Navigation Items
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home") },
+                    label = { Text("Home", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                     }
                 )
-
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                    label = { Text("Profile") },
+                    icon = { Icon(Icons.Default.Person, contentDescription = "Students") },
+                    label = { Text("Students", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
-                        // Navigate to profile
+                        navController.navigate("students")
                     }
                 )
-
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.School, contentDescription = "Teachers") },
+                    label = { Text("Teachers", fontSize = 16.sp) },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("teachers")
+                    }
+                )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Schedule, contentDescription = "Timetable") },
-                    label = { Text("Timetable Management") },
+                    label = { Text("Timetable", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                         navController.navigate("timetable_management")
                     }
                 )
-
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Schedule, contentDescription = "Schedule") },
+                    label = { Text("Schedule", fontSize = 16.sp) },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("schedules")
+                    }
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.DirectionsBus, contentDescription = "Bus Tracking") },
+                    label = {Text("Bus Tracking", fontSize = 16.sp)},
+                    selected = false,
+                    onClick = {
+                        Toast.makeText(context, "Bus Tracking is coming soon!", Toast.LENGTH_SHORT).show()
+                    }
+                )
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Version and Update Section
+                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier.padding(start = 16.dp)
+                ) {
+                    Text(
+                        text = "Version ${packageInfo.versionName}",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                        color = Color.Gray)
+                }
+                // Check for Updates and Version Section at the bottom
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                    Text(
-                        text = "Version ${packageInfo.versionName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -536,10 +562,11 @@ fun AdminDashboardScreen(navController: NavController) {
                             Text(
                                 "Check for Updates",
                                 color = PrimaryBlue,
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp)
                             )
                         }
                     }
+
                 }
             }
         }
@@ -553,9 +580,9 @@ fun AdminDashboardScreen(navController: NavController) {
                         title = {
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 Text(
-                                    "DASHBOARD",
+                                    "Dashboard",
                                     color = PrimaryBlue,
-                                    fontSize = 24.sp,
+                                    fontSize = 22.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -585,7 +612,6 @@ fun AdminDashboardScreen(navController: NavController) {
                                         tint = PrimaryBlue
                                     )
                                 }
-
                                 DropdownMenu(
                                     expanded = showDropdownMenu,
                                     onDismissRequest = { showDropdownMenu = false },
@@ -606,7 +632,8 @@ fun AdminDashboardScreen(navController: NavController) {
                                                 )
                                                 Text(
                                                     "Help",
-                                                    color = PrimaryBlue
+                                                    color = PrimaryBlue,
+                                                    fontSize = 15.sp
                                                 )
                                             }
                                         },
@@ -615,7 +642,6 @@ fun AdminDashboardScreen(navController: NavController) {
                                             handleHelpClick()
                                         }
                                     )
-
                                     DropdownMenuItem(
                                         text = {
                                             Row(
@@ -629,7 +655,8 @@ fun AdminDashboardScreen(navController: NavController) {
                                                 )
                                                 Text(
                                                     "Logout",
-                                                    color = PrimaryBlue
+                                                    color = PrimaryBlue,
+                                                    fontSize = 15.sp
                                                 )
                                             }
                                         },
@@ -652,7 +679,7 @@ fun AdminDashboardScreen(navController: NavController) {
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
                             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                            label = { Text("Home") }
+                            label = { Text("Home", fontSize = 14.sp) }
                         )
                     }
                 },
@@ -713,10 +740,8 @@ fun AdminDashboardScreen(navController: NavController) {
                                 )
                             ) {
                                 item {
-                                    SearchBar()
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    AiSearchBar()
                                 }
-
                                 item {
                                     Surface(
                                         modifier = Modifier
@@ -746,62 +771,114 @@ fun AdminDashboardScreen(navController: NavController) {
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
-
                                 item {
-                                    Row(
+                                    AnimatedSummaryCard(
+                                        title = "Pending Fees",
+                                        icon = Icons.Default.CurrencyRupee,
+                                        onClick = { navController.navigate("pending_fees") },
+                                        backgroundColor = FeesRed,
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(80.dp)
-                                            .padding(horizontal = 16.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        AnimatedSummaryCard(
-                                            title = "SCHEDULE",
-                                            icon = Icons.Default.Schedule,
-                                            onClick = { navController.navigate("schedules") },
-                                            backgroundColor = ScheduleOrange,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        AnimatedSummaryCard(
-                                            title = "PENDING FEES",
-                                            icon = Icons.Default.CurrencyRupee,
-                                            onClick = { navController.navigate("pending_fees") },
-                                            backgroundColor = FeesRed,
-                                            modifier = Modifier.weight(1f)
-                                    )
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                }
-
-                                item {
-                                    Text(
-                                        text = "MANAGE",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = PrimaryBlue,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                                    )
-                                }
-
-                                items(manageItems) { (item, icon) ->
-                                    val isExpanded = expandedStates[item] == true
-                                    EnhancedExpandableItem(
-                                        title = item,
-                                        isExpanded = isExpanded,
-                                        onExpandClick = { expandedStates[item] = !isExpanded },
-                                        onItemClick = {
-                                            when (item) {
-                                                "STUDENTS" -> navController.navigate("students")
-                                                "TEACHERS" -> navController.navigate("teachers")
-                                                "TIMETABLE" -> navController.navigate("timetable_management")
-                                            }
-                                        }
                                     )
                                 }
                             }
                         }
                     }
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AiSearchBar(modifier: Modifier = Modifier) {
+    var searchText by remember { mutableStateOf("") }
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val infiniteTransition = rememberInfiniteTransition(label = "ai-search-bar")
+    val animatedOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ), label = "gradientOffset"
+    )
+    val gradientColors = listOf(
+        Color(0xFF7C4DFF), // Purple
+        Color(0xFF42A5F5), // Blue
+        Color(0xFFE040FB), // Pink
+        Color(0xFF00E5FF), // Cyan
+        Color(0xFF7C4DFF)  // Purple
+    )
+    val brush = Brush.linearGradient(
+        colors = gradientColors,
+        start = Offset(0f, 0f),
+        end = Offset(400f * (0.5f + 0.5f * kotlin.math.sin(animatedOffset * 2 * Math.PI).toFloat()), 400f * (0.5f - 0.5f * kotlin.math.cos(animatedOffset * 2 * Math.PI).toFloat()))
+    )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 8.dp)
+            .height(60.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .height(56.dp)
+                .background(
+                    brush = brush,
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .padding(2.dp)
+        ) {
+            OutlinedTextField(
+                value = searchText,
+                onValueChange = { searchText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .background(Color.White, RoundedCornerShape(26.dp))
+                    .clip(RoundedCornerShape(26.dp)),
+                placeholder = {
+                    Text(
+                        text = "Ask AI anything...",
+                        fontSize = 16.sp,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "AI Search",
+                        tint = Color(0xFF1F41BB),
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Voice Search",
+                        tint = Color(0xFF1F41BB),
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+                shape = RoundedCornerShape(26.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    cursorColor = Color(0xFF1F41BB),
+                    focusedLeadingIconColor = Color(0xFF1F41BB),
+                    unfocusedLeadingIconColor = Color(0xFF1F41BB),
+                    focusedTrailingIconColor = Color(0xFF1F41BB),
+                    unfocusedTrailingIconColor = Color(0xFF1F41BB)
+                ),
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 16.sp, color = Color.Black, fontWeight = FontWeight.Medium),
+                maxLines = 1
             )
         }
     }
@@ -927,29 +1004,30 @@ fun AnimatedSummaryCard(
         ),
         label = ""
     )
-
     Surface(
-        modifier = modifier
-            .height(120.dp)
+        modifier = Modifier
+            .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+            .widthIn(max = 320.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-            },
+            }
+            .then(modifier),
         shape = RoundedCornerShape(12.dp),
         shadowElevation = if (isPressed) 2.dp else 4.dp,
         color = backgroundColor
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .clickable {
                     isPressed = true
                     onClick()
                     isPressed = false
                 }
-                .padding(12.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 icon,
@@ -962,18 +1040,20 @@ fun AnimatedSummaryCard(
                         scaleY = if (isPressed) 0.9f else 1f
                     }
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             Text(
                 title,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
+                fontSize = 16.sp,
+                textAlign = TextAlign.Start,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.graphicsLayer {
-                    alpha = if (isPressed) 0.8f else 1f
-                }
+                modifier = Modifier
+                    .graphicsLayer {
+                        alpha = if (isPressed) 0.8f else 1f
+                    }
+                    .weight(1f)
             )
         }
     }
@@ -1157,7 +1237,7 @@ fun PieChart(
     // Calculate the angle proportions dynamically based on counts
     val teacherRatio = teacherCount.toFloat() / total
     val studentRatio = studentCount.toFloat() / total
-    
+
     // Dynamically calculate segment angles
     val teacherAngle = teacherRatio * availableAngle
     val studentAngle = studentRatio * availableAngle
@@ -1173,150 +1253,160 @@ fun PieChart(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(end = 100.dp)
-                .pointerInput(Unit) {
-                    detectTapGestures { offset ->
-                        val canvasWidth = size.width
-                        val canvasHeight = size.height
-                        val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
-                        val centerX = canvasWidth / 2
-                        val centerY = canvasHeight / 2
-                        val strokeWidth = radius * 0.6f
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Pie chart itself
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .aspectRatio(1f)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp)
+                        .pointerInput(Unit) {
+                            detectTapGestures { offset ->
+                                val canvasWidth = size.width
+                                val canvasHeight = size.height
+                                val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
+                                val centerX = canvasWidth / 2
+                                val centerY = canvasHeight / 2
+                                val strokeWidth = radius * 0.6f
 
-                        val dx = offset.x - centerX
-                        val dy = offset.y - centerY
-                        val distanceFromCenter = kotlin.math.sqrt((dx * dx + dy * dy).toDouble())
+                                val dx = offset.x - centerX
+                                val dy = offset.y - centerY
+                                val distanceFromCenter = kotlin.math.sqrt((dx * dx + dy * dy).toDouble())
 
-                        // Only detect touches within the ring
-                        if (distanceFromCenter >= (radius - strokeWidth) && 
-                            distanceFromCenter <= radius) {
-                            
-                            // Calculate angle in degrees from 0-360
-                            // In Canvas, 0 degrees is at 3 o'clock, moving clockwise
-                            var angle = Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble()).toFloat()
-                            if (angle < 0) angle += 360f // Convert negative angles to 0-360 range
+                                // Only detect touches within the ring
+                                if (distanceFromCenter >= (radius - strokeWidth) &&
+                                    distanceFromCenter <= radius) {
 
-                            // Define segment boundaries precisely
-                            val teacherEndAngle = teacherStartAngle + teacherAngle
-                            val studentEndAngle = studentStartAngle + studentAngle
+                                    // Calculate angle in degrees from 0-360
+                                    // In Canvas, 0 degrees is at 3 o'clock, moving clockwise
+                                    var angle = Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble()).toFloat()
+                                    if (angle < 0) angle += 360f // Convert negative angles to 0-360 range
 
-                            // Debug information
-                            println("Touch at angle: $angle")
-                            println("Teacher segment: $teacherStartAngle to $teacherEndAngle")
-                            println("Student segment: $studentStartAngle to $studentEndAngle")
+                                    // Define segment boundaries precisely
+                                    val teacherEndAngle = teacherStartAngle + teacherAngle
+                                    val studentEndAngle = studentStartAngle + studentAngle
 
-                            // Determine which segment was clicked
-                            when {
-                                // Check if angle is within teacher segment
-                                (angle >= teacherStartAngle && angle <= teacherEndAngle) -> {
-                                    teacherPressed = true
-                                    onTeacherClick()
-                                    println("Teacher segment clicked")
-                                }
-                                // Check if angle is within student segment
-                                (angle >= studentStartAngle && angle <= studentEndAngle || 
-                                 angle >= 0f && angle < gapAngle) -> { // Handle wraparound at 360°
-                                    studentPressed = true
-                                    onStudentClick()
-                                    println("Student segment clicked")
+                                    // Debug information
+                                    println("Touch at angle: $angle")
+                                    println("Teacher segment: $teacherStartAngle to $teacherEndAngle")
+                                    println("Student segment: $studentStartAngle to $studentEndAngle")
+
+                                    // Determine which segment was clicked
+                                    when {
+                                        // Check if angle is within teacher segment
+                                        (angle >= teacherStartAngle && angle <= teacherEndAngle) -> {
+                                            teacherPressed = true
+                                            onTeacherClick()
+                                            println("Teacher segment clicked")
+                                        }
+                                        // Check if angle is within student segment
+                                        (angle >= studentStartAngle && angle <= studentEndAngle ||
+                                         angle >= 0f && angle < gapAngle) -> { // Handle wraparound at 360°
+                                            studentPressed = true
+                                            onStudentClick()
+                                            println("Student segment clicked")
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
+                ) {
+                    val canvasWidth = size.width
+                    val canvasHeight = size.height
+                    val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
+                    val centerX = canvasWidth / 2
+                    val centerY = canvasHeight / 2
+                    val strokeWidth = radius * 0.6f
+
+                    // Draw teacher segment (blue)
+                    drawArc(
+                        color = TeacherBlue.copy(alpha = if (teacherPressed) 0.7f else 0.85f),
+                        startAngle = teacherStartAngle,
+                        sweepAngle = teacherAngle,
+                        useCenter = false,
+                        style = Stroke(width = strokeWidth),
+                        size = Size(radius * 2, radius * 2),
+                        topLeft = Offset(centerX - radius, centerY - radius)
+                    )
+
+                    // Draw student segment (green)
+                    drawArc(
+                        color = StudentGreen.copy(alpha = if (studentPressed) 0.7f else 0.85f),
+                        startAngle = studentStartAngle,
+                        sweepAngle = studentAngle,
+                        useCenter = false,
+                        style = Stroke(width = strokeWidth),
+                        size = Size(radius * 2, radius * 2),
+                        topLeft = Offset(centerX - radius, centerY - radius)
+                    )
                 }
-        ) {
-            val canvasWidth = size.width
-            val canvasHeight = size.height
-            val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
-            val centerX = canvasWidth / 2
-            val centerY = canvasHeight / 2
-            val strokeWidth = radius * 0.6f
-
-            // Draw teacher segment (blue)
-            drawArc(
-                color = TeacherBlue.copy(alpha = if (teacherPressed) 0.7f else 0.85f),
-                startAngle = teacherStartAngle,
-                sweepAngle = teacherAngle,
-                useCenter = false,
-                style = Stroke(width = strokeWidth),
-                size = Size(radius * 2, radius * 2),
-                topLeft = Offset(centerX - radius, centerY - radius)
-            )
-
-            // Draw student segment (green)
-            drawArc(
-                color = StudentGreen.copy(alpha = if (studentPressed) 0.7f else 0.85f),
-                startAngle = studentStartAngle,
-                sweepAngle = studentAngle,
-                useCenter = false,
-                style = Stroke(width = strokeWidth),
-                size = Size(radius * 2, radius * 2),
-                topLeft = Offset(centerX - radius, centerY - radius)
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(start = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.clickable { onTeacherClick() }
+            }
+            // Legend
+            Column(
+                modifier = Modifier
+                    .padding(start = 16.dp, end = 16.dp)
+                    .width(IntrinsicSize.Min),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.Start
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(TeacherBlue, RoundedCornerShape(2.dp))
-                )
-                Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onTeacherClick() }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(TeacherBlue, RoundedCornerShape(2.dp))
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Teachers",
+                        text = "Teachers:",
                         style = TextStyle(
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
                             color = Color.DarkGray
                         )
                     )
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "$teacherCount",
                         style = TextStyle(
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.DarkGray
                         )
                     )
                 }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.clickable { onStudentClick() }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(StudentGreen, RoundedCornerShape(2.dp))
-                )
-                Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onStudentClick() }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(StudentGreen, RoundedCornerShape(2.dp))
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Students",
+                        text = "Students:",
                         style = TextStyle(
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
                             color = Color.DarkGray
                         )
                     )
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "$studentCount",
                         style = TextStyle(
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.DarkGray
                         )
@@ -1324,7 +1414,6 @@ fun PieChart(
                 }
             }
         }
-
         LaunchedEffect(studentPressed, teacherPressed) {
             if (studentPressed || teacherPressed) {
                 delay(50)

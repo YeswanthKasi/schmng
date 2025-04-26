@@ -44,6 +44,10 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import com.ecorvi.schmng.ui.data.model.Timetable
+import com.google.firebase.messaging.FirebaseMessaging
+import android.util.Log
+import com.google.firebase.firestore.FieldValue
+import kotlinx.coroutines.tasks.await
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 private val ScheduleOrange = Color(0xFFFF9800)
@@ -92,6 +96,7 @@ fun StudentDashboardScreen(navController: NavController) {
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             .edit()
             .remove("user_role")
+            .remove("stay_signed_in")
             .apply()
         navController.navigate("login") {
             popUpTo(0) { inclusive = true }
@@ -101,6 +106,28 @@ fun StudentDashboardScreen(navController: NavController) {
     LaunchedEffect(currentUser?.uid) {
         if (currentUser?.uid != null) {
             try {
+                isLoading = true
+                // First update the FCM token
+                try {
+                    val token = FirebaseMessaging.getInstance().token.await()
+                    Log.d("FCM", "Retrieved token: $token")
+                    
+                    val userRef = FirebaseFirestore.getInstance().collection("users").document(currentUser.uid)
+                    val tokenData = hashMapOf(
+                        "fcmToken" to token,
+                        "lastUpdated" to FieldValue.serverTimestamp()
+                    )
+                    
+                    userRef.update(tokenData as Map<String, Any>).await()
+                    Log.d("FCM", "Token successfully updated for user: ${currentUser.uid}")
+                } catch (e: Exception) {
+                    Log.e("FCM", "Failed to update FCM token", e)
+                    errorMessage = "Failed to update notification token: ${e.message}"
+                    isLoading = false
+                    return@LaunchedEffect
+                }
+
+                // Then fetch user data
                 FirebaseFirestore.getInstance().collection("users")
                     .document(currentUser.uid)
                     .get()

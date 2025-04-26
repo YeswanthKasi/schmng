@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
 
     private val PREFS_NAME = "app_prefs"
     private val KEY_USER_ROLE = "user_role"
+    private val KEY_STAY_SIGNED_IN = "stay_signed_in"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,7 +69,18 @@ class MainActivity : ComponentActivity() {
 
         // Check initial authentication state
         val auth = FirebaseAuth.getInstance()
-        isUserLoggedIn = auth.currentUser != null
+        val staySignedIn = sharedPrefs.getBoolean(KEY_STAY_SIGNED_IN, false)
+        isUserLoggedIn = auth.currentUser != null && staySignedIn
+
+        // If user is not staying signed in, clear credentials
+        if (!staySignedIn && auth.currentUser != null) {
+            auth.signOut()
+            sharedPrefs.edit()
+                .remove(KEY_USER_ROLE)
+                .remove(KEY_STAY_SIGNED_IN)
+                .apply()
+            isUserLoggedIn = false
+        }
 
         // Determine initial route
         if (isFirstLaunch) {
@@ -82,8 +94,6 @@ class MainActivity : ComponentActivity() {
                 // Role found in cache, use it immediately
                 initialRoute = getRouteFromRole(cachedRole)
                 isLoading = false
-                // Optional: Fetch role in background to verify/update cache if needed
-                // verifyRoleInBackground(userId, sharedPrefs)
             } else if (userId != null) {
                 // Role not cached, fetch from Firestore
                 FirebaseFirestore.getInstance().collection("users")
@@ -96,34 +106,43 @@ class MainActivity : ComponentActivity() {
                             sharedPrefs.edit().putString(KEY_USER_ROLE, role).apply()
                             initialRoute = getRouteFromRole(role)
                         } else {
-                            initialRoute = "login" // Fallback if role is null
-                            sharedPrefs.edit().remove(KEY_USER_ROLE).apply() // Clear potentially invalid cache
+                            initialRoute = "login"
+                            sharedPrefs.edit()
+                                .remove(KEY_USER_ROLE)
+                                .remove(KEY_STAY_SIGNED_IN)
+                                .apply()
                         }
                         isLoading = false
                     }
                     .addOnFailureListener {
-                        initialRoute = "login" // Fallback on failure
+                        initialRoute = "login"
                         isLoading = false
-                        sharedPrefs.edit().remove(KEY_USER_ROLE).apply() // Clear cache on failure
+                        sharedPrefs.edit()
+                            .remove(KEY_USER_ROLE)
+                            .remove(KEY_STAY_SIGNED_IN)
+                            .apply()
                     }
             } else {
-                // User ID is null, should not happen if logged in, but handle defensively
                 initialRoute = "login"
                 isLoading = false
-                sharedPrefs.edit().remove(KEY_USER_ROLE).apply() // Clear cache
+                sharedPrefs.edit()
+                    .remove(KEY_USER_ROLE)
+                    .remove(KEY_STAY_SIGNED_IN)
+                    .apply()
             }
         } else {
-            // User not logged in
             initialRoute = "login"
             isLoading = false
-            sharedPrefs.edit().remove(KEY_USER_ROLE).apply() // Clear cache
+            sharedPrefs.edit()
+                .remove(KEY_USER_ROLE)
+                .remove(KEY_STAY_SIGNED_IN)
+                .apply()
         }
 
         setContent {
             SchmngTheme {
                 navController = rememberNavController()
                 
-                // Only compose AppNavigation once the initial route is determined
                 if (!isLoading) {
                     AppNavigation(
                         navController = navController,
@@ -132,30 +151,33 @@ class MainActivity : ComponentActivity() {
                         initialRoute = initialRoute
                     )
                 } else {
-                    // Show the CommonBackground while determining the initial route
                     CommonBackground { 
-                        // Display nothing inside the background during this phase
                         Box(modifier = Modifier.fillMaxSize()) 
                     }
                 }
             }
         }
 
-        // Set up auth state listener - IMPORTANT for clearing cache on logout
+        // Set up auth state listener
         auth.addAuthStateListener { firebaseAuth ->
             val loggedIn = firebaseAuth.currentUser != null
-            if (!loggedIn && isUserLoggedIn) { // User just logged out
-                // Clear the cached role when the user logs out
+            if (!loggedIn && isUserLoggedIn) {
+                // Clear the cached data when the user logs out
                 getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     .edit()
                     .remove(KEY_USER_ROLE)
+                    .remove(KEY_STAY_SIGNED_IN)
                     .apply()
-                // Optional: Navigate to login screen immediately if needed
-                // if (::navController.isInitialized) { 
-                //     navController.navigate("login") { popUpTo(0) { inclusive = true } } 
-                // }
             }
             isUserLoggedIn = loggedIn
+        }
+    }
+
+    private fun getRouteFromRole(role: String): String {
+        return when (role.lowercase()) {
+            "admin" -> "admin_dashboard"
+            "student" -> "student_dashboard"
+            else -> "login"
         }
     }
 
@@ -322,36 +344,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    // Helper function to map role to route
-    private fun getRouteFromRole(role: String): String {
-        return when (role) {
-            "admin" -> "admin_dashboard"
-            "student" -> "student_dashboard"
-            "parent" -> "parent_dashboard" // Add other roles if needed
-            else -> "login" // Fallback for unknown roles
-        }
-    }
-
-    // Optional: Background verification function (Example)
-    /*
-    private fun verifyRoleInBackground(userId: String, prefs: SharedPreferences) {
-        FirebaseFirestore.getInstance().collection("users")
-            .document(userId)
-            .get()
-            .addOnSuccessListener { document ->
-                val freshRole = document.getString("role")?.lowercase(Locale.ROOT)
-                val cachedRole = prefs.getString(KEY_USER_ROLE, null)
-                if (freshRole != null && freshRole != cachedRole) {
-                    prefs.edit().putString(KEY_USER_ROLE, freshRole).apply()
-                    // Optional: Force navigation if role changed drastically?
-                    // Or just update cache for next time.
-                } else if (freshRole == null) {
-                     prefs.edit().remove(KEY_USER_ROLE).apply()
-                }
-            }
-            // No need to handle failure explicitly for background check
-            // unless you want to log it.
-    }
-    */
 }
