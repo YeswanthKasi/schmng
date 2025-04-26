@@ -2,11 +2,14 @@ package com.ecorvi.schmng
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,117 +31,74 @@ import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.FirebaseApp
+import com.google.firebase.analytics.FirebaseAnalytics
 import java.util.*
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
+import kotlinx.coroutines.*
 
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
-    private val MY_REQUEST_CODE = 100
-    private val NOTIFICATION_PERMISSION_REQUEST_CODE = 200
+    private lateinit var firebaseAnalytics: FirebaseAnalytics
+    private lateinit var prefs: SharedPreferences
+    private lateinit var navController: NavHostController
+    
+    private val scope = CoroutineScope(Dispatchers.Main + Job())
 
     private var showUpdateDialog by mutableStateOf(false)
     private var isUpdating by mutableStateOf(false)
-
     private var isUserLoggedIn by mutableStateOf(false)
     private var isFirstLaunch by mutableStateOf(true)
     private var isLoading by mutableStateOf(true)
     private var initialRoute by mutableStateOf("login")
 
-    private lateinit var navController: NavHostController
-
-    private val PREFS_NAME = "app_prefs"
-    private val KEY_USER_ROLE = "user_role"
-    private val KEY_STAY_SIGNED_IN = "stay_signed_in"
+    companion object {
+        private const val MY_REQUEST_CODE = 100
+        private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 200
+        private const val PREFS_NAME = "app_prefs"
+        private const val KEY_USER_ROLE = "user_role"
+        private const val KEY_STAY_SIGNED_IN = "stay_signed_in"
+        private const val KEY_FIRST_LAUNCH = "is_first_launch"
+        private const val TAG = "MainActivity"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Initialize Firebase if not already initialized
-        if (FirebaseApp.getApps(this).isEmpty()) {
-            FirebaseApp.initializeApp(this)
+        try {
+            initializeComponents()
+            setupContent()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onCreate", e)
+            showErrorDialog("Failed to initialize app")
         }
+    }
 
-        appUpdateManager = AppUpdateManagerFactory.create(this)
-        checkForUpdates()
+    private fun initializeComponents() {
+        try {
+            // Initialize SharedPreferences
+            prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-        val sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        isFirstLaunch = sharedPrefs.getBoolean("is_first_launch", true)
-        if (isFirstLaunch) {
-            sharedPrefs.edit().putBoolean("is_first_launch", false).apply()
-        }
-
-        // Check initial authentication state
-        val auth = FirebaseAuth.getInstance()
-        val staySignedIn = sharedPrefs.getBoolean(KEY_STAY_SIGNED_IN, false)
-        isUserLoggedIn = auth.currentUser != null && staySignedIn
-
-        // If user is not staying signed in, clear credentials
-        if (!staySignedIn && auth.currentUser != null) {
-            auth.signOut()
-            sharedPrefs.edit()
-                .remove(KEY_USER_ROLE)
-                .remove(KEY_STAY_SIGNED_IN)
-                .apply()
-            isUserLoggedIn = false
-        }
-
-        // Determine initial route
-        if (isFirstLaunch) {
-            initialRoute = "welcome"
-            isLoading = false
-        } else if (isUserLoggedIn) {
-            val userId = auth.currentUser?.uid
-            val cachedRole = sharedPrefs.getString(KEY_USER_ROLE, null)
-
-            if (userId != null && cachedRole != null) {
-                // Role found in cache, use it immediately
-                initialRoute = getRouteFromRole(cachedRole)
-                isLoading = false
-            } else if (userId != null) {
-                // Role not cached, fetch from Firestore
-                FirebaseFirestore.getInstance().collection("users")
-                    .document(userId)
-                    .get()
-                    .addOnSuccessListener { document ->
-                        val role = document.getString("role")?.lowercase(Locale.ROOT)
-                        if (role != null) {
-                            // Save fetched role to cache
-                            sharedPrefs.edit().putString(KEY_USER_ROLE, role).apply()
-                            initialRoute = getRouteFromRole(role)
-                        } else {
-                            initialRoute = "login"
-                            sharedPrefs.edit()
-                                .remove(KEY_USER_ROLE)
-                                .remove(KEY_STAY_SIGNED_IN)
-                                .apply()
-                        }
-                        isLoading = false
-                    }
-                    .addOnFailureListener {
-                        initialRoute = "login"
-                        isLoading = false
-                        sharedPrefs.edit()
-                            .remove(KEY_USER_ROLE)
-                            .remove(KEY_STAY_SIGNED_IN)
-                            .apply()
-                    }
-            } else {
-                initialRoute = "login"
-                isLoading = false
-                sharedPrefs.edit()
-                    .remove(KEY_USER_ROLE)
-                    .remove(KEY_STAY_SIGNED_IN)
-                    .apply()
+            // Initialize Firebase
+            if (FirebaseApp.getApps(this).isEmpty()) {
+                FirebaseApp.initializeApp(this)
             }
-        } else {
-            initialRoute = "login"
-            isLoading = false
-            sharedPrefs.edit()
-                .remove(KEY_USER_ROLE)
-                .remove(KEY_STAY_SIGNED_IN)
-                .apply()
-        }
 
+            // Initialize Firebase components
+            firebaseAnalytics = FirebaseAnalytics.getInstance(this)
+
+            // Initialize app update manager
+            appUpdateManager = AppUpdateManagerFactory.create(this)
+
+            // Setup initial state and auth listener
+            setupInitialState()
+            setupAuthStateListener()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing components", e)
+            throw e
+        }
+    }
+
+    private fun setupContent() {
         setContent {
             SchmngTheme {
                 navController = rememberNavController()
@@ -157,191 +117,183 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
 
-        // Set up auth state listener
-        auth.addAuthStateListener { firebaseAuth ->
-            val loggedIn = firebaseAuth.currentUser != null
-            if (!loggedIn && isUserLoggedIn) {
-                // Clear the cached data when the user logs out
-                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit()
-                    .remove(KEY_USER_ROLE)
-                    .remove(KEY_STAY_SIGNED_IN)
-                    .apply()
-            }
-            isUserLoggedIn = loggedIn
+    private fun showToast(message: String) {
+        runOnUiThread {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }
     }
 
+    private fun setupInitialState() {
+        try {
+            isFirstLaunch = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
+            if (isFirstLaunch) {
+                prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
+            }
+
+            val auth = FirebaseAuth.getInstance()
+            val staySignedIn = prefs.getBoolean(KEY_STAY_SIGNED_IN, false)
+            isUserLoggedIn = auth.currentUser != null && staySignedIn
+
+            if (!staySignedIn && auth.currentUser != null) {
+                auth.signOut()
+                clearUserData()
+                isUserLoggedIn = false
+            }
+
+            determineInitialRoute(auth)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting up initial state", e)
+            resetToLogin()
+        }
+    }
+
+    private fun determineInitialRoute(auth: FirebaseAuth) {
+        try {
+            when {
+                isFirstLaunch -> {
+                    initialRoute = "welcome"
+                    isLoading = false
+                }
+                isUserLoggedIn -> {
+                    val userId = auth.currentUser?.uid
+                    val cachedRole = prefs.getString(KEY_USER_ROLE, null)
+
+                    if (userId != null && cachedRole != null) {
+                        initialRoute = getRouteFromRole(cachedRole)
+                        isLoading = false
+                    } else if (userId != null) {
+                        fetchUserRole(userId)
+                    } else {
+                        resetToLogin()
+                    }
+                }
+                else -> resetToLogin()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error determining initial route", e)
+            resetToLogin()
+        }
+    }
+
+    private fun setupAuthStateListener() {
+        try {
+            FirebaseAuth.getInstance().addAuthStateListener { firebaseAuth ->
+                val loggedIn = firebaseAuth.currentUser != null
+                if (!loggedIn && isUserLoggedIn) {
+                    clearUserData()
+                }
+                isUserLoggedIn = loggedIn
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting up auth state listener", e)
+        }
+    }
+
+    private fun clearUserData() {
+        try {
+            prefs.edit().apply {
+                remove(KEY_USER_ROLE)
+                remove(KEY_STAY_SIGNED_IN)
+                apply()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing user data", e)
+        }
+    }
+
+    private fun resetToLogin() {
+        initialRoute = "login"
+        clearUserData()
+        isLoading = false
+    }
+
     private fun getRouteFromRole(role: String): String {
-        return when (role.lowercase()) {
+        return when (role.lowercase(Locale.ROOT)) {
             "admin" -> "admin_dashboard"
             "student" -> "student_dashboard"
+            "parent" -> "parent_dashboard"
             else -> "login"
         }
     }
 
-    private fun navigateToDashboard(userId: String) {
+    private fun fetchUserRole(userId: String) {
         try {
             FirebaseFirestore.getInstance().collection("users")
                 .document(userId)
                 .get()
                 .addOnSuccessListener { document ->
-                    if (document.exists()) {
+                    try {
                         val role = document.getString("role")?.lowercase(Locale.ROOT)
-                        when (role) {
-                            "admin" -> {
-                                navController.navigate("admin_dashboard") {
-                                    popUpTo("login") { inclusive = true }
-                                }
-                            }
-                            "student" -> {
-                                navController.navigate("student_dashboard") {
-                                    popUpTo("login") { inclusive = true }
-                                }
-                            }
-                            "parent" -> {
-                                navController.navigate("parent_dashboard") {
-                                    popUpTo("login") { inclusive = true }
-                                }
-                            }
-                            else -> {
-                                Toast.makeText(this, "Unknown user role", Toast.LENGTH_SHORT).show()
-                            }
+                        if (role != null) {
+                            prefs.edit().putString(KEY_USER_ROLE, role).apply()
+                            initialRoute = getRouteFromRole(role)
+                        } else {
+                            resetToLogin()
                         }
-                    } else {
-                        Toast.makeText(this, "User data not found", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing user role", e)
+                        resetToLogin()
+                    } finally {
+                        isLoading = false
                     }
-                    isLoading = false
                 }
-                .addOnFailureListener {
-                    isLoading = false
-                    Toast.makeText(this, "Failed to fetch user role", Toast.LENGTH_SHORT).show()
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error fetching user role", e)
+                    resetToLogin()
                 }
         } catch (e: Exception) {
-            isLoading = false
-            Toast.makeText(this, "Navigation error: ${e.message}", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "Error in fetchUserRole", e)
+            resetToLogin()
         }
     }
 
-    private fun checkForUpdates() {
-        val installer = applicationContext.packageManager.getInstallerPackageName(packageName)
-        if (installer != "com.android.vending") {
-            Toast.makeText(this, "Updates disabled: App not installed from Play Store.", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
-            when {
-                appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
-                        appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE) -> {
-                    try {
-                        appUpdateManager.startUpdateFlowForResult(
-                            appUpdateInfo,
-                            AppUpdateType.IMMEDIATE,
-                            this,
-                            MY_REQUEST_CODE
-                        )
-                    } catch (e: Exception) {
-                        Toast.makeText(this, "Immediate update error: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
-                }
-
-                appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
-                        appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE) -> {
-                    try {
-                        isUpdating = true
-                        appUpdateManager.startUpdateFlowForResult(
-                            appUpdateInfo,
-                            AppUpdateType.FLEXIBLE,
-                            this,
-                            MY_REQUEST_CODE
-                        )
-                        appUpdateManager.registerListener(installStateListener)
-                    } catch (e: Exception) {
-                        isUpdating = false
-                        Toast.makeText(this, "Flexible update error: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }.addOnFailureListener {
-            Toast.makeText(this, "Update check failed: ${it.message}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private val installStateListener = InstallStateUpdatedListener { state ->
-        when (state.installStatus()) {
-            InstallStatus.DOWNLOADING -> isUpdating = true
-            InstallStatus.DOWNLOADED -> {
-                isUpdating = false
-                showUpdateDialog = true
-            }
-            InstallStatus.INSTALLED -> {
-                isUpdating = false
-                Toast.makeText(this, "Update installed!", Toast.LENGTH_SHORT).show()
-            }
-            InstallStatus.FAILED -> {
-                isUpdating = false
-                Toast.makeText(this, "Update failed!", Toast.LENGTH_LONG).show()
-            }
-            else -> {}
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
-            if (info.installStatus() == InstallStatus.DOWNLOADED) {
-                showUpdateDialog = true
-            }
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == MY_REQUEST_CODE && resultCode != RESULT_OK) {
-            isUpdating = false
-            Toast.makeText(this, "Update canceled. Trying again.", Toast.LENGTH_SHORT).show()
-            checkForUpdates()
+    private fun showErrorDialog(message: String) {
+        try {
+            AlertDialog.Builder(this)
+                .setTitle("Error")
+                .setMessage(message)
+                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                .setCancelable(false)
+                .show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing error dialog", e)
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        appUpdateManager.unregisterListener(installStateListener)
-        FirestoreDatabase.cleanup()
-    }
-
-    // ✅ NOW PUBLIC
-    fun checkAndRequestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    NOTIFICATION_PERMISSION_REQUEST_CODE
-                )
-            }
+        try {
+            super.onDestroy()
+            scope.cancel()
+            appUpdateManager.unregisterListener(installStateListener)
+            FirestoreDatabase.cleanup()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onDestroy", e)
         }
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Notification permission granted", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show()
+    private val installStateListener = InstallStateUpdatedListener { state ->
+        try {
+            when (state.installStatus()) {
+                InstallStatus.DOWNLOADING -> isUpdating = true
+                InstallStatus.DOWNLOADED -> {
+                    isUpdating = false
+                    showUpdateDialog = true
+                }
+                InstallStatus.INSTALLED -> {
+                    isUpdating = false
+                    Toast.makeText(this, "Update installed!", Toast.LENGTH_SHORT).show()
+                }
+                InstallStatus.FAILED -> {
+                    isUpdating = false
+                    Toast.makeText(this, "Update failed!", Toast.LENGTH_LONG).show()
+                }
+                else -> {}
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in install state listener", e)
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.os.Bundle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,12 +14,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.components.CommonBackground
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.analytics.ktx.analytics
+import com.google.firebase.analytics.ktx.logEvent
+import com.google.firebase.ktx.Firebase
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -38,6 +44,13 @@ fun AnnouncementsScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val currentUser = FirebaseAuth.getInstance().currentUser
+
+    // Log screen view for in-app messaging
+    LaunchedEffect(Unit) {
+        Firebase.analytics.logEvent("view_announcements", Bundle().apply {
+            putString("user_id", currentUser?.uid ?: "")
+        })
+    }
 
     // Fetch announcements for the student's class
     LaunchedEffect(currentUser?.uid) {
@@ -148,4 +161,46 @@ fun AnnouncementsScreen(navController: NavController) {
             }
         }
     }
-} 
+}
+
+@Preview(showBackground = true, device = Devices.PIXEL_4)
+@Composable
+fun AnnouncementsScreenPreview() {
+    val sampleAnnouncements = listOf(
+        Announcement(
+            title = "Important Meeting",
+            content = "There will be a mandatory meeting for all students.",
+            date = "2023-12-01",
+            targetClass = "all",
+            priority = "high"
+        ),
+        Announcement(
+            title = "Homework Reminder",
+            content = "Don't forget to submit your homework by Friday.",
+            date = "2023-11-28",
+            targetClass = "Class A",
+            priority = "medium"
+        ),
+        Announcement(
+            title = "School Trip",
+            content = "Details about the upcoming school trip.",
+            date = "2023-11-25",
+            targetClass = "Class B",
+            priority = "normal"
+        ),
+        Announcement(
+            title = "Test Alert",
+            content = "Reminder about the math test on December 5th.",
+            date = "2023-11-20",
+            targetClass = "all",
+            priority = "high"
+        )
+    )
+
+    // Simulate a simplified version of the screen
+    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        items(sampleAnnouncements) { announcement ->
+           Text(text = announcement.title, modifier = Modifier.padding(8.dp))
+        }
+    }
+}

@@ -3,6 +3,8 @@ package com.ecorvi.schmng.ui.screens
 import android.Manifest
 import android.content.Context
 import android.os.Build
+import android.os.Bundle
+import android.provider.Settings.Global.putString
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -38,6 +40,10 @@ import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.analytics.ktx.analytics
+import com.google.firebase.analytics.ktx.logEvent
+import com.google.firebase.ktx.Firebase
 import java.util.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -403,61 +409,86 @@ fun LoginUser(
     onLoginResult: (Boolean, String?) -> Unit
 ) {
     val auth = FirebaseAuth.getInstance()
-    auth.signInWithEmailAndPassword(email, password).addOnCompleteListener { task ->
-        if (task.isSuccessful) {
-            val user = auth.currentUser
-            
-            // Save stay signed in preference
-            context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean("stay_signed_in", staySignedIn)
-                .apply()
-
-            // Get FCM token and update in Firestore
-            FirebaseMessaging.getInstance().token
-                .addOnCompleteListener { tokenTask ->
-                    if (tokenTask.isSuccessful) {
-                        val token = tokenTask.result
-                        val userDoc = FirebaseFirestore.getInstance()
-                            .collection("users")
-                            .document(user?.uid ?: "")
-
-                        // Update token and timestamps
-                        val updates = hashMapOf<String, Any>(
-                            "fcmToken" to token,
-                            "tokenUpdatedAt" to FieldValue.serverTimestamp(),
-                            "lastActive" to FieldValue.serverTimestamp()
-                        )
-
-                        userDoc.update(updates)
-                            .addOnSuccessListener {
-                                Log.d("LoginScreen", "FCM token updated successfully")
-                                // Continue with role check and navigation
-                                checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
-                            }
-                            .addOnFailureListener { e ->
-                                Log.e("LoginScreen", "Failed to update FCM token", e)
-                                // Continue anyway as this is not critical
-                                checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
-                            }
-                    } else {
-                        Log.e("LoginScreen", "Failed to get FCM token", tokenTask.exception)
-                        // Continue without token update
-                        val userDoc = FirebaseFirestore.getInstance()
-                            .collection("users")
-                            .document(user?.uid ?: "")
-                        checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
-                    }
+    val analytics = Firebase.analytics
+    
+    auth.signInWithEmailAndPassword(email, password)
+        .addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val user = auth.currentUser
+                
+                // Log successful login event
+                val params = Bundle().apply {
+                    putString(FirebaseAnalytics.Param.METHOD, "email")
+                    putString(FirebaseAnalytics.Param.SUCCESS, "true")
+                    putString("user_id", user?.uid ?: "")
                 }
-        } else {
-            val errorMsg = when (task.exception) {
-                is FirebaseAuthInvalidUserException -> "User not found. Check your email."
-                is FirebaseAuthInvalidCredentialsException -> "Invalid password. Try again."
-                else -> "Authentication failed. Please try again."
+                analytics.logEvent(FirebaseAnalytics.Event.LOGIN, params)
+                
+                // Also log a custom event for in-app messaging
+                val inAppParams = Bundle().apply {
+                    putString("event_type", "user_login")
+                    putString("user_id", user?.uid ?: "")
+                }
+                analytics.logEvent("trigger_in_app_message", inAppParams)
+                
+                // Save stay signed in preference
+                context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("stay_signed_in", staySignedIn)
+                    .apply()
+
+                // Get FCM token and update in Firestore
+                FirebaseMessaging.getInstance().token
+                    .addOnCompleteListener { tokenTask ->
+                        if (tokenTask.isSuccessful) {
+                            val token = tokenTask.result
+                            val userDoc = FirebaseFirestore.getInstance()
+                                .collection("users")
+                                .document(user?.uid ?: "")
+
+                            // Update token and timestamps
+                            val updates = hashMapOf<String, Any>(
+                                "fcmToken" to token,
+                                "tokenUpdatedAt" to FieldValue.serverTimestamp(),
+                                "lastActive" to FieldValue.serverTimestamp()
+                            )
+
+                            userDoc.update(updates)
+                                .addOnSuccessListener {
+                                    Log.d("LoginScreen", "FCM token updated successfully")
+                                    // Continue with role check and navigation
+                                    checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("LoginScreen", "Failed to update FCM token", e)
+                                    // Continue anyway as this is not critical
+                                    checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
+                                }
+                        } else {
+                            Log.e("LoginScreen", "Failed to get FCM token", tokenTask.exception)
+                            // Continue without token update
+                            val userDoc = FirebaseFirestore.getInstance()
+                                .collection("users")
+                                .document(user?.uid ?: "")
+                            checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
+                        }
+                    }
+            } else {
+                val errorMsg = when (task.exception) {
+                    is FirebaseAuthInvalidUserException -> "User not found. Check your email."
+                    is FirebaseAuthInvalidCredentialsException -> "Invalid password. Try again."
+                    else -> "Authentication failed. Please try again."
+                }
+                onLoginResult(false, errorMsg)
+                
+                // Log failed login attempt
+                val params = Bundle().apply {
+                    putString(FirebaseAnalytics.Param.METHOD, "email")
+                    putString("error_type", task.exception?.javaClass?.simpleName ?: "unknown")
+                }
+                analytics.logEvent("login_failed", params)
             }
-            onLoginResult(false, errorMsg)
         }
-    }
 }
 
 private fun checkRoleAndNavigate(

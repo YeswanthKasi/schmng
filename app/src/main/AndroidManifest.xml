@@ -31,6 +31,11 @@
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
             android:value="true" />
+        
+        <!-- Firebase In-App Messaging auto-init -->
+        <meta-data
+            android:name="firebase_inapp_messaging_auto_init_enabled"
+            android:value="true" />
 
         <!-- FCM Service -->
         <service
