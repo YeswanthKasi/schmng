@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,11 +45,24 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import com.ecorvi.schmng.ui.data.model.Timetable
+import com.google.firebase.messaging.FirebaseMessaging
+import android.util.Log
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextStyle
+import com.google.firebase.firestore.FieldValue
+import kotlinx.coroutines.tasks.await
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 private val ScheduleOrange = Color(0xFFFF9800)
 private val FeesRed = Color(0xFFE91E63)
 private val BackgroundColor = Color.White.copy(alpha = 0.95f)
+private val StudentGradientColors = listOf(
+    Color(0xFF1F41BB), // Primary Blue
+    Color(0xFF4CAF50), // Student Green
+    Color(0xFF2196F3), // Light Blue
+    Color(0xFF1F41BB)  // Primary Blue
+)
 
 sealed class StudentDashboardUiState {
     object Loading : StudentDashboardUiState()
@@ -92,6 +106,7 @@ fun StudentDashboardScreen(navController: NavController) {
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             .edit()
             .remove("user_role")
+            .remove("stay_signed_in")
             .apply()
         navController.navigate("login") {
             popUpTo(0) { inclusive = true }
@@ -101,6 +116,28 @@ fun StudentDashboardScreen(navController: NavController) {
     LaunchedEffect(currentUser?.uid) {
         if (currentUser?.uid != null) {
             try {
+                isLoading = true
+                // First update the FCM token
+                try {
+                    val token = FirebaseMessaging.getInstance().token.await()
+                    Log.d("FCM", "Retrieved token: $token")
+                    
+                    val userRef = FirebaseFirestore.getInstance().collection("users").document(currentUser.uid)
+                    val tokenData = hashMapOf(
+                        "fcmToken" to token,
+                        "lastUpdated" to FieldValue.serverTimestamp()
+                    )
+                    
+                    userRef.update(tokenData as Map<String, Any>).await()
+                    Log.d("FCM", "Token successfully updated for user: ${currentUser.uid}")
+                } catch (e: Exception) {
+                    Log.e("FCM", "Failed to update FCM token", e)
+                    errorMessage = "Failed to update notification token: ${e.message}"
+                    isLoading = false
+                    return@LaunchedEffect
+                }
+
+                // Then fetch user data
                 FirebaseFirestore.getInstance().collection("users")
                     .document(currentUser.uid)
                     .get()
@@ -316,6 +353,53 @@ fun StudentDashboardScreen(navController: NavController) {
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                             contentPadding = PaddingValues(16.dp)
                         ) {
+                            item {
+                                StudentAiSearchBar()
+                            }
+
+                            item {
+                                if (isLoading) {
+                                    ShimmerCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(100.dp)
+                                    )
+                                } else {
+                                    DashboardCard(
+                                        title = "My Profile",
+                                        icon = Icons.Default.Person,
+                                        color = PrimaryBlue,
+                                        onClick = { 
+                                            currentUser?.uid?.let { 
+                                                navController.navigate("view_profile/student/$it") 
+                                            }
+                                        }
+                                    ) {
+                                        student?.let { studentData ->
+                                            Column(
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${studentData.firstName} ${studentData.lastName}",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Text(
+                                                    text = "Class: ${studentData.className}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = Color.Gray
+                                                )
+                                                Text(
+                                                    text = "Roll No: ${studentData.rollNumber}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = Color.Gray
+                                                )
+                                            }
+                                        } ?: Text("Loading profile data...")
+                                    }
+                                }
+                            }
+
                             item {
                                 if (isLoading) {
                                     ShimmerCard(
@@ -542,6 +626,97 @@ fun DashboardCard(
             }
             Spacer(modifier = Modifier.height(8.dp))
             content()
+        }
+    }
+}
+
+@Composable
+private fun StudentAiSearchBar(modifier: Modifier = Modifier) {
+    var searchText by remember { mutableStateOf("") }
+    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val infiniteTransition = rememberInfiniteTransition(label = "ai-search-bar")
+    val animatedOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ), label = "gradientOffset"
+    )
+    
+    val brush = Brush.linearGradient(
+        colors = StudentGradientColors,
+        start = Offset(0f, 0f),
+        end = Offset(400f * (0.5f + 0.5f * kotlin.math.sin(animatedOffset * 2 * Math.PI).toFloat()), 
+                     400f * (0.5f - 0.5f * kotlin.math.cos(animatedOffset * 2 * Math.PI).toFloat()))
+    )
+    
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 8.dp)
+            .height(60.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .height(56.dp)
+                .background(
+                    brush = brush,
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .padding(2.dp)
+        ) {
+            OutlinedTextField(
+                value = searchText,
+                onValueChange = { searchText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .background(Color.White, RoundedCornerShape(26.dp))
+                    .clip(RoundedCornerShape(26.dp)),
+                placeholder = {
+                    Text(
+                        text = "Ask AI anything about your studies...",
+                        fontSize = 16.sp,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "AI Search",
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Voice Search",
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+                shape = RoundedCornerShape(26.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    cursorColor = PrimaryBlue,
+                    focusedLeadingIconColor = PrimaryBlue,
+                    unfocusedLeadingIconColor = PrimaryBlue,
+                    focusedTrailingIconColor = PrimaryBlue,
+                    unfocusedTrailingIconColor = PrimaryBlue
+                ),
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 16.sp, color = Color.Black, fontWeight = FontWeight.Medium),
+                maxLines = 1
+            )
         }
     }
 }

@@ -225,7 +225,21 @@ fun AddPersonScreen(
                 } else {
                     FirestoreDatabase.getTeacher(personId)
                 }
-                // ... (rest of LaunchedEffect)
+                if (person != null) {
+                    firstName = person.firstName
+                    lastName = person.lastName
+                    email = person.email
+                    phone = person.phone
+                    personTypeValue = person.type
+                    selectedClass = person.className
+                    rollNumber = person.rollNumber
+                    gender = person.gender
+                    dateOfBirth = person.dateOfBirth
+                    mobileNo = person.mobileNo
+                    address = person.address
+                    age = if (person.age > 0) person.age.toString() else ""
+                }
+                isLoading = false
             }
         }
     }

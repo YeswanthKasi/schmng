@@ -1,6 +1,7 @@
 package com.ecorvi.schmng.ui.screens
 
 import android.Manifest
+import android.content.Context
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -47,6 +48,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
+import android.util.Log
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.DocumentReference
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +73,7 @@ fun LoginScreen(navController: NavController) {
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    var staySignedIn by rememberSaveable { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -237,6 +242,28 @@ fun LoginScreen(navController: NavController) {
                             )
                         }
 
+                        // Stay Signed In Checkbox
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = staySignedIn,
+                                onCheckedChange = { staySignedIn = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = Color(0xFF1F41BB),
+                                    uncheckedColor = Color(0xFF1F41BB).copy(alpha = 0.6f)
+                                )
+                            )
+                            Text(
+                                text = "Stay signed in",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFF1F41BB)
+                            )
+                        }
+
                         // Forgot Password
                         Text(
                             text = "Forgot Password?",
@@ -245,7 +272,7 @@ fun LoginScreen(navController: NavController) {
                             modifier = Modifier
                                 .align(Alignment.End)
                                 .clickable { /* TODO: Implement forgot password */ }
-                                .padding(top = 16.dp)
+                                .padding(top = 8.dp)
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -262,6 +289,8 @@ fun LoginScreen(navController: NavController) {
                                     LoginUser(
                                         email = email,
                                         password = password,
+                                        staySignedIn = staySignedIn,
+                                        context = context,
                                         navController = navController
                                     ) { success, message ->
                                         isLoading = false
@@ -368,6 +397,8 @@ fun LoginScreenPreview() {
 fun LoginUser(
     email: String,
     password: String,
+    staySignedIn: Boolean,
+    context: Context,
     navController: NavController,
     onLoginResult: (Boolean, String?) -> Unit
 ) {
@@ -375,104 +406,49 @@ fun LoginUser(
     auth.signInWithEmailAndPassword(email, password).addOnCompleteListener { task ->
         if (task.isSuccessful) {
             val user = auth.currentUser
-            FirebaseMessaging.getInstance().token.addOnCompleteListener { tokenTask ->
-                if (tokenTask.isSuccessful) {
-                    val token = tokenTask.result
-                    val userDoc = FirebaseFirestore.getInstance()
-                        .collection("users")
-                        .document(user?.uid ?: "")
+            
+            // Save stay signed in preference
+            context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("stay_signed_in", staySignedIn)
+                .apply()
 
-                    userDoc.get()
-                        .addOnSuccessListener { document ->
-                            if (document != null && document.exists()) {
-                                val role = document.getString("role")
-                                if (role != null) {
-                                    // Update FCM token
-                                    userDoc.update("fcmToken", token)
-                                        .addOnSuccessListener {
-                                            // Navigate based on role
-                                            when (role.lowercase()) {
-                                                "admin" -> {
-                                                    onLoginResult(true, null)
-                                                    navController.navigate("admin_dashboard") {
-                                                        popUpTo("login") { inclusive = true }
-                                                    }
-                                                }
-                                                "student" -> {
-                                                    onLoginResult(true, null)
-                                                    navController.navigate("student_dashboard") {
-                                                        popUpTo("login") { inclusive = true }
-                                                    }
-                                                }
-                                                else -> onLoginResult(false, "Invalid user role")
-                                            }
-                                        }
-                                        .addOnFailureListener { e ->
-                                            // Continue with navigation even if token update fails
-                                            when (role.lowercase()) {
-                                                "admin" -> {
-                                                    onLoginResult(true, null)
-                                                    navController.navigate("admin_dashboard") {
-                                                        popUpTo("login") { inclusive = true }
-                                                    }
-                                                }
-                                                "student" -> {
-                                                    onLoginResult(true, null)
-                                                    navController.navigate("student_dashboard") {
-                                                        popUpTo("login") { inclusive = true }
-                                                    }
-                                                }
-                                                else -> onLoginResult(false, "Invalid user role")
-                                            }
-                                        }
-                                } else {
-                                    onLoginResult(false, "User role not found")
-                                }
-                            } else {
-                                onLoginResult(false, "User data not found")
+            // Get FCM token and update in Firestore
+            FirebaseMessaging.getInstance().token
+                .addOnCompleteListener { tokenTask ->
+                    if (tokenTask.isSuccessful) {
+                        val token = tokenTask.result
+                        val userDoc = FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(user?.uid ?: "")
+
+                        // Update token and timestamps
+                        val updates = hashMapOf<String, Any>(
+                            "fcmToken" to token,
+                            "tokenUpdatedAt" to FieldValue.serverTimestamp(),
+                            "lastActive" to FieldValue.serverTimestamp()
+                        )
+
+                        userDoc.update(updates)
+                            .addOnSuccessListener {
+                                Log.d("LoginScreen", "FCM token updated successfully")
+                                // Continue with role check and navigation
+                                checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
                             }
-                        }
-                        .addOnFailureListener { e ->
-                            onLoginResult(false, "Failed to fetch user role: ${e.localizedMessage}")
-                        }
-                } else {
-                    // Continue with login even if token fetch fails
-                    val userDoc = FirebaseFirestore.getInstance()
-                        .collection("users")
-                        .document(user?.uid ?: "")
-                    
-                    userDoc.get()
-                        .addOnSuccessListener { document ->
-                            if (document != null && document.exists()) {
-                                val role = document.getString("role")
-                                if (role != null) {
-                                    when (role.lowercase()) {
-                                        "admin" -> {
-                                            onLoginResult(true, null)
-                                            navController.navigate("admin_dashboard") {
-                                                popUpTo("login") { inclusive = true }
-                                            }
-                                        }
-                                        "student" -> {
-                                            onLoginResult(true, null)
-                                            navController.navigate("student_dashboard") {
-                                                popUpTo("login") { inclusive = true }
-                                            }
-                                        }
-                                        else -> onLoginResult(false, "Invalid user role")
-                                    }
-                                } else {
-                                    onLoginResult(false, "User role not found")
-                                }
-                            } else {
-                                onLoginResult(false, "User data not found")
+                            .addOnFailureListener { e ->
+                                Log.e("LoginScreen", "Failed to update FCM token", e)
+                                // Continue anyway as this is not critical
+                                checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
                             }
-                        }
-                        .addOnFailureListener { e ->
-                            onLoginResult(false, "Failed to fetch user role: ${e.localizedMessage}")
-                        }
+                    } else {
+                        Log.e("LoginScreen", "Failed to get FCM token", tokenTask.exception)
+                        // Continue without token update
+                        val userDoc = FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(user?.uid ?: "")
+                        checkRoleAndNavigate(userDoc, context, navController, onLoginResult)
+                    }
                 }
-            }
         } else {
             val errorMsg = when (task.exception) {
                 is FirebaseAuthInvalidUserException -> "User not found. Check your email."
@@ -482,6 +458,50 @@ fun LoginUser(
             onLoginResult(false, errorMsg)
         }
     }
+}
+
+private fun checkRoleAndNavigate(
+    userDoc: DocumentReference,
+    context: Context,
+    navController: NavController,
+    onLoginResult: (Boolean, String?) -> Unit
+) {
+    userDoc.get()
+        .addOnSuccessListener { document ->
+            if (document != null && document.exists()) {
+                val role = document.getString("role")
+                if (role != null) {
+                    // Save user role in SharedPreferences
+                    context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                        .edit()
+                        .putString("user_role", role.lowercase())
+                        .apply()
+
+                    when (role.lowercase()) {
+                        "admin" -> {
+                            onLoginResult(true, null)
+                            navController.navigate("admin_dashboard") {
+                                popUpTo("login") { inclusive = true }
+                            }
+                        }
+                        "student" -> {
+                            onLoginResult(true, null)
+                            navController.navigate("student_dashboard") {
+                                popUpTo("login") { inclusive = true }
+                            }
+                        }
+                        else -> onLoginResult(false, "Invalid user role")
+                    }
+                } else {
+                    onLoginResult(false, "User role not found")
+                }
+            } else {
+                onLoginResult(false, "User data not found")
+            }
+        }
+        .addOnFailureListener { e ->
+            onLoginResult(false, "Failed to fetch user role: ${e.localizedMessage}")
+        }
 }
 
 
