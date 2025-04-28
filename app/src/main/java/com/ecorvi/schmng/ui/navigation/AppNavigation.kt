@@ -107,5 +107,7 @@ fun AppNavigation(
             val id = backStackEntry.arguments?.getString("id") ?: ""
             ProfileScreen(navController, id, type)
         }
+
+        composable("password_reset") { PasswordResetScreen(navController) }
     }
 }

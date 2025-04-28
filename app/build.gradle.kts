@@ -1,4 +1,5 @@
 import org.gradle.kotlin.dsl.implementation
+import org.gradle.kotlin.dsl.testImplementation
 
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
@@ -60,6 +61,14 @@ android {
 
 
 dependencies {
+    // Unit testing
+    testImplementation("org.mockito:mockito-core:4.11.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
+    testImplementation("org.mockito:mockito-inline:4.11.0")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("androidx.test:core:1.5.0")
     implementation("com.google.accompanist:accompanist-placeholder-material:0.32.0")
     implementation("com.google.accompanist:accompanist-placeholder-material:0.32.0")
     implementation("androidx.compose.material3:material3:1.3.2") // Ensure you use the latest stable version
@@ -105,5 +114,10 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    androidTestImplementation("org.mockito:mockito-android:4.11.0")
+    androidTestImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.arch.core:core-testing:2.2.0")
 }
 
