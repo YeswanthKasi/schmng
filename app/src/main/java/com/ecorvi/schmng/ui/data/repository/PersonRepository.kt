@@ -4,7 +4,7 @@ import com.ecorvi.schmng.ui.data.model.Person
 import com.google.android.gms.tasks.Task
 import com.google.firebase.firestore.FirebaseFirestore
 
-class PersonRepository(
+open class PersonRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     fun addPerson(person: Person): Task<Void> {

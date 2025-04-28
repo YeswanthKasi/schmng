@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -37,6 +38,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import android.app.DatePickerDialog
+import java.util.*
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +66,11 @@ fun AddPersonScreen(
     var showClassDialog by remember { mutableStateOf(false) }
     var showTypeDialog by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(personId != null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var adminPasswordInput by remember { mutableStateOf("") }
+    var isAuthenticating by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val isEditMode = personId != null
     val coroutineScope = rememberCoroutineScope()
@@ -74,8 +82,14 @@ fun AddPersonScreen(
         listOf("Regular", "Temporary", "Visiting")
     }
 
+    // Helper to show error messages and force recomposition
     fun showMessage(message: String) {
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        errorMessage = message
+        // Optionally clear after a delay for UX, but not needed for test
+        // LaunchedEffect(errorMessage) {
+        //     delay(3000)
+        //     errorMessage = null
+        // }
     }
 
     fun validateInputs(): Boolean {
@@ -85,6 +99,10 @@ fun AddPersonScreen(
         }
         if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             showMessage("Please enter a valid email address")
+            return false
+        }
+        if (!isEditMode && password.length < 6) {
+            showMessage("Password must be at least 6 characters")
             return false
         }
         if (phone.isNotBlank() && !android.util.Patterns.PHONE.matcher(phone).matches()) {
@@ -158,6 +176,76 @@ fun AddPersonScreen(
         }
     }
 
+    // Add this function for development/testing only. Do NOT use in production.
+    fun savePersonWithAdminCredentials(adminEmail: String, adminPassword: String) {
+        if (validateInputs()) {
+            isLoading = true
+            val auth = FirebaseAuth.getInstance()
+            val db = FirebaseFirestore.getInstance()
+
+            auth.createUserWithEmailAndPassword(email, password)
+                .addOnCompleteListener { authTask ->
+                    if (authTask.isSuccessful) {
+                        // Immediately sign back in as admin
+                        auth.signInWithEmailAndPassword(adminEmail, adminPassword)
+                            .addOnCompleteListener { adminSignInTask ->
+                                if (adminSignInTask.isSuccessful) {
+                                    val userId = authTask.result?.user?.uid ?: return@addOnCompleteListener
+
+                                    val person = Person(
+                                        id = userId,
+                                        firstName = firstName.trim(),
+                                        lastName = lastName.trim(),
+                                        email = email.trim(),
+                                        password = password,
+                                        phone = phone.trim(),
+                                        type = personTypeValue,
+                                        className = selectedClass,
+                                        rollNumber = rollNumber.trim(),
+                                        gender = gender,
+                                        dateOfBirth = dateOfBirth.trim(),
+                                        mobileNo = mobileNo.trim(),
+                                        address = address.trim(),
+                                        age = age.toIntOrNull() ?: 0
+                                    )
+
+                                    val userData = mapOf(
+                                        "role" to personType,
+                                        "email" to email,
+                                        "name" to "$firstName $lastName",
+                                        "createdAt" to com.google.firebase.Timestamp.now(),
+                                        "userId" to userId,
+                                        "type" to personTypeValue,
+                                        "className" to selectedClass
+                                    )
+
+                                    FirestoreDatabase.createUserWithRole(
+                                        userId = userId,
+                                        userData = userData,
+                                        person = person,
+                                        onSuccess = {
+                                            isLoading = false
+                                            showMessage("${personType.capitalize()} added successfully")
+                                            navController.popBackStack()
+                                        },
+                                        onFailure = { e ->
+                                            isLoading = false
+                                            showMessage("Error saving ${personType}: ${e.message}")
+                                        }
+                                    )
+                                } else {
+                                    isLoading = false
+                                    showMessage("Error re-authenticating as admin: ${adminSignInTask.exception?.message}")
+                                }
+                            }
+                    } else {
+                        isLoading = false
+                        showMessage("Error creating user: ${authTask.exception?.message}")
+                    }
+                }
+        }
+    }
+
     fun validateAndSavePerson() {
         if (!validateInputs()) {
             return
@@ -216,6 +304,21 @@ fun AddPersonScreen(
         }
     }
 
+    fun reauthenticateAndSave(adminEmail: String, adminPassword: String) {
+        isAuthenticating = true
+        val auth = FirebaseAuth.getInstance()
+        auth.signInWithEmailAndPassword(adminEmail, adminPassword)
+            .addOnCompleteListener { authTask ->
+                isAuthenticating = false
+                if (authTask.isSuccessful) {
+                    savePerson()
+                } else {
+                    val errorMsg = authTask.exception?.localizedMessage ?: "Incorrect password. Please try again."
+                    showMessage(errorMsg)
+                }
+            }
+    }
+
     LaunchedEffect(personId) {
         if (personId != null) {
             isLoading = true
@@ -244,6 +347,23 @@ fun AddPersonScreen(
         }
     }
 
+    // DatePickerDialog logic
+    if (showDatePicker) {
+        val calendar = Calendar.getInstance()
+        val datePickerDialog = DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                dateOfBirth = "${month + 1}/$dayOfMonth/$year"
+                showDatePicker = false
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        )
+        datePickerDialog.setOnCancelListener { showDatePicker = false }
+        datePickerDialog.show()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -257,7 +377,7 @@ fun AddPersonScreen(
         },
         content = { padding ->
             Box(modifier = Modifier.fillMaxSize()) {
-                if (isLoading) {
+                if (isLoading || isAuthenticating) {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center)
                     )
@@ -393,8 +513,13 @@ fun AddPersonScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),
                                 trailingIcon = {
-                                    Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
-                                }
+                                    Icon(
+                                        Icons.Default.CalendarToday,
+                                        contentDescription = "Select Date",
+                                        modifier = Modifier.clickable { showDatePicker = true }
+                                    )
+                                },
+                                readOnly = true
                             )
                         }
 
@@ -531,11 +656,11 @@ fun AddPersonScreen(
                         // Save Button
                         item {
                             Button(
-                                onClick = { 
+                                onClick = {
                                     if (isEditMode) {
                                         validateAndSavePerson()
                                     } else {
-                                        savePerson()
+                                        showPasswordDialog = true
                                     }
                                 },
                                 modifier = Modifier
@@ -544,9 +669,22 @@ fun AddPersonScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F41BB))
                             ) {
                                 Text(
-                                    if (isEditMode) "Update ${personType.capitalize()}" 
-                                    else "Add ${personType.capitalize()}", 
+                                    if (isEditMode) "Update ${personType.capitalize()}"
+                                    else "Add ${personType.capitalize()}",
                                     color = Color.White
+                                )
+                            }
+                        }
+
+                        // Error Message
+                        if (errorMessage != null) {
+                            item {
+                                Text(
+                                    text = errorMessage!!,
+                                    color = Color.Red,
+                                    modifier = Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .testTag("error_message")
                                 )
                             }
                         }
@@ -626,6 +764,40 @@ fun AddPersonScreen(
                                 TextButton(onClick = { showTypeDialog = false }) {
                                     Text("Close")
                                 }
+                            }
+                        )
+                    }
+
+                    // Password Confirmation Dialog
+                    if (showPasswordDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showPasswordDialog = false },
+                            title = { Text("Admin Password Required") },
+                            text = {
+                                OutlinedTextField(
+                                    value = adminPasswordInput,
+                                    onValueChange = { adminPasswordInput = it },
+                                    label = { Text("Enter Admin Password") },
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    singleLine = true
+                                )
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    val adminEmail = FirebaseAuth.getInstance().currentUser?.email
+                                    if (adminEmail.isNullOrBlank()) {
+                                        showMessage("Admin email not found. Please log in again.")
+                                        showPasswordDialog = false
+                                    } else if (adminPasswordInput.isBlank()) {
+                                        showMessage("Please enter your password.")
+                                    } else {
+                                        showPasswordDialog = false
+                                        reauthenticateAndSave(adminEmail, adminPasswordInput)
+                                    }
+                                }) { Text("Confirm") }
+                            },
+                            dismissButton = {
+                                Button(onClick = { showPasswordDialog = false }) { Text("Cancel") }
                             }
                         )
                     }

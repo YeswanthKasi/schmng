@@ -271,7 +271,7 @@ fun LoginScreen(navController: NavController) {
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier
                                 .align(Alignment.End)
-                                .clickable { /* TODO: Implement forgot password */ }
+                                .clickable { navController.navigate("password_reset") }
                                 .padding(top = 8.dp)
                         )
 
@@ -283,6 +283,15 @@ fun LoginScreen(navController: NavController) {
                                 isLoading = true
                                 if (email.isBlank() || password.isBlank()) {
                                     errorMessage = "Please enter email and password"
+                                    Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                                    isLoading = false
+                                } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                                    errorMessage = "Invalid email address"
+                                    Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                                    isLoading = false
+                                } else if (password.length < 6) {
+                                    errorMessage = "Password must be at least 6 characters"
+                                    Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
                                     isLoading = false
                                 } else {
                                     errorMessage = ""
@@ -450,12 +459,14 @@ fun LoginUser(
                     }
                 }
         } else {
-            val errorMsg = when (task.exception) {
+            val exception = task.exception
+            val errorMsg = when (exception) {
                 is FirebaseAuthInvalidUserException -> "User not found. Check your email."
                 is FirebaseAuthInvalidCredentialsException -> "Invalid password. Try again."
-                else -> "Authentication failed. Please try again."
+                else -> exception?.localizedMessage ?: "Authentication failed. Please try again."
             }
             onLoginResult(false, errorMsg)
+            Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -501,6 +512,85 @@ private fun checkRoleAndNavigate(
         }
         .addOnFailureListener { e ->
             onLoginResult(false, "Failed to fetch user role: ${e.localizedMessage}")
+        }
+}
+
+@Composable
+fun PasswordResetScreen(navController: NavController) {
+    val context = LocalContext.current
+    var email by rememberSaveable { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var message by rememberSaveable { mutableStateOf("") }
+    var isSuccess by rememberSaveable { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Reset Password", fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Color(0xFF1F41BB))
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it; message = "" },
+                label = { Text("Email") },
+                placeholder = { Text("Enter your email") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    if (email.isBlank()) {
+                        message = "Please enter your email"
+                        isSuccess = false
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                        message = "Invalid email address"
+                        isSuccess = false
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    } else {
+                        isLoading = true
+                        FirebaseAuth.getInstance().sendPasswordResetEmail(email)
+                            .addOnCompleteListener { task ->
+                                isLoading = false
+                                if (task.isSuccessful) {
+                                    message = "Password reset link sent! Check your email."
+                                    isSuccess = true
+                                } else {
+                                    val exception = task.exception
+                                    message = when (exception) {
+                                        is FirebaseAuthInvalidUserException -> "No user found with this email."
+                                        else -> exception?.localizedMessage ?: "Failed to send reset email."
+                                    }
+                                    isSuccess = false
+                                }
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading
+            ) {
+                if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                else Text("Send Reset Link")
+            }
+            if (message.isNotEmpty()) {
+                Text(
+                    text = message,
+                    color = if (isSuccess) Color(0xFF1F41BB) else Color.Red,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            TextButton(onClick = { navController.popBackStack() }) {
+                Text("Back to Login", color = Color(0xFF1F41BB))
+            }
+        }
         }
 }
 

@@ -98,13 +98,11 @@ fun AddFeeScreen(navController: NavController) {
                             Toast.makeText(context, "Please fill all required fields", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-
                         val amountValue = amount.toDoubleOrNull()
                         if (amountValue == null) {
                             Toast.makeText(context, "Please enter a valid amount", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-
                         isLoading = true
                         val fee = Fee(
                             studentName = studentName,
