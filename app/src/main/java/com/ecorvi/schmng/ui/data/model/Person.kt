@@ -1,27 +1,28 @@
 package com.ecorvi.schmng.ui.data.model
 
 data class Person(
-    val id: String = "",
+    var id: String = "",
     val firstName: String = "",
     val lastName: String = "",
     val email: String = "",
-    val password: String = "",
     val phone: String = "",
-    val type: String = "",
+    val type: String = "", // student, teacher, staff
     val className: String = "",
     val rollNumber: String = "",
-    var gender: String = "",
-    var dateOfBirth: String = "",
-    var mobileNo: String = "",
-    var address: String = "",
-    var age: Int = 0
+    val gender: String = "",
+    val dateOfBirth: String = "",
+    val mobileNo: String = "",
+    val address: String = "",
+    val age: Int = 0,
+    val designation: String = "",
+    val department: String = "",
+    val password: String = "" // Added for registration, not stored in Firestore
 ) {
     constructor() : this(
         id = "",
         firstName = "",
         lastName = "",
         email = "",
-        password = "",
         phone = "",
         type = "",
         className = "",
@@ -30,6 +31,9 @@ data class Person(
         dateOfBirth = "",
         mobileNo = "",
         address = "",
-        age = 0
+        age = 0,
+        designation = "",
+        department = "",
+        password = ""
     )
 }

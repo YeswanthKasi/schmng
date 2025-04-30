@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.ui.components.*
@@ -91,57 +92,129 @@ import kotlin.math.cos
 import kotlin.math.sin
 import java.text.SimpleDateFormat
 import java.util.*
+import com.ecorvi.schmng.ui.components.AnalyticsPieChart
+import kotlinx.coroutines.async
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.ecorvi.schmng.ui.navigation.AppNavigation
 
-private val PrimaryBlue = Color(0xFF1F41BB)
-private val StudentGreen = Color(0xFF4CAF50)
-private val TeacherBlue = Color(0xFF2196F3)
-private val ScheduleOrange = Color(0xFFFF9800)
-private val FeesRed = Color(0xFFE91E63)
-private val BackgroundColor = Color.White.copy(alpha = 0.95f)
+// Define primary colors used throughout the dashboard
+private val PrimaryBlue = Color(0xFF1F41BB)    // Main theme color
+private val StudentGreen = Color(0xFF4CAF50)   // Color for student-related items
+private val TeacherBlue = Color(0xFF2196F3)    // Color for teacher-related items
+private val StaffPurple = Color(0xFF9C27B0)    // Color for staff-related items
+private val ScheduleOrange = Color(0xFFFF9800)  // Color for schedule-related items
+private val FeesRed = Color(0xFFE91E63)        // Color for fee-related items
+private val BackgroundColor = Color.White.copy(alpha = 0.95f)  // Semi-transparent background
 
+// Main composable function for the Admin Dashboard Screen
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun AdminDashboardScreen(navController: NavController) {
+    // Initialize Firebase Authentication instance
     val auth = FirebaseAuth.getInstance()
+    // Get current context for Android operations
     val context = LocalContext.current
+    
+    // Define management items for the dashboard
     val manageItems = listOf(
         "STUDENTS" to Icons.Default.Person,
         "TEACHERS" to Icons.Default.School,
+        "STAFF" to Icons.Default.Group,
         "TIMETABLE" to Icons.Default.Schedule
     )
-    val expandedStates = remember { mutableStateMapOf<String, Boolean>().apply {
-        manageItems.forEach { this[it.first] = false }
-    } }
-
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var showDialog by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf("") }
-    var showAddInput by remember { mutableStateOf(false) }
-    var showViewList by remember { mutableStateOf(false) }
-    var inputText by remember { mutableStateOf("") }
+    
+    // State management using remember and mutableStateOf
+    var selectedTab by remember { mutableIntStateOf(0) }  // Track selected bottom navigation tab
+    var showDialog by remember { mutableStateOf(false) }  // Control dialog visibility
+    var selectedCategory by remember { mutableStateOf("") }  // Track selected category
+    var showAddInput by remember { mutableStateOf(false) }  // Control add input visibility
+    var showViewList by remember { mutableStateOf(false) }  // Control list view visibility
+    var inputText by remember { mutableStateOf("") }  // Store input text
+    
+    // State for data lists
     var schedules by remember { mutableStateOf<List<Schedule>>(emptyList()) }
     var pendingFees by remember { mutableStateOf<List<Fee>>(emptyList()) }
+    
+    // Loading and error states
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    
+    // Snackbar host state for showing messages
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
+    // Statistics counters
     var studentCount by remember { mutableStateOf(0) }
     var teacherCount by remember { mutableStateOf(0) }
+    var staffCount by remember { mutableStateOf(0) }
+    
+    // UI state management
     var showDropdownMenu by remember { mutableStateOf(false) }
     var showNavigationDrawer by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
 
-    // Drawer state
+    // Initialize drawer state
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
+    // Effect to load initial data with improved loading state management
     LaunchedEffect(Unit) {
         isLoading = true
-        // Reverted to static calls
-        FirestoreDatabase.fetchStudentCount { count -> studentCount = count }
-        FirestoreDatabase.fetchTeacherCount { count -> teacherCount = count }
-        isLoading = false
+        
+        try {
+            withContext(Dispatchers.IO) {
+                // Launch all data fetching operations concurrently
+                val studentDeferred = async { 
+                    suspendCoroutine<Int> { continuation ->
+                        FirestoreDatabase.fetchStudentCount { count ->
+                            continuation.resume(count)
+                        }
+                    }
+                }
+                
+                val teacherDeferred = async {
+                    suspendCoroutine<Int> { continuation ->
+                        FirestoreDatabase.fetchTeacherCount { count ->
+                            continuation.resume(count)
+                        }
+                    }
+                }
+
+                val staffDeferred = async {
+                    suspendCoroutine<Int> { continuation ->
+                        FirestoreDatabase.fetchStaffCount { count ->
+                            continuation.resume(count)
+                        }
+                    }
+                }
+
+                try {
+                    // Wait for all operations to complete
+                    studentCount = studentDeferred.await()
+                    teacherCount = teacherDeferred.await()
+                    staffCount = staffDeferred.await()
+                    
+                    withContext(Dispatchers.Main) {
+                        // Add small delay for smooth transition
+                        delay(200)
+                        isLoading = false
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        errorMessage = "Failed to load data: ${e.message}"
+                        isLoading = false
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            errorMessage = "Failed to initialize dashboard: ${e.message}"
+            isLoading = false
+        }
     }
 
+    // Function to show temporary messages
     fun showMessage(msg: String) {
         errorMessage = msg
         coroutineScope.launch {
@@ -150,19 +223,26 @@ fun AdminDashboardScreen(navController: NavController) {
         }
     }
 
+    // Function to add new items (schedules or fees)
     fun addItem(category: String, item: String) {
         if (item.isBlank()) return
-        // Reverted to static calls
+        
         when (category) {
             "SCHEDULE" -> {
+                // Create new schedule object
                 val schedule = Schedule(
                     title = item,
-                    description = "", date = "", time = "", className = ""
+                    description = "", 
+                    date = "", 
+                    time = "", 
+                    className = ""
                 )
+                // Add schedule to Firebase
                 FirestoreDatabase.addSchedule(
                     schedule = schedule,
                     onSuccess = {
                         showMessage("Schedule added successfully")
+                        // Refresh schedules list
                         FirestoreDatabase.fetchSchedules(
                             onComplete = { schedules = it },
                             onFailure = { e -> showMessage("Failed to refresh schedules: ${e.message}") }
@@ -172,14 +252,19 @@ fun AdminDashboardScreen(navController: NavController) {
                 )
             }
             "PENDING FEES" -> {
+                // Create new fee object
                 val fee = Fee(
                     studentName = item,
-                    amount = 0.0, dueDate = "", description = ""
+                    amount = 0.0, 
+                    dueDate = "", 
+                    description = ""
                 )
+                // Add fee to Firebase
                 FirestoreDatabase.addFee(
                     fee = fee,
                     onSuccess = {
                         showMessage("Fee added successfully")
+                        // Refresh fees list
                         FirestoreDatabase.fetchPendingFees(
                             onComplete = { pendingFees = it },
                             onFailure = { e -> showMessage("Failed to refresh fees: ${e.message}") }
@@ -191,7 +276,7 @@ fun AdminDashboardScreen(navController: NavController) {
         }
     }
 
-    // Function to handle help option - open email client
+    // Function to handle help option - opens email client
     fun handleHelpClick() {
         val intent = Intent(Intent.ACTION_SENDTO).apply {
             data = Uri.parse("mailto:info@ecorvi.com")
@@ -208,25 +293,28 @@ fun AdminDashboardScreen(navController: NavController) {
         }
     }
 
-    // Function to handle logout
+    // Function to handle user logout
     fun handleLogout() {
+        // Sign out from Firebase
         auth.signOut()
-        // Clear cached role and stay signed in preference on logout
+        // Clear cached user data
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             .edit()
             .remove("user_role")
             .remove("stay_signed_in")
             .apply()
 
-        navController.navigate("login") { // Navigate to login
-            popUpTo("admin_dashboard") { inclusive = true } // Correct route name
-            launchSingleTop = true // Avoid multiple login screens
+        // Navigate to login screen
+        navController.navigate("login") {
+            popUpTo("admin_dashboard") { inclusive = true }
+            launchSingleTop = true
         }
     }
 
-    // Function to handle update check
+    // Function to check for app updates
     fun checkForUpdates() {
         try {
+            // Try to open Play Store app
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 data = Uri.parse("market://details?id=${context.packageName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -241,21 +329,21 @@ fun AdminDashboardScreen(navController: NavController) {
             try {
                 context.startActivity(webIntent)
             } catch (e: Exception) {
-                Toast.makeText(
-                    context,
-                    "Unable to open Play Store",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(context, "Unable to open Play Store", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
+    // Dialog for displaying options
     if (showDialog) {
+        // Get data list based on selected category
         val dataList = when (selectedCategory) {
             "SCHEDULE" -> schedules.map { it.title }
             "PENDING FEES" -> pendingFees.map { "${it.studentName} - ₹${it.amount}" }
             else -> emptyList()
         }
+        
+        // Show options dialog
         OptionsDialog(
             category = selectedCategory,
             onDismiss = {
@@ -277,9 +365,9 @@ fun AdminDashboardScreen(navController: NavController) {
                 inputText = ""
             },
             onDelete = { item ->
-                // Reverted to static calls
                 when (selectedCategory) {
                     "SCHEDULE" -> {
+                        // Delete schedule from Firebase
                         val scheduleToDelete = schedules.find { it.title == item }
                         if (scheduleToDelete != null) {
                             FirestoreDatabase.deleteSchedule(
@@ -296,6 +384,7 @@ fun AdminDashboardScreen(navController: NavController) {
                         }
                     }
                     "PENDING FEES" -> {
+                        // Delete fee from Firebase
                         val feeToDelete = pendingFees.find { "${it.studentName} - ₹${it.amount}" == item }
                         if (feeToDelete != null) {
                             FirestoreDatabase.deleteFee(
@@ -317,50 +406,60 @@ fun AdminDashboardScreen(navController: NavController) {
         )
     }
 
+    // Loading shimmer effect component with improved animations
     @Composable
     fun DashboardShimmer() {
+        // Create infinite transition for shimmer animation with smoother timing
         val transition = rememberInfiniteTransition(label = "shimmer")
         val translateAnim = transition.animateFloat(
             initialValue = 0f,
             targetValue = 1000f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+                animation = tween(
+                    durationMillis = 1000,  // Faster animation for better responsiveness
+                    easing = FastOutSlowInEasing
+                ),
                 repeatMode = RepeatMode.Restart
             ),
             label = "shimmer"
         )
 
+        // Enhanced shimmer gradient colors for better visibility
         val shimmerColorShades = listOf(
-            Color.LightGray.copy(alpha = 0.9f),
-            Color.LightGray.copy(alpha = 0.2f),
-            Color.LightGray.copy(alpha = 0.9f)
+            Color.LightGray.copy(alpha = 0.8f),    // More visible start color
+            Color.LightGray.copy(alpha = 0.3f),    // Softer middle color
+            Color.LightGray.copy(alpha = 0.8f)     // More visible end color
         )
 
+        // Create shimmer brush with improved animation
         val brush = Brush.linearGradient(
             colors = shimmerColorShades,
             start = Offset(translateAnim.value - 1000f, translateAnim.value - 1000f),
             end = Offset(translateAnim.value, translateAnim.value)
         )
 
+        // Enhanced shimmer layout
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White.copy(alpha = 0.95f)),  // Match dashboard background
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
         ) {
-            // Search bar shimmer
+            // AI Search bar shimmer with rounded corners
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
                         .padding(horizontal = 16.dp)
+                        .height(56.dp)
                         .clip(RoundedCornerShape(28.dp))
                         .background(brush)
                 )
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Pie Chart shimmer
+            // Analytics Card shimmer with proper elevation and shape
             item {
                 Surface(
                     modifier = Modifier
@@ -370,98 +469,124 @@ fun AdminDashboardScreen(navController: NavController) {
                     color = BackgroundColor,
                     shadowElevation = 2.dp
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Pie chart placeholder
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp) // Updated to match new pie chart height
-                                .clip(RoundedCornerShape(8.dp))
+                                .size(200.dp)
+                                .clip(RoundedCornerShape(100.dp))  // Circle shape for pie chart
                                 .background(brush)
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Legend items shimmer
+                        repeat(2) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Legend label shimmer
+                                Box(
+                                    modifier = Modifier
+                                        .width(100.dp)
+                                        .height(16.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(brush)
+                                )
+                                // Legend value shimmer
+                                Box(
+                                    modifier = Modifier
+                                        .width(40.dp)
+                                        .height(16.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(brush)
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Summary Row shimmer
+            // Pending Fees Card shimmer
             item {
-                Row(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    color = BackgroundColor,
+                    shadowElevation = 2.dp
                 ) {
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .height(80.dp) // Updated to match new summary card height
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(brush)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(80.dp) // Updated to match new summary card height
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(brush)
-                    )
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Icon placeholder
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(brush)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        // Text placeholder
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(24.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(brush)
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Manage section shimmer
-            item {
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .width(80.dp)
-                        .height(20.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
 
-            // Manage items shimmer
-            items(3) { _ ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(72.dp)
-                        .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(brush)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
         }
     }
 
+    // Main navigation drawer layout
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
+            // Drawer content layout
             ModalDrawerSheet(
                 modifier = Modifier.width(300.dp),
                 drawerContainerColor = Color.White.copy(alpha = 0.95f)
             ) {
+                // App logo and title section
                 Spacer(modifier = Modifier.height(16.dp))
-                // App Logo and Name
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Check if in preview mode
                     val isPreview = LocalInspectionMode.current
                     if (!isPreview) {
                         Image(
-                            painter = if (isPreview) painterResource(id = android.R.drawable.ic_menu_gallery) else painterResource(id = R.drawable.ecorvilogo),
+                            painter = if (isPreview) 
+                                painterResource(id = android.R.drawable.ic_menu_gallery) 
+                            else 
+                                painterResource(id = R.drawable.ecorvilogo),
                             contentDescription = "App Logo",
                             modifier = Modifier
                                 .size(80.dp)
                                 .padding(8.dp)
                         )
                     }
+                    // App title
                     Text(
                         text = "Ecorvi School Management",
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
@@ -469,8 +594,9 @@ fun AdminDashboardScreen(navController: NavController) {
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                // Navigation menu items
                 Spacer(modifier = Modifier.height(12.dp))
-                // Navigation Items
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                     label = { Text("Home", fontSize = 16.sp) },
@@ -495,6 +621,15 @@ fun AdminDashboardScreen(navController: NavController) {
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                         navController.navigate("teachers")
+                    }
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Group, contentDescription = "Staff") },
+                    label = { Text("Non-Teaching Staff", fontSize = 16.sp) },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("staff")
                     }
                 )
                 NavigationDrawerItem(
@@ -523,54 +658,42 @@ fun AdminDashboardScreen(navController: NavController) {
                         Toast.makeText(context, "Bus Tracking is coming soon!", Toast.LENGTH_SHORT).show()
                     }
                 )
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(0.2f))
 
                 val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                Spacer(modifier = Modifier.height(8.dp))
                 Column(
                     modifier = Modifier.padding(start = 16.dp)
                 ) {
                     Text(
                         text = "Version ${packageInfo.versionName}",
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                        color = Color.Gray)
-                }
-                // Check for Updates and Version Section at the bottom
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Surface(
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { checkForUpdates() },
-                        color = Color.Transparent
+                            .clickable { checkForUpdates() }
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.Update,
-                                contentDescription = "Check for updates",
-                                tint = PrimaryBlue
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                "Check for Updates",
-                                color = PrimaryBlue,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp)
-                            )
-                        }
+                        Icon(
+                            Icons.Default.Update,
+                            contentDescription = "Check for Updates",
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Check for Updates",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                            color = PrimaryBlue
+                        )
                     }
-
                 }
             }
         }
     ) {
+        // Main content scaffold
         CommonBackground {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -605,7 +728,7 @@ fun AdminDashboardScreen(navController: NavController) {
                         },
                         actions = {
                             Box {
-                                IconButton(onClick = { showDropdownMenu = true }) {
+                                IconButton(onClick = { showMenu = true }) {
                                     Icon(
                                         Icons.Default.AccountCircle,
                                         contentDescription = "Profile Menu",
@@ -613,56 +736,58 @@ fun AdminDashboardScreen(navController: NavController) {
                                     )
                                 }
                                 DropdownMenu(
-                                    expanded = showDropdownMenu,
-                                    onDismissRequest = { showDropdownMenu = false },
+                                    expanded = showMenu,
+                                    onDismissRequest = { showMenu = false },
                                     modifier = Modifier
                                         .background(Color.White)
                                         .width(160.dp)
                                 ) {
                                     DropdownMenuItem(
-                                        text = {
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Help,
-                                                    contentDescription = "Help",
-                                                    tint = PrimaryBlue
-                                                )
-                                                Text(
-                                                    "Help",
-                                                    color = PrimaryBlue,
-                                                    fontSize = 15.sp
-                                                )
-                                            }
-                                        },
+                                        text = { Text("Profile") },
+                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                                         onClick = {
-                                            showDropdownMenu = false
-                                            handleHelpClick()
+                                            showMenu = false
+                                            navController.navigate("admin_profile")
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = {
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
+                                        text = { Text("Privacy & Security") },
+                                        leadingIcon = { Icon(Icons.Default.Security, contentDescription = null) },
+                                        onClick = {
+                                            showMenu = false
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://sites.google.com/view/ecorvischoolmanagement/home"))
+                                            context.startActivity(intent)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Help & Support") },
+                                        leadingIcon = { Icon(Icons.Default.Help, contentDescription = null) },
+                                        onClick = {
+                                            showMenu = false
+                                            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                                data = Uri.parse("mailto:info@ecorvi.com")
+                                            }
+                                            context.startActivity(intent)
+                                        }
+                                    )
+                                    Divider()
+                                    DropdownMenuItem(
+                                        text = { Text("Logout", color = Color.Red) },
+                                        leadingIcon = { 
                                                 Icon(
                                                     Icons.Default.Logout,
-                                                    contentDescription = "Logout",
-                                                    tint = PrimaryBlue
-                                                )
-                                                Text(
-                                                    "Logout",
-                                                    color = PrimaryBlue,
-                                                    fontSize = 15.sp
-                                                )
-                                            }
+                                                contentDescription = null,
+                                                tint = Color.Red
+                                            )
                                         },
                                         onClick = {
-                                            showDropdownMenu = false
-                                            handleLogout()
+                                            showMenu = false
+                                            FirebaseAuth.getInstance().signOut()
+                                            navController.navigate("login") {
+                                                popUpTo(navController.graph.startDestinationId) {
+                                                    inclusive = true
+                                                }
+                                            }
                                         }
                                     )
                                 }
@@ -675,11 +800,42 @@ fun AdminDashboardScreen(navController: NavController) {
                 },
                 bottomBar = {
                     NavigationBar(containerColor = Color.White) {
+                        // Home
                         NavigationBarItem(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
                             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                             label = { Text("Home", fontSize = 14.sp) }
+                        )
+                        // Profile
+                        NavigationBarItem(
+                            selected = selectedTab == 1,
+                            onClick = { 
+                                selectedTab = 1
+                                navController.navigate("profile")
+                            },
+                            icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
+                            label = { Text("Profile", fontSize = 14.sp) }
+                        )
+                        // Notifications
+                        NavigationBarItem(
+                            selected = selectedTab == 2,
+                            onClick = { 
+                                selectedTab = 2
+                                navController.navigate("notifications")
+                            },
+                            icon = { Icon(Icons.Default.Notifications, contentDescription = "Notifications") },
+                            label = { Text("Notifications", fontSize = 14.sp) }
+                        )
+                        // Messages
+                        NavigationBarItem(
+                            selected = selectedTab == 3,
+                            onClick = { 
+                                selectedTab = 3
+                                navController.navigate("messages")
+                            },
+                            icon = { Icon(Icons.Default.Message, contentDescription = "Messages") },
+                            label = { Text("Messages", fontSize = 14.sp) }
                         )
                     }
                 },
@@ -752,24 +908,19 @@ fun AdminDashboardScreen(navController: NavController) {
                                         shadowElevation = 2.dp
                                     ) {
                                         Column(
-                                            modifier = Modifier.padding(16.dp)
+                                            modifier = Modifier.padding(8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(200.dp)
-                                                    .padding(8.dp)
-                                            ) {
-                                                PieChart(
-                                                    studentCount = studentCount,
-                                                    teacherCount = teacherCount,
-                                                    onStudentClick = { navController.navigate("students") },
-                                                    onTeacherClick = { navController.navigate("teachers") }
-                                                )
-                                            }
+                                            AnalyticsPieChart(
+                                                studentCount = studentCount,
+                                                teacherCount = teacherCount,
+                                                staffCount = staffCount,
+                                                onStudentClick = { navController.navigate("students") },
+                                                onTeacherClick = { navController.navigate("teachers") },
+                                                onStaffClick = { navController.navigate("staff") }
+                                            )
                                         }
                                     }
-                                    Spacer(modifier = Modifier.height(16.dp))
                                 }
                                 item {
                                     AnimatedSummaryCard(
@@ -789,11 +940,17 @@ fun AdminDashboardScreen(navController: NavController) {
     }
 }
 
+// AI Search Bar Component
 @Composable
 private fun AiSearchBar(modifier: Modifier = Modifier) {
+    // State for search text and focus
     var searchText by remember { mutableStateOf("") }
     var isFocused by remember { mutableStateOf(false) }
+    
+    // Create interaction source for the search bar
     val interactionSource = remember { MutableInteractionSource() }
+    
+    // Setup infinite transition for animated gradient
     val infiniteTransition = rememberInfiniteTransition(label = "ai-search-bar")
     val animatedOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -804,11 +961,11 @@ private fun AiSearchBar(modifier: Modifier = Modifier) {
         ), label = "gradientOffset"
     )
     val gradientColors = listOf(
-        Color(0xFF7C4DFF), // Purple
-        Color(0xFF42A5F5), // Blue
-        Color(0xFFE040FB), // Pink
+        Color(0xFF14BD08), // Purple
+        Color(0xFF9C27B0), // Blue
+        Color(0xFFC2B436), // Pink
         Color(0xFF00E5FF), // Cyan
-        Color(0xFF7C4DFF)  // Purple
+        Color(0xFF133BB2)  // Purple
     )
     val brush = Brush.linearGradient(
         colors = gradientColors,
@@ -854,7 +1011,7 @@ private fun AiSearchBar(modifier: Modifier = Modifier) {
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "AI Search",
-                        tint = Color(0xFF1F41BB),
+                        tint = Color(0xFF030307),
                         modifier = Modifier.size(24.dp)
                     )
                 },
@@ -862,7 +1019,7 @@ private fun AiSearchBar(modifier: Modifier = Modifier) {
                     Icon(
                         imageVector = Icons.Default.Mic,
                         contentDescription = "Voice Search",
-                        tint = Color(0xFF1F41BB),
+                        tint = Color(0xFF000000),
                         modifier = Modifier.size(24.dp)
                     )
                 },
@@ -995,7 +1152,10 @@ fun AnimatedSummaryCard(
     backgroundColor: Color,
     modifier: Modifier = Modifier
 ) {
+    // State for press animation
     var isPressed by remember { mutableStateOf(false) }
+    
+    // Scale animation for press effect
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
         animationSpec = spring(
@@ -1004,6 +1164,8 @@ fun AnimatedSummaryCard(
         ),
         label = ""
     )
+
+    // Card surface with shadow and animation
     Surface(
         modifier = Modifier
             .padding(top = 12.dp, start = 16.dp, end = 16.dp)
@@ -1017,6 +1179,7 @@ fun AnimatedSummaryCard(
         shadowElevation = if (isPressed) 2.dp else 4.dp,
         color = backgroundColor
     ) {
+        // Card content
         Row(
             modifier = Modifier
                 .clickable {
@@ -1029,6 +1192,7 @@ fun AnimatedSummaryCard(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Card icon with animation
             Icon(
                 icon,
                 contentDescription = null,
@@ -1041,6 +1205,7 @@ fun AnimatedSummaryCard(
                     }
             )
             Spacer(modifier = Modifier.width(16.dp))
+            // Card title with animation
             Text(
                 title,
                 color = Color.White,
@@ -1078,6 +1243,7 @@ fun OptionsDialog(
         title = { Text(category) },
         text = {
             Column {
+                // Show main options if no sub-view is active
                 if (!showAddInput && !showViewList) {
                     Button(
                         onClick = onAddClick,
@@ -1093,6 +1259,7 @@ fun OptionsDialog(
                     }
                 }
 
+                // Show input field for adding new item
                 if (showAddInput) {
                     OutlinedTextField(
                         value = inputText,
@@ -1102,6 +1269,7 @@ fun OptionsDialog(
                     )
                 }
 
+                // Show list of existing items
                 if (showViewList) {
                     LazyColumn {
                         items(dataList) { item ->
@@ -1146,6 +1314,7 @@ fun OptionsDialog(
     )
 }
 
+// Enhanced expandable item component
 @Composable
 fun EnhancedExpandableItem(
     title: String,
@@ -1153,8 +1322,10 @@ fun EnhancedExpandableItem(
     onExpandClick: () -> Unit,
     onItemClick: () -> Unit
 ) {
+    // State for press animation
     var isPressed by remember { mutableStateOf(false) }
 
+    // Item surface with shadow
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -1220,212 +1391,6 @@ fun CommonBackground(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun PieChart(
-    studentCount: Int,
-    teacherCount: Int,
-    onStudentClick: () -> Unit,
-    onTeacherClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val total = studentCount + teacherCount
-    if (total == 0) return // prevent division by zero
-
-    val gapAngle = 3.5f
-    val totalGapAngle = gapAngle * 2 // Total gap space to distribute
-    val availableAngle = 360f - totalGapAngle // Available angle for segments
-
-    // Calculate the angle proportions dynamically based on counts
-    val teacherRatio = teacherCount.toFloat() / total
-    val studentRatio = studentCount.toFloat() / total
-
-    // Dynamically calculate segment angles
-    val teacherAngle = teacherRatio * availableAngle
-    val studentAngle = studentRatio * availableAngle
-
-    // Define the precise start angles for each segment
-    val teacherStartAngle = gapAngle
-    val studentStartAngle = teacherStartAngle + teacherAngle + gapAngle
-
-    var studentPressed by remember { mutableStateOf(false) }
-    var teacherPressed by remember { mutableStateOf(false) }
-
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Pie chart itself
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(1f)
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp)
-                        .pointerInput(Unit) {
-                            detectTapGestures { offset ->
-                                val canvasWidth = size.width
-                                val canvasHeight = size.height
-                                val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
-                                val centerX = canvasWidth / 2
-                                val centerY = canvasHeight / 2
-                                val strokeWidth = radius * 0.6f
-
-                                val dx = offset.x - centerX
-                                val dy = offset.y - centerY
-                                val distanceFromCenter = kotlin.math.sqrt((dx * dx + dy * dy).toDouble())
-
-                                // Only detect touches within the ring
-                                if (distanceFromCenter >= (radius - strokeWidth) &&
-                                    distanceFromCenter <= radius) {
-
-                                    // Calculate angle in degrees from 0-360
-                                    // In Canvas, 0 degrees is at 3 o'clock, moving clockwise
-                                    var angle = Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble()).toFloat()
-                                    if (angle < 0) angle += 360f // Convert negative angles to 0-360 range
-
-                                    // Define segment boundaries precisely
-                                    val teacherEndAngle = teacherStartAngle + teacherAngle
-                                    val studentEndAngle = studentStartAngle + studentAngle
-
-                                    // Debug information
-                                    println("Touch at angle: $angle")
-                                    println("Teacher segment: $teacherStartAngle to $teacherEndAngle")
-                                    println("Student segment: $studentStartAngle to $studentEndAngle")
-
-                                    // Determine which segment was clicked
-                                    when {
-                                        // Check if angle is within teacher segment
-                                        (angle >= teacherStartAngle && angle <= teacherEndAngle) -> {
-                                            teacherPressed = true
-                                            onTeacherClick()
-                                            println("Teacher segment clicked")
-                                        }
-                                        // Check if angle is within student segment
-                                        (angle >= studentStartAngle && angle <= studentEndAngle ||
-                                         angle >= 0f && angle < gapAngle) -> { // Handle wraparound at 360°
-                                            studentPressed = true
-                                            onStudentClick()
-                                            println("Student segment clicked")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                ) {
-                    val canvasWidth = size.width
-                    val canvasHeight = size.height
-                    val radius = (minOf(canvasWidth, canvasHeight) / 2.2f)
-                    val centerX = canvasWidth / 2
-                    val centerY = canvasHeight / 2
-                    val strokeWidth = radius * 0.6f
-
-                    // Draw teacher segment (blue)
-                    drawArc(
-                        color = TeacherBlue.copy(alpha = if (teacherPressed) 0.7f else 0.85f),
-                        startAngle = teacherStartAngle,
-                        sweepAngle = teacherAngle,
-                        useCenter = false,
-                        style = Stroke(width = strokeWidth),
-                        size = Size(radius * 2, radius * 2),
-                        topLeft = Offset(centerX - radius, centerY - radius)
-                    )
-
-                    // Draw student segment (green)
-                    drawArc(
-                        color = StudentGreen.copy(alpha = if (studentPressed) 0.7f else 0.85f),
-                        startAngle = studentStartAngle,
-                        sweepAngle = studentAngle,
-                        useCenter = false,
-                        style = Stroke(width = strokeWidth),
-                        size = Size(radius * 2, radius * 2),
-                        topLeft = Offset(centerX - radius, centerY - radius)
-                    )
-                }
-            }
-            // Legend
-            Column(
-                modifier = Modifier
-                    .padding(start = 16.dp, end = 16.dp)
-                    .width(IntrinsicSize.Min),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onTeacherClick() }
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .background(TeacherBlue, RoundedCornerShape(2.dp))
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Teachers:",
-                        style = TextStyle(
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.DarkGray
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "$teacherCount",
-                        style = TextStyle(
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.DarkGray
-                        )
-                    )
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onStudentClick() }
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .background(StudentGreen, RoundedCornerShape(2.dp))
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Students:",
-                        style = TextStyle(
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.DarkGray
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "$studentCount",
-                        style = TextStyle(
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.DarkGray
-                        )
-                    )
-                }
-            }
-        }
-        LaunchedEffect(studentPressed, teacherPressed) {
-            if (studentPressed || teacherPressed) {
-                delay(50)
-                studentPressed = false
-                teacherPressed = false
-            }
-        }
-    }
-}
-
-
-@Composable
 private fun AttendanceCountRow(
     label: String,
     count: Int,
@@ -1434,7 +1399,7 @@ private fun AttendanceCountRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1461,3 +1426,4 @@ private fun AttendanceCountRow(
         )
     }
 }
+

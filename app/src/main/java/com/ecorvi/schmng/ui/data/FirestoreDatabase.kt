@@ -1,28 +1,42 @@
 package com.ecorvi.schmng.ui.data
 
+import android.net.Uri
 import android.util.Log
+import com.ecorvi.schmng.ui.data.FirestoreDatabase.db
+import com.ecorvi.schmng.ui.data.model.AdminProfile
+import com.ecorvi.schmng.ui.data.model.ChatMessage
 import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.data.model.Schedule
 import com.ecorvi.schmng.ui.data.model.Fee
+import com.ecorvi.schmng.ui.data.model.SchoolProfile
 import com.ecorvi.schmng.ui.data.model.Timetable
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 
+import java.util.*
+
 object FirestoreDatabase {
-    private val db = FirebaseFirestore.getInstance()
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
+
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    
     private val schedulesCollection = db.collection("schedules")
     private val feesCollection = db.collection("fees")
     private val timetablesCollection = db.collection("timetables")
 
     val studentsCollection: CollectionReference = db.collection("students")
     val teachersCollection: CollectionReference = db.collection("teachers")
+    val staffCollection: CollectionReference = db.collection("non_teaching_staff")
     val pendingFeesCollection: CollectionReference = db.collection("pending_fees")
 
     private var teacherListener: ListenerRegistration? = null
     private var studentListener: ListenerRegistration? = null
+    private var staffListener: ListenerRegistration? = null
 
     // Add a timetable entry (Reverted signature)
     fun addTimetable(
@@ -563,6 +577,7 @@ object FirestoreDatabase {
     fun cleanup() {
         teacherListener?.remove()
         studentListener?.remove()
+        staffListener?.remove()
     }
 
     // Get user role
@@ -601,20 +616,309 @@ object FirestoreDatabase {
             .set(userData)
             .addOnSuccessListener {
                 // Then add the person data to appropriate collection
-                if (userData["role"] == "student") {
-                    studentsCollection.document(userId)
-                        .set(person)
-                        .addOnSuccessListener { onSuccess() }
-                        .addOnFailureListener { onFailure(it) }
-                } else if (userData["role"] == "teacher") {
-                    teachersCollection.document(userId)
-                        .set(person)
-                        .addOnSuccessListener { onSuccess() }
-                        .addOnFailureListener { onFailure(it) }
-                } else {
-                    onFailure(Exception("Invalid role specified"))
+                when (userData["role"]) {
+                    "student" -> {
+                        studentsCollection.document(userId)
+                            .set(person)
+                            .addOnSuccessListener { onSuccess() }
+                            .addOnFailureListener { onFailure(it) }
+                    }
+                    "teacher" -> {
+                        teachersCollection.document(userId)
+                            .set(person)
+                            .addOnSuccessListener { onSuccess() }
+                            .addOnFailureListener { onFailure(it) }
+                    }
+                    "staff" -> {
+                        staffCollection.document(userId)
+                            .set(person)
+                            .addOnSuccessListener { onSuccess() }
+                            .addOnFailureListener { onFailure(it) }
+                    }
+                    else -> {
+                        onFailure(Exception("Invalid role specified"))
+                    }
                 }
             }
             .addOnFailureListener { onFailure(it) }
+    }
+
+    fun fetchStaffCount(onComplete: (Int) -> Unit) {
+        FirebaseFirestore.getInstance().collection("non_teaching_staff")
+            .get()
+            .addOnSuccessListener { result ->
+                onComplete(result.size())
+            }
+            .addOnFailureListener {
+                onComplete(0)
+            }
+    }
+
+    // Add a staff member to Firestore
+    fun addStaffMember(staff: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        val newStaffRef = staffCollection.document()
+        val staffWithId = staff.copy(id = newStaffRef.id)
+
+        newStaffRef.set(staffWithId)
+            .addOnSuccessListener {
+                Log.d("Firestore", "Staff member added with ID: ${newStaffRef.id}")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error adding staff member: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Delete staff member by ID
+    fun deleteStaffMember(staffId: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        staffCollection.document(staffId)
+            .delete()
+            .addOnSuccessListener {
+                Log.d("Firestore", "Staff member with ID: $staffId deleted successfully")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error deleting staff member: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Real-time updates for staff members
+    fun listenForStaffUpdates(
+        onUpdate: (List<Person>) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration {
+        staffListener?.remove()
+        return staffCollection
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null) {
+                    val staffMembers = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            Person(
+                                id = doc.id,
+                                firstName = doc.getString("firstName") ?: "",
+                                lastName = doc.getString("lastName") ?: "",
+                                email = doc.getString("email") ?: "",
+                                phone = doc.getString("phone") ?: "",
+                                type = "staff",
+                                className = "",
+                                rollNumber = "",
+                                gender = doc.getString("gender") ?: "",
+                                dateOfBirth = doc.getString("dateOfBirth") ?: "",
+                                mobileNo = doc.getString("mobileNo") ?: "",
+                                address = doc.getString("address") ?: "",
+                                age = doc.getLong("age")?.toInt() ?: 0,
+                                designation = doc.getString("designation") ?: "",
+                                department = doc.getString("department") ?: ""
+                            )
+                        } catch (e: Exception) {
+                            Log.e("Firestore", "Error mapping staff document: ${e.message}")
+                            null
+                        }
+                    }
+                    onUpdate(staffMembers)
+                }
+            }.also { staffListener = it }
+    }
+
+    // Chat Methods
+    fun sendMessage(
+        message: ChatMessage,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        val chatId = db.collection("chats").document().id
+        val messageWithId = message.copy(
+            id = chatId,
+            participants = listOf(message.senderId, message.receiverId)
+        )
+        
+        db.collection("chats")
+            .document(chatId)
+            .set(messageWithId)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onFailure(e) }
+    }
+
+    fun getMessages(
+        userId1: String,
+        userId2: String,
+        onNewMessage: (ChatMessage) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        db.collection("chats")
+            .whereArrayContainsAny("participants", listOf(userId1))
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    onError(e)
+                    return@addSnapshotListener
+                }
+
+                snapshot?.documentChanges?.forEach { change ->
+                    if (change.type == DocumentChange.Type.ADDED) {
+                        val message = change.document.toObject(ChatMessage::class.java)
+                        // Only include messages between these two users
+                        if (message.participants.containsAll(listOf(userId1, userId2))) {
+                            onNewMessage(message)
+                        }
+                    }
+                }
+            }
+    }
+
+    fun markMessageAsRead(
+        messageId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        db.collection("chats")
+            .document(messageId)
+            .update("read", true)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onFailure(e) }
+    }
+
+    fun getUnreadMessageCount(
+        userId: String,
+        onSuccess: (Int) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        db.collection("chats")
+            .whereEqualTo("receiverId", userId)
+            .whereEqualTo("read", false)
+            .get()
+            .addOnSuccessListener { documents ->
+                onSuccess(documents.size())
+            }
+            .addOnFailureListener { e -> onFailure(e) }
+    }
+
+    fun getChatList(
+        userId: String,
+        onSuccess: (List<String>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        db.collection("chats")
+            .whereArrayContains("participants", userId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .get()
+            .addOnSuccessListener { documents ->
+                val chatList = documents.mapNotNull { doc ->
+                    val message = doc.toObject(ChatMessage::class.java)
+                    // Get the other participant's ID
+                    message.participants.find { it != userId }
+                }.distinct()
+                onSuccess(chatList)
+            }
+            .addOnFailureListener { e -> onFailure(e) }
+    }
+
+    // Add this method to get staff member
+    suspend fun getStaffMember(staffId: String): Person? {
+        return try {
+            val doc = staffCollection.document(staffId).get().await()
+            doc.toObject(Person::class.java)?.copy(id = doc.id)
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting staff member: ${e.message}")
+            null
+        }
+    }
+
+    // Move these methods out of companion object and into the main object
+    suspend fun getAdminProfile(adminId: String): AdminProfile? {
+        return try {
+            val doc = db.collection("admin_profiles")
+                .document(adminId)
+                .get()
+                .await()
+            
+            if (doc != null && doc.exists()) {
+                doc.toObject(AdminProfile::class.java)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting admin profile: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getSchoolProfile(): SchoolProfile? {
+        return try {
+            val doc = db.collection("school_profile")
+                .document("main")
+                .get()
+                .await()
+            
+            if (doc != null && doc.exists()) {
+                doc.toObject(SchoolProfile::class.java)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting school profile: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun updateSchoolProfile(profile: SchoolProfile): Boolean {
+        return try {
+            db.collection("school_profile")
+                .document("main")
+                .set(profile)
+                .await()
+            true
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error updating school profile: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun updateAdminProfile(adminId: String, profile: AdminProfile): Boolean {
+        return try {
+            db.collection("admin_profiles")
+                .document(adminId)
+                .set(profile)
+                .await()
+            true
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error updating admin profile: ${e.message}")
+            false
+        }
+    }
+
+    // Add this new method for chat list updates
+    fun listenForChatUpdates(
+        userId: String,
+        onUpdate: (List<ChatMessage>) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        db.collection("chats")
+            .whereArrayContains("participants", userId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    onError(e)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null) {
+                    val messages = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            doc.toObject(ChatMessage::class.java)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    onUpdate(messages)
+                }
+            }
     }
 }

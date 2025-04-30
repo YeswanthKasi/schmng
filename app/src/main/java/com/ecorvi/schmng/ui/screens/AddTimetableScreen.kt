@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import java.util.*
 import android.util.Log
+import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.utils.Constants
 import com.google.firebase.auth.FirebaseAuth
 
@@ -44,11 +45,13 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
     var subject by remember { mutableStateOf("") }
     var teacher by remember { mutableStateOf("") }
     var roomNumber by remember { mutableStateOf("") }
+    var teachers by remember { mutableStateOf<List<Person>>(emptyList()) }
     
     // Dropdown states
     var showClassDropdown by remember { mutableStateOf(false) }
     var showDayDropdown by remember { mutableStateOf(false) }
     var showTimeDropdown by remember { mutableStateOf(false) }
+    var showTeacherDropdown by remember { mutableStateOf(false) }
 
     // Check if user is admin
     LaunchedEffect(currentUser?.uid) {
@@ -73,14 +76,22 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
         }
     }
 
-    // Constants
-    val classes = listOf("1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th")
-    val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
-    val timeSlots = (8..17).map { hour -> String.format("%02d:00", hour) }
+    // Fetch teachers list
+    LaunchedEffect(Unit) {
+        FirestoreDatabase.listenForTeacherUpdates(
+            onUpdate = { fetchedTeachers ->
+                teachers = fetchedTeachers
+            },
+            onError = { e ->
+                Log.e("AddTimetable", "Error fetching teachers: ${e.message}")
+                Toast.makeText(context, "Error loading teachers: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
 
-    // Load existing timetable data if in edit mode
+    // Load existing timetable if in edit mode
     LaunchedEffect(timetableId) {
-        if (isEditMode && timetableId != null) {
+        if (timetableId != null) {
             FirestoreDatabase.getTimetableById(
                 timetableId = timetableId,
                 onComplete = { timetable ->
@@ -92,15 +103,19 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
                         teacher = timetable.teacher
                         roomNumber = timetable.roomNumber
                     }
-                    isLoading = false
                 },
                 onFailure = { e ->
-                    Toast.makeText(context, "Failed to load data: ${e.message}", Toast.LENGTH_SHORT).show()
-                    isLoading = false
+                    Toast.makeText(context, "Error loading timetable: ${e.message}", Toast.LENGTH_SHORT).show()
+                    navController.navigateUp()
                 }
             )
         }
     }
+
+    // Constants
+    val classes = listOf("1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th")
+    val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    val timeSlots = (8..17).map { hour -> String.format("%02d:00", hour) }
 
     fun validateForm(): Boolean {
         if (!isAdmin) {
@@ -282,19 +297,44 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
                         }
                     }
 
+                    // Teacher Selection
+                    ExposedDropdownMenuBox(
+                        expanded = showTeacherDropdown,
+                        onExpandedChange = { showTeacherDropdown = !showTeacherDropdown }
+                    ) {
+                        OutlinedTextField(
+                            value = teacher,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Teacher") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = showTeacherDropdown)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = showTeacherDropdown,
+                            onDismissRequest = { showTeacherDropdown = false }
+                        ) {
+                            teachers.forEach { teacherOption ->
+                                DropdownMenuItem(
+                                    text = { Text("${teacherOption.firstName} ${teacherOption.lastName}") },
+                                    onClick = {
+                                        teacher = "${teacherOption.firstName} ${teacherOption.lastName}"
+                                        showTeacherDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     // Subject Input
                     OutlinedTextField(
                         value = subject,
                         onValueChange = { subject = it },
                         label = { Text("Subject") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // Teacher Input
-                    OutlinedTextField(
-                        value = teacher,
-                        onValueChange = { teacher = it },
-                        label = { Text("Teacher") },
                         modifier = Modifier.fillMaxWidth()
                     )
 

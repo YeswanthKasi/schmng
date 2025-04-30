@@ -15,6 +15,9 @@ class PersonRepository(
             person.type.contains("teacher", ignoreCase = true) -> {
                 db.collection("teachers").document(person.id).set(person)
             }
+            person.type.contains("staff", ignoreCase = true) -> {
+                db.collection("non_teaching_staff").document(person.id).set(person)
+            }
             else -> {
                 throw IllegalArgumentException("Invalid person type")
             }
@@ -28,6 +31,9 @@ class PersonRepository(
             }
             person.type.contains("teacher", ignoreCase = true) -> {
                 db.collection("teachers").document(person.id).set(person)
+            }
+            person.type.contains("staff", ignoreCase = true) -> {
+                db.collection("non_teaching_staff").document(person.id).set(person)
             }
             else -> {
                 throw IllegalArgumentException("Invalid person type")

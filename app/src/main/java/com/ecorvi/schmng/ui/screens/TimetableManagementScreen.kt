@@ -29,19 +29,23 @@ import kotlinx.coroutines.launch
 import com.google.firebase.auth.FirebaseAuth
 import android.util.Log
 import androidx.compose.foundation.clickable
+import com.ecorvi.schmng.ui.data.model.Person
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimetableManagementScreen(navController: NavController) {
     var selectedClass by remember { mutableStateOf("1st") }
     var selectedDay by remember { mutableStateOf("Monday") }
+    var selectedTeacher by remember { mutableStateOf<String?>(null) }
     var timetables by remember { mutableStateOf<List<Timetable>>(emptyList()) }
+    var teachers by remember { mutableStateOf<List<Person>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var timetableToDelete by remember { mutableStateOf<Timetable?>(null) }
     var showClassDropdown by remember { mutableStateOf(false) }
     var showDayDropdown by remember { mutableStateOf(false) }
+    var showTeacherDropdown by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val currentUser = FirebaseAuth.getInstance().currentUser
     var isAdmin by remember { mutableStateOf(false) }
@@ -67,6 +71,19 @@ fun TimetableManagementScreen(navController: NavController) {
             Toast.makeText(context, "Please log in to continue", Toast.LENGTH_LONG).show()
             navController.navigate("login")
         }
+    }
+
+    // Fetch teachers list
+    LaunchedEffect(Unit) {
+        FirestoreDatabase.listenForTeacherUpdates(
+            onUpdate = { fetchedTeachers ->
+                teachers = fetchedTeachers
+            },
+            onError = { e ->
+                Log.e("TimetableManagement", "Error fetching teachers: ${e.message}")
+                Toast.makeText(context, "Error loading teachers: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     // Fetch timetables when class or day changes
@@ -220,6 +237,42 @@ fun TimetableManagementScreen(navController: NavController) {
                                 onClick = {
                                     selectedDay = day
                                     showDayDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Teacher Selection Dropdown
+                Box(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showTeacherDropdown = true }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Teacher: ${selectedTeacher ?: "Select"}")
+                            Icon(Icons.Default.ArrowDropDown, "Select Teacher")
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = showTeacherDropdown,
+                        onDismissRequest = { showTeacherDropdown = false }
+                    ) {
+                        teachers.forEach { teacher ->
+                            DropdownMenuItem(
+                                text = { Text("${teacher.firstName} ${teacher.lastName}") },
+                                onClick = {
+                                    selectedTeacher = "${teacher.firstName} ${teacher.lastName}"
+                                    showTeacherDropdown = false
                                 }
                             )
                         }

@@ -34,16 +34,40 @@ fun AppNavigation(
         navController = navController,
         startDestination = initialRoute
     ) {
+        // Authentication
         composable("welcome") { WelcomeScreen(navController) }
         composable("login") { LoginScreen(navController) }
+        composable("register") { RegisterScreen(navController) }
+
+        // Main Screens
         composable("admin_dashboard") { AdminDashboardScreen(navController) }
         composable("student_dashboard") { StudentDashboardScreen(navController) }
+        composable("admin_profile") { AdminProfileScreen(navController) }
+        composable("profile") { ProfileScreen(navController, "", "") }
+        composable("notifications") { NotificationsScreen(navController) }
+        composable("messages") { MessagesScreen(navController) }
+
+        // Chat Related
+        composable(
+            "chat/{userId}",
+            arguments = listOf(navArgument("userId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId")
+            userId?.let {
+                ChatScreen(navController, userId)
+            }
+        }
+        composable("new_message") { NewMessageScreen(navController) }
+
+        // Management Screens
         composable("students") { StudentsScreen(navController) }
         composable("teachers") { TeachersScreen(navController) }
+        composable("staff") { StaffScreen(navController) }
         composable("schedules") { SchedulesScreen(navController) }
         composable("pending_fees") { PendingFeesScreen(navController) }
         composable("add_student") { AddPersonScreen(navController, "student") }
         composable("add_teacher") { AddPersonScreen(navController, "teacher") }
+        composable("add_staff") { AddStaffScreen(navController) }
         composable("add_schedule") { AddScheduleScreen(navController) }
         composable("add_fee") { AddFeeScreen(navController) }
         
@@ -95,6 +119,16 @@ fun AppNavigation(
             AddPersonScreen(navController, "teacher", personId)
         }
 
+        composable(
+            route = "add_staff/{personId}",
+            arguments = listOf(
+                navArgument("personId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val personId = backStackEntry.arguments?.getString("personId") ?: ""
+            AddStaffScreen(navController, personId)
+        }
+
         // Add view profile routes
         composable(
             route = "view_profile/{type}/{id}",
@@ -106,6 +140,38 @@ fun AppNavigation(
             val type = backStackEntry.arguments?.getString("type") ?: ""
             val id = backStackEntry.arguments?.getString("id") ?: ""
             ProfileScreen(navController, id, type)
+        }
+
+        // Add staff details route
+        composable(
+            route = "staff_details/{staffId}",
+            arguments = listOf(
+                navArgument("staffId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val staffId = backStackEntry.arguments?.getString("staffId") ?: ""
+            ProfileScreen(navController, staffId, "staff")
+        }
+
+        // Student and Teacher detail routes
+        composable(
+            "student_detail/{studentId}",
+            arguments = listOf(navArgument("studentId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val studentId = backStackEntry.arguments?.getString("studentId")
+            studentId?.let {
+                ProfileScreen(navController, studentId, "student")
+            }
+        }
+        
+        composable(
+            "teacher_detail/{teacherId}",
+            arguments = listOf(navArgument("teacherId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val teacherId = backStackEntry.arguments?.getString("teacherId")
+            teacherId?.let {
+                ProfileScreen(navController, teacherId, "teacher")
+            }
         }
     }
 }
