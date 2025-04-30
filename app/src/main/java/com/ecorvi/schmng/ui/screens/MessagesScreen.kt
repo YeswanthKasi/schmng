@@ -18,9 +18,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.ChatMessage
 import com.ecorvi.schmng.ui.data.model.Person
+import com.ecorvi.schmng.ui.navigation.BottomNav
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.*
@@ -37,7 +39,11 @@ data class ChatPreview(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MessagesScreen(navController: NavController) {
+fun MessagesScreen(
+    navController: NavController,
+    currentRoute: String,
+    onRouteSelected: (String) -> Unit
+) {
     val auth = FirebaseAuth.getInstance()
     val currentUser = auth.currentUser
     val scope = rememberCoroutineScope()
@@ -116,18 +122,16 @@ fun MessagesScreen(navController: NavController) {
                         fontWeight = FontWeight.Bold
                     )
                 },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color(0xFF1F41BB)
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White.copy(alpha = 0.95f)
                 )
+            )
+        },
+        bottomBar = {
+            BottomNav(
+                navController = navController,
+                currentRoute = currentRoute,
+                onItemSelected = { item -> onRouteSelected(item.route) }
             )
         },
         floatingActionButton = {

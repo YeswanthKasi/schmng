@@ -7,7 +7,8 @@ data class Schedule(
     var date: String = "",
     var time: String = "",
     var className: String = "",
+    var recipientType: String = "Students",
     var status: String = "Pending"
 ) {
-    constructor() : this("", "", "", "", "", "", "Pending")
+    constructor() : this("", "", "", "", "", "", "Students", "Pending")
 } 

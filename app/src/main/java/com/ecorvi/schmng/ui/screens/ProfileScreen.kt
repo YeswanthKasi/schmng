@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.net.http.SslCertificate.saveState
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,10 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.AdminProfile
 import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.data.model.SchoolProfile
+import com.ecorvi.schmng.ui.navigation.BottomNav
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -32,68 +35,33 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProfileScreen(
     navController: NavController,
+    currentRoute: String,
+    onRouteSelected: (String) -> Unit,
     id: String = "",
     type: String = ""
 ) {
-    var adminProfile by remember { mutableStateOf<AdminProfile?>(null) }
-    var schoolProfile by remember { mutableStateOf<SchoolProfile?>(null) }
-    var person by remember { mutableStateOf<Person?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
     var isEditing by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var editingSchool by remember { mutableStateOf(false) }
-    
-    // State for edited values
+    var adminProfile by remember { mutableStateOf<AdminProfile?>(null) }
+    var schoolProfile by remember { mutableStateOf<SchoolProfile?>(null) }
     var editedAdminProfile by remember { mutableStateOf<AdminProfile?>(null) }
     var editedSchoolProfile by remember { mutableStateOf<SchoolProfile?>(null) }
     
-    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    
+    val snackbarHostState = remember { SnackbarHostState() }
+
     // Load profiles
-    LaunchedEffect(id, type) {
-        isLoading = true
-        error = null
-        
+    LaunchedEffect(Unit) {
         try {
-            when {
-                // Load specific profile based on type
-                id.isNotEmpty() && type.isNotEmpty() -> {
-                    person = when (type) {
-                        "student" -> FirestoreDatabase.getStudent(id)
-                        "teacher" -> FirestoreDatabase.getTeacher(id)
-                        "staff" -> FirestoreDatabase.getStaffMember(id)
-                        else -> null
-                    }
-                    isLoading = false
-                }
-                // Load admin and school profile for general profile view
-                else -> {
-                    FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-                        try {
-                            val adminData = FirestoreDatabase.getAdminProfile(uid)
-                            val schoolData = FirestoreDatabase.getSchoolProfile()
-                            
-                            adminProfile = adminData
-                            schoolProfile = schoolData
-                            editedAdminProfile = adminData?.copy()
-                            editedSchoolProfile = schoolData?.copy()
-                            
-                            isLoading = false
-                        } catch (e: Exception) {
-                            error = e.message
-                            isLoading = false
-                        }
-                    } ?: run {
-                        error = "User not authenticated"
-                        isLoading = false
-                    }
-                }
+            FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+                adminProfile = FirestoreDatabase.getAdminProfile(uid)
+                schoolProfile = FirestoreDatabase.getSchoolProfile()
             }
         } catch (e: Exception) {
-            error = e.message
-            isLoading = false
+            scope.launch {
+                snackbarHostState.showSnackbar("Failed to load profile: ${e.message}")
+            }
         }
     }
 
@@ -108,17 +76,7 @@ fun ProfileScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color(0xFF1F41BB)
-                        )
-                    }
-                },
                 actions = {
-                    // Only show edit button for admin viewing their own profile
                     if (id.isEmpty() && type.isEmpty()) {
                         IconButton(onClick = { isEditing = !isEditing }) {
                             Icon(
@@ -134,115 +92,63 @@ fun ProfileScreen(
                 )
             )
         },
+        bottomBar = {
+            BottomNav(
+                navController = navController,
+                currentRoute = currentRoute,
+                onItemSelected = { item -> onRouteSelected(item.route) }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Color(0xFF1F41BB))
-            }
-        } else if (error != null) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(error ?: "Unknown error occurred", color = Color.Red)
-            }
-        } else {
-            LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                when {
-                    person != null -> {
-                        // Show person profile
-                        item {
-                            ProfileSection(
-                                title = when(type) {
-                                    "student" -> "Student Profile"
-                                    "teacher" -> "Teacher Profile"
-                                    "staff" -> "Staff Profile"
-                                    else -> "Profile"
-                                },
-                                icon = when(type) {
-                                    "student" -> Icons.Default.School
-                                    "teacher" -> Icons.Default.Class
-                                    "staff" -> Icons.Default.Badge
-                                    else -> Icons.Default.Person
-                                },
-                                items = listOf(
-                                    "Name" to "${person?.firstName} ${person?.lastName}",
-                                    "Email" to (person?.email ?: ""),
-                                    "Phone" to (person?.phone ?: ""),
-                                    "Type" to (person?.type?.capitalize() ?: ""),
-                                    "Class" to (person?.className ?: ""),
-                                    if (type == "student") "Roll Number" to (person?.rollNumber ?: "") else null,
-                                    "Gender" to (person?.gender ?: ""),
-                                    "Date of Birth" to (person?.dateOfBirth ?: ""),
-                                    "Address" to (person?.address ?: ""),
-                                    if (type != "student") "Designation" to (person?.designation ?: "") else null,
-                                    if (type == "staff") "Department" to (person?.department ?: "") else null
-                                ).filterNotNull()
-                            )
-                        }
+                .verticalScroll(rememberScrollState())
+        ) {
+            // School Profile Section
+            schoolProfile?.let { school ->
+                ProfileSection(
+                    title = "School Profile",
+                    icon = Icons.Default.School,
+                    items = listOf(
+                        "Name" to (school.name ?: ""),
+                        "Principal" to (school.principalName ?: ""),
+                        "Board" to (school.boardType ?: ""),
+                        "Email" to (school.email ?: ""),
+                        "Phone" to (school.phone ?: ""),
+                        "Website" to (school.website ?: ""),
+                        "Address" to (school.address ?: "")
+                    ),
+                    isEditing = isEditing,
+                    onEditClick = {
+                        editedSchoolProfile = school
+                        editingSchool = true
+                        showEditDialog = true
                     }
-                    else -> {
-                        // Show school profile
-                        item {
-                            schoolProfile?.let { school ->
-                                ProfileSection(
-                                    title = "School Profile",
-                                    icon = Icons.Default.School,
-                                    items = listOf(
-                                        "Name" to (school.name),
-                                        "Principal" to (school.principalName),
-                                        "Board" to (school.boardType),
-                                        "Established" to (school.establishedYear),
-                                        "Email" to (school.email),
-                                        "Phone" to (school.phone),
-                                        "Website" to (school.website),
-                                        "Address" to (school.address),
-                                        "Description" to (school.description)
-                                    ),
-                                    isEditing = isEditing,
-                                    onEditClick = {
-                                        editingSchool = true
-                                        showEditDialog = true
-                                    }
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
-                        // Show admin profile
-                        item {
-                            adminProfile?.let { admin ->
-                                ProfileSection(
-                                    title = "Admin Profile",
-                                    icon = Icons.Default.AdminPanelSettings,
-                                    items = listOf(
-                                        "Name" to (admin.name),
-                                        "Designation" to (admin.designation),
-                                        "Email" to (admin.email),
-                                        "Phone" to (admin.phone),
-                                        "Join Date" to (admin.joinDate),
-                                        "Last Login" to (admin.lastLogin)
-                                    ),
-                                    isEditing = isEditing,
-                                    onEditClick = {
-                                        editingSchool = false
-                                        showEditDialog = true
-                                    }
-                                )
-                            }
-                        }
+            // Admin Profile Section
+            adminProfile?.let { admin ->
+                ProfileSection(
+                    title = "Admin Profile",
+                    icon = Icons.Default.Person,
+                    items = listOf(
+                        "Name" to (admin.name ?: ""),
+                        "Designation" to (admin.designation ?: ""),
+                        "Email" to (admin.email ?: ""),
+                        "Phone" to (admin.phone ?: "")
+                    ),
+                    isEditing = isEditing,
+                    onEditClick = {
+                        editedAdminProfile = admin
+                        editingSchool = false
+                        showEditDialog = true
                     }
-                }
+                )
             }
         }
     }

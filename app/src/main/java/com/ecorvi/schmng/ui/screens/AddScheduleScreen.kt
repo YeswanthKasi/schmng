@@ -1,7 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
 import android.widget.Toast
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -29,9 +28,11 @@ fun AddScheduleScreen(navController: NavController) {
     var date by remember { mutableStateOf("") }
     var time by remember { mutableStateOf("") }
     var selectedClass by remember { mutableStateOf(Constants.CLASS_OPTIONS.first()) }
+    var selectedRecipientType by remember { mutableStateOf(Constants.RECIPIENT_TYPES.first()) }
     var isLoading by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var showClassDropdown by remember { mutableStateOf(false) }
+    var showRecipientTypeDropdown by remember { mutableStateOf(false) }
 
     CommonBackground {
         Scaffold(
@@ -99,30 +100,66 @@ fun AddScheduleScreen(navController: NavController) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Box {
+                ExposedDropdownMenuBox(
+                    expanded = showClassDropdown,
+                    onExpandedChange = { showClassDropdown = it }
+                ) {
                     OutlinedTextField(
                         value = selectedClass,
-                        onValueChange = { },
+                        onValueChange = {},
+                        readOnly = true,
                         label = { Text("Class") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = showClassDropdown)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { showClassDropdown = true },
-                        readOnly = true,
-                        trailingIcon = {
-                            Icon(Icons.Default.ArrowDropDown, "Select Class")
-                        }
+                            .menuAnchor()
                     )
-                    DropdownMenu(
+                    ExposedDropdownMenu(
                         expanded = showClassDropdown,
-                        onDismissRequest = { showClassDropdown = false },
-                        modifier = Modifier.fillMaxWidth()
+                        onDismissRequest = { showClassDropdown = false }
                     ) {
-                        Constants.CLASS_OPTIONS.forEach { classOption ->
+                        Constants.CLASS_OPTIONS.forEach { option ->
                             DropdownMenuItem(
-                                text = { Text(classOption) },
-                                onClick = { 
-                                    selectedClass = classOption
-                                    showClassDropdown = false 
+                                text = { Text(option) },
+                                onClick = {
+                                    selectedClass = option
+                                    showClassDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                ExposedDropdownMenuBox(
+                    expanded = showRecipientTypeDropdown,
+                    onExpandedChange = { showRecipientTypeDropdown = it }
+                ) {
+                    OutlinedTextField(
+                        value = selectedRecipientType,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Recipient Type") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = showRecipientTypeDropdown)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = showRecipientTypeDropdown,
+                        onDismissRequest = { showRecipientTypeDropdown = false }
+                    ) {
+                        Constants.RECIPIENT_TYPES.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    selectedRecipientType = option
+                                    showRecipientTypeDropdown = false
                                 }
                             )
                         }
@@ -133,7 +170,7 @@ fun AddScheduleScreen(navController: NavController) {
 
                 Button(
                     onClick = {
-                        if (title.isBlank() || description.isBlank() || date.isBlank() || time.isBlank() || selectedClass.isBlank()) {
+                        if (title.isBlank() || description.isBlank() || date.isBlank() || time.isBlank() || selectedClass.isBlank() || selectedRecipientType.isBlank()) {
                             Toast.makeText(context, "Please fill all fields", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
@@ -144,7 +181,8 @@ fun AddScheduleScreen(navController: NavController) {
                             description = description,
                             date = date,
                             time = time,
-                            className = selectedClass
+                            className = selectedClass,
+                            recipientType = selectedRecipientType
                         )
 
                         FirestoreDatabase.addSchedule(

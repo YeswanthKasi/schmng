@@ -14,12 +14,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.ecorvi.schmng.ui.navigation.BottomNav
 import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationsScreen(navController: NavController) {
+fun NotificationsScreen(
+    navController: NavController,
+    currentRoute: String,
+    onRouteSelected: (String) -> Unit
+) {
     val notifications = remember { 
         mutableStateListOf(
             NotificationItem(
@@ -54,15 +60,6 @@ fun NotificationsScreen(navController: NavController) {
                         fontWeight = FontWeight.Bold
                     )
                 },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color(0xFF1F41BB)
-                        )
-                    }
-                },
                 actions = {
                     IconButton(onClick = { /* Clear all notifications */ }) {
                         Icon(
@@ -75,6 +72,13 @@ fun NotificationsScreen(navController: NavController) {
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White.copy(alpha = 0.95f)
                 )
+            )
+        },
+        bottomBar = {
+            BottomNav(
+                navController = navController,
+                currentRoute = currentRoute,
+                onItemSelected = { item -> onRouteSelected(item.route) }
             )
         }
     ) { padding ->

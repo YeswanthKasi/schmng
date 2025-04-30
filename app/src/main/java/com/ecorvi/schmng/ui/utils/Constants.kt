@@ -13,4 +13,10 @@ object Constants {
         "9th",
         "10th"
     )
+
+    val RECIPIENT_TYPES = listOf(
+        "Students",
+        "Teachers",
+        "Staff"
+    )
 } 

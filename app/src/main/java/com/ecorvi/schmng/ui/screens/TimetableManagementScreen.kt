@@ -29,13 +29,14 @@ import kotlinx.coroutines.launch
 import com.google.firebase.auth.FirebaseAuth
 import android.util.Log
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
 import com.ecorvi.schmng.ui.data.model.Person
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimetableManagementScreen(navController: NavController) {
     var selectedClass by remember { mutableStateOf("1st") }
-    var selectedDay by remember { mutableStateOf("Monday") }
+    var selectedDay by remember { mutableStateOf(getCurrentDay()) }
     var selectedTeacher by remember { mutableStateOf<String?>(null) }
     var timetables by remember { mutableStateOf<List<Timetable>>(emptyList()) }
     var teachers by remember { mutableStateOf<List<Person>>(emptyList()) }
@@ -86,11 +87,11 @@ fun TimetableManagementScreen(navController: NavController) {
         )
     }
 
-    // Fetch timetables when class or day changes
-    LaunchedEffect(selectedClass, selectedDay) {
+    // Fetch timetables when class, day, or teacher changes
+    LaunchedEffect(selectedClass, selectedDay, selectedTeacher) {
         isLoading = true
         errorMessage = null
-        Log.d("TimetableManagement", "Fetching timetables for class: $selectedClass")
+        Log.d("TimetableManagement", "Fetching timetables - Class: $selectedClass, Day: $selectedDay, Teacher: $selectedTeacher")
         
         FirestoreDatabase.fetchTimetablesForClass(
             classGrade = selectedClass,
@@ -98,8 +99,9 @@ fun TimetableManagementScreen(navController: NavController) {
                 Log.d("TimetableManagement", "Fetched ${fetchedTimetables.size} timetables")
                 timetables = fetchedTimetables
                     .filter { it.dayOfWeek == selectedDay }
+                    .filter { selectedTeacher == null || it.teacher == selectedTeacher }
                     .sortedBy { it.timeSlot }
-                Log.d("TimetableManagement", "Filtered ${timetables.size} timetables for $selectedDay")
+                Log.d("TimetableManagement", "Filtered ${timetables.size} timetables")
                 isLoading = false
             },
             onFailure = { e ->
@@ -167,9 +169,10 @@ fun TimetableManagementScreen(navController: NavController) {
                 .padding(padding)
                 .padding(16.dp)
         ) {
+            // Filter Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Class Selection Dropdown
                 Box(
@@ -178,17 +181,34 @@ fun TimetableManagementScreen(navController: NavController) {
                     OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .height(56.dp)
                             .clickable { showClassDropdown = true }
                     ) {
                         Row(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Class: $selectedClass")
-                            Icon(Icons.Default.ArrowDropDown, "Select Class")
+                            Text(
+                                text = "Class: $selectedClass",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .weight(0.9f)
+                                    .padding(end = 4.dp),
+                                maxLines = 2,
+                                softWrap = true,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                "Select Class",
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .padding(start = 4.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     DropdownMenu(
@@ -214,17 +234,34 @@ fun TimetableManagementScreen(navController: NavController) {
                     OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .height(56.dp)
                             .clickable { showDayDropdown = true }
                     ) {
                         Row(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Day: $selectedDay")
-                            Icon(Icons.Default.ArrowDropDown, "Select Day")
+                            Text(
+                                text = "Day: $selectedDay",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .weight(0.9f)
+                                    .padding(end = 4.dp),
+                                maxLines = 2,
+                                softWrap = true,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                "Select Day",
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .padding(start = 4.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     DropdownMenu(
@@ -250,28 +287,59 @@ fun TimetableManagementScreen(navController: NavController) {
                     OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .height(56.dp)
                             .clickable { showTeacherDropdown = true }
                     ) {
                         Row(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Teacher: ${selectedTeacher ?: "Select"}")
-                            Icon(Icons.Default.ArrowDropDown, "Select Teacher")
+                            Text(
+                                text = selectedTeacher ?: "Teacher: Select",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .weight(0.9f)
+                                    .padding(end = 4.dp),
+                                maxLines = 2,
+                                softWrap = true,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                "Select Teacher",
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .padding(start = 4.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     DropdownMenu(
                         expanded = showTeacherDropdown,
                         onDismissRequest = { showTeacherDropdown = false }
                     ) {
-                        teachers.forEach { teacher ->
+                        // Add a "Clear Selection" option
+                        DropdownMenuItem(
+                            text = { Text("Clear Selection") },
+                            onClick = {
+                                selectedTeacher = null
+                                showTeacherDropdown = false
+                            }
+                        )
+                        teachers.sortedBy { it.firstName }.forEach { teacher ->
+                            val fullName = "${teacher.firstName} ${teacher.lastName}".trim()
                             DropdownMenuItem(
-                                text = { Text("${teacher.firstName} ${teacher.lastName}") },
+                                text = { 
+                                    Column {
+                                        Text(teacher.firstName, style = MaterialTheme.typography.bodyMedium)
+                                        Text(teacher.lastName, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                },
                                 onClick = {
-                                    selectedTeacher = "${teacher.firstName} ${teacher.lastName}"
+                                    selectedTeacher = fullName
                                     showTeacherDropdown = false
                                 }
                             )
@@ -371,5 +439,18 @@ fun TimetableManagementScreen(navController: NavController) {
                 }
             }
         }
+    }
+}
+
+private fun getCurrentDay(): String {
+    val calendar = Calendar.getInstance()
+    return when (calendar.get(Calendar.DAY_OF_WEEK)) {
+        Calendar.MONDAY -> "Monday"
+        Calendar.TUESDAY -> "Tuesday"
+        Calendar.WEDNESDAY -> "Wednesday"
+        Calendar.THURSDAY -> "Thursday"
+        Calendar.FRIDAY -> "Friday"
+        Calendar.SATURDAY -> "Saturday"
+        else -> "Monday" // Default to Monday for Sunday
     }
 } 

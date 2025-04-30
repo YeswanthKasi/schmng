@@ -80,7 +80,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -99,6 +98,20 @@ import kotlin.coroutines.suspendCoroutine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.ecorvi.schmng.ui.navigation.AppNavigation
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.nativeCanvas
+import com.ecorvi.schmng.ui.navigation.BottomNav
+import java.text.NumberFormat
+import java.util.Locale
+import kotlin.random.Random
 
 // Define primary colors used throughout the dashboard
 private val PrimaryBlue = Color(0xFF1F41BB)    // Main theme color
@@ -109,10 +122,21 @@ private val ScheduleOrange = Color(0xFFFF9800)  // Color for schedule-related it
 private val FeesRed = Color(0xFFE91E63)        // Color for fee-related items
 private val BackgroundColor = Color.White.copy(alpha = 0.95f)  // Semi-transparent background
 
+// Add these color definitions with the other colors
+private val GraphBlue = Color(0xFF2196F3)
+private val GraphGreen = Color(0xFF4CAF50)
+private val GraphOrange = Color(0xFFFF9800)
+private val GraphPurple = Color(0xFF9C27B0)
+private val GraphRed = Color(0xFFE91E63)
+
 // Main composable function for the Admin Dashboard Screen
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
-fun AdminDashboardScreen(navController: NavController) {
+fun AdminDashboardScreen(
+    navController: NavController,
+    currentRoute: String,
+    onRouteSelected: (String) -> Unit
+) {
     // Initialize Firebase Authentication instance
     val auth = FirebaseAuth.getInstance()
     // Get current context for Android operations
@@ -692,6 +716,7 @@ fun AdminDashboardScreen(navController: NavController) {
                 }
             }
         }
+
     ) {
         // Main content scaffold
         CommonBackground {
@@ -784,7 +809,7 @@ fun AdminDashboardScreen(navController: NavController) {
                                             showMenu = false
                                             FirebaseAuth.getInstance().signOut()
                                             navController.navigate("login") {
-                                                popUpTo(navController.graph.startDestinationId) {
+                                                popUpTo(navController.graph.id) {
                                                     inclusive = true
                                                 }
                                             }
@@ -799,45 +824,11 @@ fun AdminDashboardScreen(navController: NavController) {
                     )
                 },
                 bottomBar = {
-                    NavigationBar(containerColor = Color.White) {
-                        // Home
-                        NavigationBarItem(
-                            selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
-                            icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                            label = { Text("Home", fontSize = 14.sp) }
-                        )
-                        // Profile
-                        NavigationBarItem(
-                            selected = selectedTab == 1,
-                            onClick = { 
-                                selectedTab = 1
-                                navController.navigate("profile")
-                            },
-                            icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                            label = { Text("Profile", fontSize = 14.sp) }
-                        )
-                        // Notifications
-                        NavigationBarItem(
-                            selected = selectedTab == 2,
-                            onClick = { 
-                                selectedTab = 2
-                                navController.navigate("notifications")
-                            },
-                            icon = { Icon(Icons.Default.Notifications, contentDescription = "Notifications") },
-                            label = { Text("Notifications", fontSize = 14.sp) }
-                        )
-                        // Messages
-                        NavigationBarItem(
-                            selected = selectedTab == 3,
-                            onClick = { 
-                                selectedTab = 3
-                                navController.navigate("messages")
-                            },
-                            icon = { Icon(Icons.Default.Message, contentDescription = "Messages") },
-                            label = { Text("Messages", fontSize = 14.sp) }
-                        )
-                    }
+                    BottomNav(
+                        navController = navController,
+                        currentRoute = currentRoute,
+                        onItemSelected = { item -> onRouteSelected(item.route) }
+                    )
                 },
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 content = { padding ->
@@ -921,6 +912,10 @@ fun AdminDashboardScreen(navController: NavController) {
                                             )
                                         }
                                     }
+                                }
+                                item {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    FeeAnalyticsCard(navController)
                                 }
                                 item {
                                     AnimatedSummaryCard(
@@ -1372,7 +1367,7 @@ fun EnhancedExpandableItem(
 @Preview(showBackground = true)
 @Composable
 fun PreviewAdminDashboardScreen() {
-    AdminDashboardScreen(rememberNavController())
+    AdminDashboardScreen(rememberNavController(), "admin_dashboard", {})
 }
 
 @Composable
@@ -1424,6 +1419,211 @@ private fun AttendanceCountRow(
             fontWeight = FontWeight.Medium,
             color = color
         )
+    }
+}
+
+@Composable
+fun FeeAnalyticsCard(navController: NavController) {
+    var isLoading by remember { mutableStateOf(true) }
+    var selectedMonth by remember { mutableStateOf<Int?>(null) }
+    
+    // Fixed monthly data for first 6 months
+    val monthlyFees = remember {
+        listOf(
+            120000, // Jan
+            135000, // Feb
+            95000,  // Mar
+            110000, // Apr
+            125000, // May
+            140000  // Jun
+        )
+    }
+    
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1000)
+        isLoading = false
+    }
+
+    // Handle navigation when a month is selected
+    LaunchedEffect(selectedMonth) {
+        if (selectedMonth != null) {
+            navController.navigate("fee_analytics/${selectedMonth}")
+            selectedMonth = null
+        }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .height(220.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = BackgroundColor,
+        shadowElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
+            Text(
+                "Monthly Fee",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color(0xFF1F41BB),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = PrimaryBlue)
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 8.dp)
+                            .pointerInput(Unit) {
+                                detectTapGestures { offset ->
+                                    val barWidth = (size.width - 40f) / 6
+                                    val clickedIndex = ((offset.x - 40f) / barWidth).toInt()
+                                    if (clickedIndex in monthlyFees.indices) {
+                                        selectedMonth = clickedIndex
+                                    }
+                                }
+                            }
+                    ) {
+                        val barWidth = (size.width - 40f) / 6
+                        val maxFee = monthlyFees.maxOrNull()?.toFloat() ?: 0f
+                        
+                        // Draw axes
+                        drawLine(
+                            color = Color.Gray.copy(alpha = 0.5f),
+                            start = Offset(40f, 0f),
+                            end = Offset(40f, size.height - 20f),
+                            strokeWidth = 1f
+                        )
+                        drawLine(
+                            color = Color.Gray.copy(alpha = 0.5f),
+                            start = Offset(40f, size.height - 20f),
+                            end = Offset(size.width, size.height - 20f),
+                            strokeWidth = 1f
+                        )
+                        
+                        monthlyFees.forEachIndexed { index, fee ->
+                            val barHeight = (fee / maxFee) * (size.height - 40f)
+                            val performance = fee / maxFee
+                            val barColor = when {
+                                performance > 0.8f -> Color(0xFF4CAF50)
+                                performance > 0.6f -> Color(0xFF8BC34A)
+                                performance > 0.4f -> Color(0xFFFFC107)
+                                performance > 0.2f -> Color(0xFFFF9800)
+                                else -> Color(0xFFF44336)
+                            }
+                            
+                            val isSelected = selectedMonth == index
+                            val barAlpha = if (isSelected) 1f else 0.7f
+                            
+                            // Calculate bar position
+                            val barX = 40f + (index * barWidth) + 15f
+                            
+                            drawRect(
+                                color = barColor.copy(alpha = barAlpha),
+                                topLeft = Offset(
+                                    barX,
+                                    size.height - 20f - barHeight
+                                ),
+                                size = Size(barWidth - 30f, barHeight)
+                            )
+                            
+                            if (isSelected) {
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    "₹${fee/1000}K",
+                                    barX,
+                                    size.height - 20f - barHeight - 10f,
+                                    android.graphics.Paint().apply {
+                                        color = android.graphics.Color.BLACK
+                                        textSize = 30f
+                                        textAlign = android.graphics.Paint.Align.LEFT
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // Month labels
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 28.dp, end = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start
+                    ) {
+                        val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun")
+                        val barWidth = (LocalConfiguration.current.screenWidthDp - 64) / 6f
+                        
+                        months.forEachIndexed { index, month ->
+                            Box(
+                                modifier = Modifier
+                                    .width(barWidth.dp)
+                                    .offset(x = (-8).dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = month,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickStatCard(
+    title: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = color.copy(alpha = 0.1f)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall,
+                color = color
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+        }
     }
 }
 
