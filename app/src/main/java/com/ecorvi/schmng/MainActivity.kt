@@ -59,6 +59,14 @@ class MainActivity : ComponentActivity() {
         private const val KEY_STAY_SIGNED_IN = "stay_signed_in"
         private const val KEY_FIRST_LAUNCH = "is_first_launch"
         private const val TAG = "MainActivity"
+        private const val REQUEST_CODE_UPDATE = 500
+    }
+
+    private val installStateUpdatedListener = InstallStateUpdatedListener { state ->
+        if (state.installStatus() == InstallStatus.DOWNLOADED) {
+            // Show snackbar or dialog to prompt install
+            showUpdateDownloadedDialog()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,6 +74,7 @@ class MainActivity : ComponentActivity() {
         try {
             initializeComponents()
             setupContent()
+            checkForAppUpdate()
         } catch (e: Exception) {
             Log.e(TAG, "Error in onCreate", e)
             showErrorDialog("Failed to initialize app")
@@ -263,37 +272,70 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun checkForAppUpdate() {
+        try {
+            val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+            appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+                launchFlexibleUpdateIfAvailable(appUpdateInfo)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking for app update", e)
+        }
+    }
+
+    private fun launchFlexibleUpdateIfAvailable(appUpdateInfo: AppUpdateInfo) {
+        if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+            appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
+        ) {
+            appUpdateManager.registerListener(installStateUpdatedListener)
+            appUpdateManager.startUpdateFlowForResult(
+                appUpdateInfo,
+                AppUpdateType.FLEXIBLE,
+                this,
+                REQUEST_CODE_UPDATE
+            )
+        }
+    }
+
+    private fun showUpdateDownloadedDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Update Ready")
+            .setMessage("An update has been downloaded. Would you like to install it now?")
+            .setPositiveButton("Install") { _, _ ->
+                appUpdateManager.completeUpdate()
+            }
+            .setNegativeButton("Later", null)
+            .show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+            if (appUpdateInfo.installStatus() == InstallStatus.DOWNLOADED) {
+                showUpdateDownloadedDialog()
+            } else {
+                launchFlexibleUpdateIfAvailable(appUpdateInfo)
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_UPDATE) {
+            if (resultCode != RESULT_OK) {
+                Log.d(TAG, "Update flow failed! Result code: $resultCode")
+            }
+        }
+    }
+
     override fun onDestroy() {
         try {
             super.onDestroy()
             scope.cancel()
-            appUpdateManager.unregisterListener(installStateListener)
+            appUpdateManager.unregisterListener(installStateUpdatedListener)
             FirestoreDatabase.cleanup()
         } catch (e: Exception) {
             Log.e(TAG, "Error in onDestroy", e)
-        }
-    }
-
-    private val installStateListener = InstallStateUpdatedListener { state ->
-        try {
-            when (state.installStatus()) {
-                InstallStatus.DOWNLOADING -> isUpdating = true
-                InstallStatus.DOWNLOADED -> {
-                    isUpdating = false
-                    showUpdateDialog = true
-                }
-                InstallStatus.INSTALLED -> {
-                    isUpdating = false
-                    Toast.makeText(this, "Update installed!", Toast.LENGTH_SHORT).show()
-                }
-                InstallStatus.FAILED -> {
-                    isUpdating = false
-                    Toast.makeText(this, "Update failed!", Toast.LENGTH_LONG).show()
-                }
-                else -> {}
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in install state listener", e)
         }
     }
 }
