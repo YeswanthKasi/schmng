@@ -21,6 +21,8 @@ import com.ecorvi.schmng.ui.utils.getCurrentDate
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.*
+import com.ecorvi.schmng.ui.screens.StudentProfileScreen
+import com.ecorvi.schmng.ui.screens.TeacherProfileScreen
 
 @Composable
 fun AppNavigation(
@@ -121,36 +123,35 @@ fun AppNavigation(
         composable("students") { StudentsScreen(navController) }
         composable("teachers") { TeachersScreen(navController) }
         composable("staff") { StaffScreen(navController) }
-        composable("schedules") { SchedulesScreen(navController) }
-        composable("pending_fees") { PendingFeesScreen(navController) }
-        composable("add_student") { AddPersonScreen(navController, "student") }
-        composable("add_teacher") { AddPersonScreen(navController, "teacher") }
-        composable("add_staff") { AddStaffScreen(navController) }
-        composable("add_schedule") { AddScheduleScreen(navController) }
-        composable("add_fee") { AddFeeScreen(navController) }
         
-        // Add timetable management routes
-        composable("timetable_management") { TimetableManagementScreen(navController) }
-        composable("view_timetable") { ViewTimetableScreen(navController) }
-        composable("add_timetable") { 
-            AddTimetableScreen(navController, null)
-        }
+        // Schedule Management Routes
+        composable("schedules") { SchedulesScreen(navController) }
+        composable("add_schedule") { AddScheduleScreen(navController) }
+        composable("view_schedule") { ViewScheduleScreen(navController) }
         composable(
-            route = "add_timetable/{timetableId}",
-            arguments = listOf(
-                navArgument("timetableId") { type = NavType.StringType }
-            )
+            route = "edit_schedule/{scheduleId}",
+            arguments = listOf(navArgument("scheduleId") { type = NavType.StringType })
         ) { backStackEntry ->
+            val scheduleId = backStackEntry.arguments?.getString("scheduleId")
+            EditScheduleScreen(navController, scheduleId)
+        }
+        
+        // Timetable Management Routes
+        composable("timetable_management") { AdminTimetableScreen(navController) }
+        composable("view_timetable") { ViewTimetableScreen(navController) }
+        composable("teacher_timetable") { TeacherTimetableScreen(navController) }
+        composable("add_timetable") { AddTimetableScreen(navController) }
+        composable("edit_timetable/{timetableId}") { backStackEntry ->
             val timetableId = backStackEntry.arguments?.getString("timetableId")
             AddTimetableScreen(navController, timetableId)
         }
         
-        // Add student-specific routes
+        // Student-specific Routes
         composable("student_schedule") { StudentScheduleScreen(navController) }
+        composable("student_timetable") { StudentTimetableScreen(navController) }
         composable("student_fees") { StudentFeesScreen(navController) }
         composable("student_announcements") { AnnouncementsScreen(navController) }
         composable("student_teacher_info") { ClassTeacherInfoScreen(navController) }
-        composable("student_timetable") { StudentTimetableScreen(navController) }
         
         // Detail routes with bottom navigation
         composable(
@@ -167,32 +168,117 @@ fun AppNavigation(
             )
         }
         
-        composable(
-            route = "teacher_detail/{teacherId}",
-            arguments = listOf(navArgument("teacherId") { type = NavType.StringType })
-        ) { backStackEntry ->
+        composable("teacher_profile/{teacherId}") { backStackEntry ->
             val teacherId = backStackEntry.arguments?.getString("teacherId") ?: ""
-            ProfileScreen(
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            var isAdmin by remember { mutableStateOf(false) }
+
+            LaunchedEffect(currentUser?.uid) {
+                if (currentUser?.uid != null) {
+                    FirestoreDatabase.getUserRole(
+                        userId = currentUser.uid,
+                        onComplete = { role ->
+                            isAdmin = role?.lowercase() == "admin"
+                        },
+                        onFailure = { e ->
+                            // Handle error silently, defaulting to non-admin
+                            isAdmin = false
+                        }
+                    )
+                }
+            }
+
+            TeacherProfileScreen(
                 navController = navController,
-                currentRoute = currentRoute,
-                onRouteSelected = onRouteSelected,
-                id = teacherId,
-                type = "teacher"
+                teacherId = teacherId,
+                isAdmin = isAdmin
             )
         }
         
+        composable("student_profile/{studentId}") { backStackEntry ->
+            val studentId = backStackEntry.arguments?.getString("studentId") ?: ""
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            var isAdmin by remember { mutableStateOf(false) }
+
+            LaunchedEffect(currentUser?.uid) {
+                if (currentUser?.uid != null) {
+                    FirestoreDatabase.getUserRole(
+                        userId = currentUser.uid,
+                        onComplete = { role ->
+                            isAdmin = role?.lowercase() == "admin"
+                        },
+                        onFailure = { e ->
+                            // Handle error silently, defaulting to non-admin
+                            isAdmin = false
+                        }
+                    )
+                }
+            }
+
+            StudentProfileScreen(
+                navController = navController,
+                studentId = studentId,
+                isAdmin = isAdmin
+            )
+        }
+
+        // Staff routes
+        composable("staff") { StaffScreen(navController) }
         composable(
-            route = "staff_details/{staffId}",
+            route = "staff_profile/{staffId}",
             arguments = listOf(navArgument("staffId") { type = NavType.StringType })
         ) { backStackEntry ->
             val staffId = backStackEntry.arguments?.getString("staffId") ?: ""
-            ProfileScreen(
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            var isAdmin by remember { mutableStateOf(false) }
+
+            LaunchedEffect(currentUser?.uid) {
+                if (currentUser?.uid != null) {
+                    FirestoreDatabase.getUserRole(
+                        userId = currentUser.uid,
+                        onComplete = { role ->
+                            isAdmin = role?.lowercase() == "admin"
+                        },
+                        onFailure = { e ->
+                            // Handle error silently, defaulting to non-admin
+                            isAdmin = false
+                        }
+                    )
+                }
+            }
+
+            StaffProfileScreen(
                 navController = navController,
-                currentRoute = currentRoute,
-                onRouteSelected = onRouteSelected,
-                id = staffId,
-                type = "staff"
+                staffId = staffId,
+                isAdmin = isAdmin
             )
+        }
+
+        // Add/Edit Person routes
+        composable(
+            route = "add_person/{personType}?personId={personId}",
+            arguments = listOf(
+                navArgument("personType") { 
+                    type = NavType.StringType 
+                },
+                navArgument("personId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val personType = backStackEntry.arguments?.getString("personType") ?: ""
+            val personId = backStackEntry.arguments?.getString("personId")
+            
+            when (personType) {
+                "staff" -> AddStaffScreen(navController, personId)
+                else -> AddPersonScreen(
+                    navController = navController,
+                    personType = personType,
+                    personId = personId
+                )
+            }
         }
     }
 }

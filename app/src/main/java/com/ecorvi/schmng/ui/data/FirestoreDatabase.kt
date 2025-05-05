@@ -38,6 +38,10 @@ object FirestoreDatabase {
     private var studentListener: ListenerRegistration? = null
     private var staffListener: ListenerRegistration? = null
 
+    // Time slots collection
+    private val timeSlotsCollection = db.collection("timeSlots")
+    private val subjectsCollection = db.collection("subjects")
+
     // Add a timetable entry (Reverted signature)
     fun addTimetable(
         timetable: Timetable,
@@ -45,11 +49,13 @@ object FirestoreDatabase {
         onFailure: (Exception) -> Unit
     ) {
         timetablesCollection.add(timetable)
-            .addOnSuccessListener { 
-                onSuccess()
+            .addOnSuccessListener { documentReference ->
+                // Update the document to set the id field
+                documentReference.update("id", documentReference.id)
+                    .addOnSuccessListener { onSuccess() }
+                    .addOnFailureListener { e -> onFailure(e) }
             }
             .addOnFailureListener { e ->
-                Log.e("Firestore", "Error adding timetable: ${e.message}")
                 onFailure(e)
             }
     }
@@ -393,18 +399,6 @@ object FirestoreDatabase {
                 Log.e("Firestore", "Error fetching schedules: ${e.message}")
                 onFailure(e)
             }
-    }
-
-    // Delete schedule by ID
-    fun deleteSchedule(
-        scheduleId: String,
-        onSuccess: () -> Unit,
-        onFailure: (Exception) -> Unit
-    ) {
-        schedulesCollection.document(scheduleId)
-            .delete()
-            .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { onFailure(it) } // Keep original failure logic for this one
     }
 
     // Fetch pending fees with ID
@@ -919,6 +913,304 @@ object FirestoreDatabase {
                     }
                     onUpdate(messages)
                 }
+            }
+    }
+
+    // Get schedule by ID
+    fun getScheduleById(
+        scheduleId: String,
+        onComplete: (Schedule?) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        schedulesCollection.document(scheduleId)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    val schedule = document.toObject(Schedule::class.java)
+                    schedule?.id = document.id
+                    onComplete(schedule)
+                } else {
+                    onComplete(null)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error getting schedule: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Update schedule
+    fun updateSchedule(
+        schedule: Schedule,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        if (schedule.id.isBlank()) {
+            onFailure(Exception("Invalid schedule ID"))
+            return
+        }
+
+        schedulesCollection.document(schedule.id)
+            .set(schedule)
+            .addOnSuccessListener {
+                Log.d("Firestore", "Schedule updated successfully")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error updating schedule: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Delete schedule
+    fun deleteSchedule(
+        scheduleId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        if (scheduleId.isBlank()) {
+            onFailure(Exception("Invalid schedule ID"))
+            return
+        }
+
+        schedulesCollection.document(scheduleId)
+            .delete()
+            .addOnSuccessListener {
+                Log.d("Firestore", "Schedule deleted successfully")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error deleting schedule: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    fun getPersonById(id: String, type: String): Person? {
+        val collection = when (type.lowercase()) {
+            "student" -> studentsCollection
+            "teacher" -> teachersCollection
+            else -> throw IllegalArgumentException("Invalid type: $type")
+        }
+        val document = collection.document(id).get().result
+        return document?.toObject(Person::class.java)
+    }
+
+    // Fetch timetables for a specific teacher
+    fun fetchTimetablesForTeacher(
+        teacherName: String,
+        onComplete: (List<Timetable>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timetablesCollection
+            .whereEqualTo("teacherName", teacherName)
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                val timetables = querySnapshot.documents.mapNotNull { doc ->
+                    try {
+                        val timetable = doc.toObject(Timetable::class.java)
+                        timetable?.id = doc.id
+                        timetable
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error converting document to Timetable: ${e.message}")
+                        null
+                    }
+                }
+                onComplete(timetables)
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching timetables: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Get a teacher by user ID
+    fun getTeacherByUserId(
+        userId: String,
+        onComplete: (Person?) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        teachersCollection
+            .whereEqualTo("id", userId)
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                if (!querySnapshot.isEmpty) {
+                    val doc = querySnapshot.documents[0]
+                    val teacher = doc.toObject(Person::class.java)
+                    teacher?.id = doc.id
+                    onComplete(teacher)
+                } else {
+                    onComplete(null)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error getting teacher by user ID: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Time slots methods
+    fun addTimeSlot(
+        timeSlot: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timeSlotsCollection.document()
+            .set(mapOf("timeSlot" to timeSlot))
+            .addOnSuccessListener {
+                Log.d("Firestore", "Time slot added successfully")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error adding time slot: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    fun deleteTimeSlot(
+        timeSlot: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timeSlotsCollection
+            .whereEqualTo("timeSlot", timeSlot)
+            .get()
+            .addOnSuccessListener { documents ->
+                if (documents.isEmpty) {
+                    onFailure(Exception("Time slot not found"))
+                    return@addOnSuccessListener
+                }
+                
+                // Delete the first matching document
+                documents.documents[0].reference
+                    .delete()
+                    .addOnSuccessListener {
+                        Log.d("Firestore", "Time slot deleted successfully")
+                        onSuccess()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Firestore", "Error deleting time slot: ${e.message}")
+                        onFailure(e)
+                    }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error finding time slot: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    fun fetchTimeSlots(
+        onComplete: (List<String>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timeSlotsCollection
+            .get()
+            .addOnSuccessListener { documents ->
+                val timeSlots = documents.mapNotNull { doc ->
+                    doc.getString("timeSlot")
+                }
+                onComplete(timeSlots)
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching time slots: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    fun listenForTimeSlotUpdates(
+        onUpdate: (List<String>) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        timeSlotsCollection
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("Firestore", "Error listening for time slot updates: ${error.message}")
+                    onError(error)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null) {
+                    val timeSlots = snapshot.documents.mapNotNull { doc ->
+                        doc.getString("timeSlot")
+                    }
+                    onUpdate(timeSlots)
+                }
+            }
+    }
+
+    // Subjects methods
+    fun addSubject(
+        subject: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        subjectsCollection
+            .document(subject)
+            .set(mapOf("subject" to subject))
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { onFailure(it) }
+    }
+
+    fun deleteSubject(
+        subject: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        subjectsCollection
+            .document(subject)
+            .delete()
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { onFailure(it) }
+    }
+
+    fun fetchSubjects(
+        onComplete: (List<String>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        subjectsCollection
+            .get()
+            .addOnSuccessListener { documents ->
+                val subjects = documents.mapNotNull { it.getString("subject") }
+                onComplete(subjects)
+            }
+            .addOnFailureListener { onFailure(it) }
+    }
+
+    // Fetch timetables for a specific teacher and class
+    fun fetchTimetablesForTeacherAndClass(
+        teacherName: String,
+        classGrade: String,
+        onComplete: (List<Timetable>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        timetablesCollection
+            .whereEqualTo("teacher", teacherName)
+            .whereEqualTo("classGrade", classGrade)
+            .whereEqualTo("active", true)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val timetables = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val timetable = Timetable()
+                        timetable.id = doc.id
+                        timetable.classGrade = doc.getString("classGrade") ?: ""
+                        timetable.dayOfWeek = doc.getString("dayOfWeek") ?: ""
+                        timetable.timeSlot = doc.getString("timeSlot") ?: ""
+                        timetable.subject = doc.getString("subject") ?: ""
+                        timetable.teacher = doc.getString("teacher") ?: ""
+                        timetable.roomNumber = doc.getString("roomNumber") ?: ""
+                        timetable.isActive = doc.getBoolean("active") ?: true
+                        timetable
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error converting document to Timetable: ${e.message}")
+                        null
+                    }
+                }
+                Log.d("Firestore", "Fetched ${timetables.size} timetables for teacher $teacherName in class $classGrade")
+                onComplete(timetables)
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error fetching timetables: ${e.message}")
+                onFailure(e)
             }
     }
 }

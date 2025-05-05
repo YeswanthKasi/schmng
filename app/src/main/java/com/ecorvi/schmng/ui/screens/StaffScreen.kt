@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,8 +17,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -25,6 +28,8 @@ import com.ecorvi.schmng.ui.components.CommonBackground
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
 import com.google.firebase.firestore.ListenerRegistration
+
+private val StaffPurple = Color(0xFF9C27B0) // Purple color for staff theme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +40,7 @@ fun StaffScreen(navController: NavController) {
     val context = LocalContext.current
     var staffListener: ListenerRegistration? by remember { mutableStateOf(null) }
     var selectedDepartment by remember { mutableStateOf("All Departments") }
+    var searchQuery by remember { mutableStateOf("") }
     
     // List of departments
     val departments = listOf(
@@ -68,42 +74,116 @@ fun StaffScreen(navController: NavController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Non-Teaching Staff") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    // Department filter dropdown
-                    var expanded by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { expanded = true }) {
-                            Icon(Icons.Default.FilterList, "Filter by department")
+            Column {
+                TopAppBar(
+                    title = { 
+                        Text(
+                            "Non-Teaching Staff",
+                            color = StaffPurple,
+                            fontWeight = FontWeight.Bold
+                        ) 
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.navigateUp() }) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                "Back",
+                                tint = StaffPurple
+                            )
                         }
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
+                    },
+                    actions = {
+                        // Department filter dropdown
+                        var expanded by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(
+                                    Icons.Default.FilterList,
+                                    "Filter by department",
+                                    tint = StaffPurple
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                departments.forEach { department ->
+                                    DropdownMenuItem(
+                                        text = { Text(department) },
+                                        onClick = {
+                                            selectedDepartment = department
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+                
+                // Search bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    placeholder = { Text("Search staff...") },
+                    leadingIcon = { 
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = StaffPurple
+                        ) 
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedBorderColor = StaffPurple.copy(alpha = 0.12f),
+                        focusedBorderColor = StaffPurple,
+                        focusedLeadingIconColor = StaffPurple,
+                        focusedPlaceholderColor = StaffPurple.copy(alpha = 0.5f),
+                        cursorColor = StaffPurple
+                    )
+                )
+
+                // Selected department chip
+                if (selectedDepartment != "All Departments") {
+                    Surface(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                        color = StaffPurple.copy(alpha = 0.1f),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            departments.forEach { department ->
-                                DropdownMenuItem(
-                                    text = { Text(department) },
-                                    onClick = {
-                                        selectedDepartment = department
-                                        expanded = false
-                                    }
+                            Text(
+                                text = selectedDepartment,
+                                color = StaffPurple,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            IconButton(
+                                onClick = { selectedDepartment = "All Departments" },
+                                modifier = Modifier.size(16.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Clear filter",
+                                    tint = StaffPurple
                                 )
                             }
                         }
                     }
                 }
-            )
+            }
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { navController.navigate("add_staff") },
-                containerColor = Color(0xFF9C27B0)
+                onClick = { navController.navigate("add_person/staff") },
+                containerColor = StaffPurple
             ) {
                 Icon(Icons.Default.Add, "Add Staff Member", tint = Color.White)
             }
@@ -116,7 +196,8 @@ fun StaffScreen(navController: NavController) {
         ) {
             if (isLoading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier.align(Alignment.Center),
+                    color = StaffPurple
                 )
             } else if (errorMessage != null) {
                 Text(
@@ -127,19 +208,36 @@ fun StaffScreen(navController: NavController) {
                         .padding(16.dp)
                 )
             } else {
-                val filteredStaff = if (selectedDepartment == "All Departments") {
-                    staffMembers
-                } else {
-                    staffMembers.filter { it.department == selectedDepartment }
-                }
+                val filteredStaff = staffMembers
+                    .filter { staff ->
+                        (selectedDepartment == "All Departments" || staff.department == selectedDepartment) &&
+                        (searchQuery.isEmpty() || 
+                         "${staff.firstName} ${staff.lastName}".contains(searchQuery, ignoreCase = true) ||
+                         staff.department.contains(searchQuery, ignoreCase = true) ||
+                         staff.designation.contains(searchQuery, ignoreCase = true))
+                    }
 
                 if (filteredStaff.isEmpty()) {
-                    Text(
-                        text = "No staff members found",
+                    Column(
                         modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp)
-                    )
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SearchOff,
+                            contentDescription = "No results",
+                            modifier = Modifier.size(48.dp),
+                            tint = StaffPurple.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No staff members found",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = StaffPurple.copy(alpha = 0.5f)
+                        )
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -149,26 +247,7 @@ fun StaffScreen(navController: NavController) {
                             StaffListItem(
                                 staff = staff,
                                 onItemClick = {
-                                    navController.navigate("staff_details/${staff.id}")
-                                },
-                                onDeleteClick = {
-                                    FirestoreDatabase.deleteStaffMember(
-                                        staffId = staff.id,
-                                        onSuccess = {
-                                            Toast.makeText(
-                                                context,
-                                                "Staff member deleted successfully",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        },
-                                        onFailure = { e ->
-                                            Toast.makeText(
-                                                context,
-                                                "Error deleting staff member: ${e.message}",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                        }
-                                    )
+                                    navController.navigate("staff_profile/${staff.id}")
                                 }
                             )
                         }
@@ -182,8 +261,7 @@ fun StaffScreen(navController: NavController) {
 @Composable
 fun StaffListItem(
     staff: Person,
-    onItemClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onItemClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -195,20 +273,22 @@ fun StaffListItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Staff Icon
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = Color(0xFF9C27B0).copy(alpha = 0.1f),
-                modifier = Modifier.size(48.dp)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(StaffPurple.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = "Staff",
-                    tint = Color(0xFF9C27B0),
-                    modifier = Modifier.padding(8.dp)
+                    tint = StaffPurple,
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
@@ -216,31 +296,22 @@ fun StaffListItem(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 16.dp)
+                    .padding(start = 12.dp)
             ) {
                 Text(
                     text = "${staff.firstName} ${staff.lastName}",
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = staff.designation,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = StaffPurple
                 )
                 Text(
                     text = staff.department,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Delete Button
-            IconButton(onClick = onDeleteClick) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }

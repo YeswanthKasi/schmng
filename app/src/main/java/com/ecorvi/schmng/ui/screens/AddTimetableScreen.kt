@@ -38,10 +38,16 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
     val currentUser = FirebaseAuth.getInstance().currentUser
     var isAdmin by remember { mutableStateOf(false) }
 
+    // Get parameters from navigation
+    val backStackEntry = navController.currentBackStackEntry
+    val classGradeParam = backStackEntry?.savedStateHandle?.get<String>("classGrade")
+    val dayOfWeekParam = backStackEntry?.savedStateHandle?.get<String>("dayOfWeek")
+    val timeSlotParam = backStackEntry?.savedStateHandle?.get<String>("timeSlot")
+
     // Form state
-    var classGrade by remember { mutableStateOf("1st") }
-    var dayOfWeek by remember { mutableStateOf("Monday") }
-    var timeSlot by remember { mutableStateOf("08:00") }
+    var classGrade by remember { mutableStateOf(classGradeParam ?: "1st") }
+    var dayOfWeek by remember { mutableStateOf(dayOfWeekParam ?: "Monday") }
+    var timeSlot by remember { mutableStateOf(timeSlotParam ?: "08:00") }
     var subject by remember { mutableStateOf("") }
     var teacher by remember { mutableStateOf("") }
     var roomNumber by remember { mutableStateOf("") }
@@ -52,6 +58,14 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
     var showDayDropdown by remember { mutableStateOf(false) }
     var showTimeDropdown by remember { mutableStateOf(false) }
     var showTeacherDropdown by remember { mutableStateOf(false) }
+    var showSubjectDropdown by remember { mutableStateOf(false) }
+
+    // Clear parameters after use
+    LaunchedEffect(Unit) {
+        backStackEntry?.savedStateHandle?.remove<String>("classGrade")
+        backStackEntry?.savedStateHandle?.remove<String>("dayOfWeek")
+        backStackEntry?.savedStateHandle?.remove<String>("timeSlot")
+    }
 
     // Check if user is admin
     LaunchedEffect(currentUser?.uid) {
@@ -95,6 +109,7 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
             FirestoreDatabase.getTimetableById(
                 timetableId = timetableId,
                 onComplete = { timetable ->
+                    isLoading = false
                     if (timetable != null) {
                         classGrade = timetable.classGrade
                         dayOfWeek = timetable.dayOfWeek
@@ -102,9 +117,13 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
                         subject = timetable.subject
                         teacher = timetable.teacher
                         roomNumber = timetable.roomNumber
+                    } else {
+                        Toast.makeText(context, "Timetable not found", Toast.LENGTH_SHORT).show()
+                        navController.navigateUp()
                     }
                 },
                 onFailure = { e ->
+                    isLoading = false
                     Toast.makeText(context, "Error loading timetable: ${e.message}", Toast.LENGTH_SHORT).show()
                     navController.navigateUp()
                 }
@@ -115,7 +134,31 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
     // Constants
     val classes = listOf("1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th")
     val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
-    val timeSlots = (8..17).map { hour -> String.format("%02d:00", hour) }
+    val timeSlots = listOf(
+        "9:00 - 9:45",
+        "9:45 - 10:30",
+        "10:30 - 11:15",
+        "11:15 - 12:00",
+        "12:00 - 12:45", // Lunch Break
+        "12:45 - 1:30",
+        "1:30 - 2:15",
+        "2:15 - 3:00"
+    )
+    val subjects = listOf(
+        "Mathematics",
+        "Science",
+        "English",
+        "Social Studies",
+        "Hindi",
+        "Sanskrit",
+        "Physical Education",
+        "Art",
+        "Music",
+        "Computer Science",
+        "General Knowledge",
+        "Break",
+        "Lunch"
+    )
 
     fun validateForm(): Boolean {
         if (!isAdmin) {
@@ -330,13 +373,38 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
                         }
                     }
 
-                    // Subject Input
-                    OutlinedTextField(
-                        value = subject,
-                        onValueChange = { subject = it },
-                        label = { Text("Subject") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    // Subject Selection (dropdown)
+                    ExposedDropdownMenuBox(
+                        expanded = showSubjectDropdown,
+                        onExpandedChange = { showSubjectDropdown = !showSubjectDropdown }
+                    ) {
+                        OutlinedTextField(
+                            value = subject,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Subject") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = showSubjectDropdown)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = showSubjectDropdown,
+                            onDismissRequest = { showSubjectDropdown = false }
+                        ) {
+                            subjects.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        subject = option
+                                        showSubjectDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
 
                     // Room Number Input
                     OutlinedTextField(

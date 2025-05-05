@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,7 +23,6 @@ import com.ecorvi.schmng.ui.data.model.Person
 fun TeacherListItem(
     teacher: Person,
     onItemClick: () -> Unit,
-    onDeleteClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -60,7 +58,7 @@ fun TeacherListItem(
             // Teacher Info
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .padding(horizontal = 16.dp)
             ) {
                 Text(
@@ -75,19 +73,6 @@ fun TeacherListItem(
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = Color.Gray
                     )
-                )
-            }
-
-            // Delete Button
-            IconButton(
-                onClick = onDeleteClick,
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = Color.Red
-                )
-            ) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete Teacher"
                 )
             }
         }
@@ -106,7 +91,6 @@ fun PreviewTeacherListItem() {
     TeacherListItem(
         teacher = teacher,
         onItemClick = {},
-        onDeleteClick = {}
     )
 }
 

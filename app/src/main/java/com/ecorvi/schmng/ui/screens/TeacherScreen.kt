@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -41,7 +42,6 @@ fun TeachersScreen(navController: NavController) {
     var filteredTeachers by remember { mutableStateOf<List<Person>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
-    var showDeleteDialog by remember { mutableStateOf<Person?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -80,89 +80,106 @@ fun TeachersScreen(navController: NavController) {
         }
     }
 
-    CommonBackground {
-        Scaffold(
-            topBar = {
-                Column {
-                    TopAppBar(
-                        title = { Text("Teachers") },
-                        navigationIcon = {
-                            IconButton(onClick = { navController.popBackStack() }) {
-                                Icon(Icons.Default.ArrowBack, "Back")
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = { showClassFilter = true }) {
-                                Icon(Icons.Default.FilterList, "Filter")
-                            }
+    Scaffold(
+        topBar = {
+            Column {
+                TopAppBar(
+                    title = { Text("Teachers") },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.Default.ArrowBack, "Back")
                         }
-                    )
-                    
-                    // Search bar
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search teachers...") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        leadingIcon = { Icon(Icons.Default.Search, "Search") }
-                    )
+                    },
+                    actions = {
+                        IconButton(onClick = { showClassFilter = true }) {
+                            Icon(Icons.Default.FilterList, "Filter")
+                        }
+                    }
+                )
 
-                    // Selected class chip
-                    if (selectedClass != "All Classes") {
-                        Surface(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = MaterialTheme.shapes.small
+                // Search bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search teachers...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    leadingIcon = { Icon(Icons.Default.Search, "Search") }
+                )
+
+                // Selected class chip
+                if (selectedClass != "All Classes") {
+                    Surface(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                        color = Color(0xFF1F41BB).copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Text(
+                                text = selectedClass,
+                                color = Color(0xFF1F41BB),
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            IconButton(
+                                onClick = { selectedClass = "All Classes" },
+                                modifier = Modifier.size(16.dp)
                             ) {
-                                Text(selectedClass)
-                                IconButton(
-                                    onClick = { selectedClass = "All Classes" }
-                                ) {
-                                    Icon(Icons.Default.Close, "Clear filter")
-                                }
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Clear filter",
+                                    tint = Color(0xFF1F41BB)
+                                )
                             }
                         }
                     }
                 }
-            },
-            floatingActionButton = {
-                FloatingActionButton(
-                    onClick = { navController.navigate("add_teacher") },
-                    containerColor = Color(0xFF1F41BB)
-                ) {
-                    Icon(Icons.Default.Add, "Add Teacher", tint = Color.White)
-                }
             }
-        ) { padding ->
-            Column(
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { navController.navigate("add_person/teacher") },
+                containerColor = Color(0xFF1F41BB)
+            ) {
+                Icon(Icons.Default.Add, "Add Teacher", tint = Color.White)
+            }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        content = { padding ->
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.White)
                     .padding(padding)
             ) {
                 if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 50.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = Color(0xFF1F41BB))
-                    }
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
+                    )
                 } else if (filteredTeachers.isEmpty()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 50.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Text("No teachers found", color = Color.Gray)
+                        Icon(
+                            imageVector = Icons.Default.SearchOff,
+                            contentDescription = "No results",
+                            modifier = Modifier.size(48.dp),
+                            tint = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No teachers found",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.Gray
+                        )
                     }
                 } else {
                     LazyColumn(
@@ -179,10 +196,7 @@ fun TeachersScreen(navController: NavController) {
                             TeacherListItem(
                                 teacher = teacher,
                                 onItemClick = {
-                                    navController.navigate("view_profile/teacher/${teacher.id}")
-                                },
-                                onDeleteClick = {
-                                    showDeleteDialog = teacher
+                                    navController.navigate("teacher_profile/${teacher.id}")
                                 }
                             )
                         }
@@ -190,7 +204,7 @@ fun TeachersScreen(navController: NavController) {
                 }
             }
         }
-    }
+    )
 
     // Class filter dialog
     if (showClassFilter) {
@@ -236,44 +250,6 @@ fun TeachersScreen(navController: NavController) {
             }
         )
     }
-
-    // Delete Confirmation Dialog
-    showDeleteDialog?.let { teacher ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            title = { Text("Confirm Delete") },
-            text = {
-                Text("Are you sure you want to delete ${teacher.firstName} ${teacher.lastName}?")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        FirestoreDatabase.deleteTeacher(
-                            teacher.id,
-                            onSuccess = {
-                                Toast.makeText(context, "Teacher deleted successfully", Toast.LENGTH_SHORT).show()
-                                showDeleteDialog = null
-                            },
-                            onFailure = { e ->
-                                Toast.makeText(context, "Error deleting teacher: ${e.message}", Toast.LENGTH_SHORT).show()
-                                showDeleteDialog = null
-                            }
-                        )
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = Color.Red
-                    )
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 }
 
 @Composable
@@ -286,25 +262,22 @@ private fun FilterOption(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onSelect)
-            .padding(vertical = 12.dp, horizontal = 16.dp),
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = onSelect,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = Color(0xFF1F41BB)
-            )
+            onClick = onSelect
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text)
+        Text(
+            text = text,
+            modifier = Modifier.padding(start = 16.dp)
+        )
     }
 }
 
-@Preview(showBackground = true, device = Devices.PIXEL_4_XL)
+@Preview(showBackground = true, device = Devices.PIXEL_4)
 @Composable
 fun TeachersScreenPreview() {
-    val context = LocalContext.current
-    val navController = NavController(context)
-    TeachersScreen(navController)
+    TeachersScreen(NavController(LocalContext.current))
 }

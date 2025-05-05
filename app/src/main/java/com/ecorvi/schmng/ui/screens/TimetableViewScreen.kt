@@ -34,11 +34,18 @@ fun TimetableViewScreen(navController: NavController) {
     var timetables by remember { mutableStateOf<List<Timetable>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Time slots from 8 AM to 5 PM (24-hour format)
+    // Time slots from 9:00 to 3:00 (new format)
     val timeSlots = remember {
-        (8..17).map { hour ->
-            String.format("%02d:00", hour)
-        }
+        listOf(
+            "9:00 - 9:45",
+            "9:45 - 10:30",
+            "10:30 - 11:15",
+            "11:15 - 12:00",
+            "12:00 - 12:45", // Lunch Break
+            "12:45 - 1:30",
+            "1:30 - 2:15",
+            "2:15 - 3:00"
+        )
     }
 
     // Days of the week (Strings)

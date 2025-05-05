@@ -47,6 +47,7 @@ fun ProfileScreen(
     var schoolProfile by remember { mutableStateOf<SchoolProfile?>(null) }
     var editedAdminProfile by remember { mutableStateOf<AdminProfile?>(null) }
     var editedSchoolProfile by remember { mutableStateOf<SchoolProfile?>(null) }
+    var personProfile by remember { mutableStateOf<Person?>(null) }
     
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -54,9 +55,15 @@ fun ProfileScreen(
     // Load profiles
     LaunchedEffect(Unit) {
         try {
-            FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-                adminProfile = FirestoreDatabase.getAdminProfile(uid)
-                schoolProfile = FirestoreDatabase.getSchoolProfile()
+            if (id.isNotEmpty() && type.isNotEmpty()) {
+                // Load student or teacher profile
+                personProfile = FirestoreDatabase.getPersonById(id, type)
+            } else {
+                // Load admin and school profiles
+                FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+                    adminProfile = FirestoreDatabase.getAdminProfile(uid)
+                    schoolProfile = FirestoreDatabase.getSchoolProfile()
+                }
             }
         } catch (e: Exception) {
             scope.launch {
@@ -107,48 +114,64 @@ fun ProfileScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // School Profile Section
-            schoolProfile?.let { school ->
-                ProfileSection(
-                    title = "School Profile",
-                    icon = Icons.Default.School,
-                    items = listOf(
-                        "Name" to (school.name ?: ""),
-                        "Principal" to (school.principalName ?: ""),
-                        "Board" to (school.boardType ?: ""),
-                        "Email" to (school.email ?: ""),
-                        "Phone" to (school.phone ?: ""),
-                        "Website" to (school.website ?: ""),
-                        "Address" to (school.address ?: "")
-                    ),
-                    isEditing = isEditing,
-                    onEditClick = {
-                        editedSchoolProfile = school
-                        editingSchool = true
-                        showEditDialog = true
-                    }
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+            if (id.isNotEmpty() && type.isNotEmpty()) {
+                // Display student or teacher profile
+                personProfile?.let { person ->
+                    ProfileSection(
+                        title = "${type.capitalize()} Profile",
+                        icon = Icons.Default.Person,
+                        items = listOf(
+                            "Name" to "${person.firstName} ${person.lastName}",
+                            "Email" to (person.email ?: ""),
+                            "Phone" to (person.phone ?: ""),
+                            "Class" to (person.className ?: "")
+                        ),
+                        isEditing = false
+                    )
+                }
+            } else {
+                // Display admin and school profiles
+                schoolProfile?.let { school ->
+                    ProfileSection(
+                        title = "School Profile",
+                        icon = Icons.Default.School,
+                        items = listOf(
+                            "Name" to (school.name ?: ""),
+                            "Principal" to (school.principalName ?: ""),
+                            "Board" to (school.boardType ?: ""),
+                            "Email" to (school.email ?: ""),
+                            "Phone" to (school.phone ?: ""),
+                            "Website" to (school.website ?: ""),
+                            "Address" to (school.address ?: "")
+                        ),
+                        isEditing = isEditing,
+                        onEditClick = {
+                            editedSchoolProfile = school
+                            editingSchool = true
+                            showEditDialog = true
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
-            // Admin Profile Section
-            adminProfile?.let { admin ->
-                ProfileSection(
-                    title = "Admin Profile",
-                    icon = Icons.Default.Person,
-                    items = listOf(
-                        "Name" to (admin.name ?: ""),
-                        "Designation" to (admin.designation ?: ""),
-                        "Email" to (admin.email ?: ""),
-                        "Phone" to (admin.phone ?: "")
-                    ),
-                    isEditing = isEditing,
-                    onEditClick = {
-                        editedAdminProfile = admin
-                        editingSchool = false
-                        showEditDialog = true
-                    }
-                )
+                adminProfile?.let { admin ->
+                    ProfileSection(
+                        title = "Admin Profile",
+                        icon = Icons.Default.Person,
+                        items = listOf(
+                            "Name" to (admin.name ?: ""),
+                            "Designation" to (admin.designation ?: ""),
+                            "Email" to (admin.email ?: ""),
+                            "Phone" to (admin.phone ?: "")
+                        ),
+                        isEditing = isEditing,
+                        onEditClick = {
+                            editedAdminProfile = admin
+                            editingSchool = false
+                            showEditDialog = true
+                        }
+                    )
+                }
             }
         }
     }
@@ -159,7 +182,7 @@ fun ProfileScreen(
             onDismissRequest = { showEditDialog = false },
             title = { Text(if (editingSchool) "Edit School Profile" else "Edit Admin Profile") },
             text = {
-                    Column(
+                Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -238,17 +261,17 @@ fun ProfileScreen(
                     }
                 }
             },
-                confirmButton = {
+            confirmButton = {
                 Button(
-                        onClick = {
-                                        scope.launch {
+                    onClick = {
+                        scope.launch {
                             try {
                                 if (editingSchool) {
                                     editedSchoolProfile?.let { school ->
                                         FirestoreDatabase.updateSchoolProfile(school)
                                         schoolProfile = school
                                     }
-                            } else {
+                                } else {
                                     editedAdminProfile?.let { admin ->
                                         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
                                             FirestoreDatabase.updateAdminProfile(uid, admin)
@@ -265,14 +288,14 @@ fun ProfileScreen(
                     }
                 ) {
                     Text("Save")
-                    }
-                },
-                dismissButton = {
-                TextButton(onClick = { showEditDialog = false }) {
-                        Text("Cancel")
-                    }
                 }
-            )
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

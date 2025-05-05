@@ -38,6 +38,8 @@ import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.launch
 import com.ecorvi.schmng.R
 
+private val StudentGreen = Color(0xFF4CAF50) // Green color for student theme
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudentsScreen(navController: NavController) {
@@ -48,16 +50,9 @@ fun StudentsScreen(navController: NavController) {
     var filteredStudents by remember { mutableStateOf<List<Person>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
-    var showAttendanceButton by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf<Person?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    // Update showAttendanceButton when class is selected
-    LaunchedEffect(selectedClass) {
-        showAttendanceButton = selectedClass != "All Classes"
-    }
 
     // Firestore real-time listener
     LaunchedEffect(Unit) {
@@ -98,15 +93,29 @@ fun StudentsScreen(navController: NavController) {
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("Students") },
+                    title = { 
+                        Text(
+                            "Students",
+                            color = StudentGreen,
+                            fontWeight = FontWeight.Bold
+                        ) 
+                    },
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.Default.ArrowBack, "Back")
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                "Back",
+                                tint = StudentGreen
+                            )
                         }
                     },
                     actions = {
                         IconButton(onClick = { showClassFilter = true }) {
-                            Icon(Icons.Default.FilterList, "Filter")
+                            Icon(
+                                Icons.Default.FilterList,
+                                "Filter",
+                                tint = StudentGreen
+                            )
                         }
                     }
                 )
@@ -119,25 +128,42 @@ fun StudentsScreen(navController: NavController) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    leadingIcon = { Icon(Icons.Default.Search, "Search") }
+                    leadingIcon = { 
+                        Icon(
+                            Icons.Default.Search,
+                            "Search",
+                            tint = StudentGreen
+                        ) 
+                    }
                 )
 
                 // Selected class chip
                 if (selectedClass != "All Classes") {
                     Surface(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = MaterialTheme.shapes.small
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                        color = StudentGreen.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Row(
                             modifier = Modifier.padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(selectedClass)
+                            Text(
+                                text = selectedClass,
+                                color = StudentGreen,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
                             IconButton(
-                                onClick = { selectedClass = "All Classes" }
+                                onClick = { selectedClass = "All Classes" },
+                                modifier = Modifier.size(16.dp)
                             ) {
-                                Icon(Icons.Default.Close, "Clear filter")
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Clear filter",
+                                    tint = StudentGreen
+                                )
                             }
                         }
                     }
@@ -145,66 +171,44 @@ fun StudentsScreen(navController: NavController) {
             }
         },
         floatingActionButton = {
-            Column {
-                if (showAttendanceButton) {
-                    FloatingActionButton(
-                        onClick = { 
-                            if (selectedClass != "All Classes") {
-                                navController.navigate("student_attendance/$selectedClass")
-                            } else {
-                                Toast.makeText(context, "Please select a class first", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.padding(bottom = 8.dp),
-                        containerColor = Color(0xFF1F41BB)
-                    ) {
-                        Icon(Icons.Default.CalendarToday, "Take Attendance", tint = Color.White)
-                    }
-                }
-                FloatingActionButton(
-                    onClick = { navController.navigate("add_student") },
-                    containerColor = Color(0xFF1F41BB)
-                ) {
-                    Icon(Icons.Default.Add, "Add Student", tint = Color.White)
-                }
+            FloatingActionButton(
+                onClick = { navController.navigate("add_person/student") },
+                containerColor = StudentGreen
+            ) {
+                Icon(Icons.Default.Add, "Add Student", tint = Color.White)
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         content = { padding ->
-            Image(
-                painter = painterResource(id = R.drawable.bg_ui),
-                contentDescription = "Background",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                colorFilter = ColorFilter.tint(
-                    color = Color(0xFFFFFFFF).copy(alpha = 0.1f),
-                    blendMode = BlendMode.SrcAtop
-                )
-            )
-
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.White)
                     .padding(padding)
             ) {
                 if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 50.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = Color(0xFF1F41BB))
-                    }
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
+                    )
                 } else if (filteredStudents.isEmpty()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 50.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Text("No students found", color = Color.Gray)
+                        Icon(
+                            imageVector = Icons.Default.SearchOff,
+                            contentDescription = "No results",
+                            modifier = Modifier.size(48.dp),
+                            tint = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No students found",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.Gray
+                        )
                     }
                 } else {
                     LazyColumn(
@@ -221,10 +225,7 @@ fun StudentsScreen(navController: NavController) {
                             StudentListItem(
                                 student = student,
                                 onItemClick = {
-                                    navController.navigate("view_profile/student/${student.id}")
-                                },
-                                onDeleteClick = {
-                                    showDeleteDialog = student
+                                    navController.navigate("student_profile/${student.id}")
                                 }
                             )
                         }
@@ -238,7 +239,7 @@ fun StudentsScreen(navController: NavController) {
     if (showClassFilter) {
         AlertDialog(
             onDismissRequest = { showClassFilter = false },
-            title = { Text("Select Class") },
+            title = { Text("Select Class", color = StudentGreen) },
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState())
@@ -251,7 +252,10 @@ fun StudentsScreen(navController: NavController) {
                                 onClick = {
                                     selectedClass = "All Classes"
                                     showClassFilter = false
-                                }
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = StudentGreen
+                                )
                             )
                         }
                     )
@@ -264,7 +268,10 @@ fun StudentsScreen(navController: NavController) {
                                     onClick = {
                                         selectedClass = classOption
                                         showClassFilter = false
-                                    }
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = StudentGreen
+                                    )
                                 )
                             }
                         )
@@ -273,45 +280,7 @@ fun StudentsScreen(navController: NavController) {
             },
             confirmButton = {
                 TextButton(onClick = { showClassFilter = false }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
-
-    // Delete Confirmation Dialog
-    showDeleteDialog?.let { student ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            title = { Text("Confirm Delete") },
-            text = {
-                Text("Are you sure you want to delete ${student.firstName} ${student.lastName}?")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        FirestoreDatabase.deleteStudent(
-                            student.id,
-                            onSuccess = {
-                                Toast.makeText(context, "Student deleted successfully", Toast.LENGTH_SHORT).show()
-                                showDeleteDialog = null
-                            },
-                            onFailure = { e ->
-                                Toast.makeText(context, "Error deleting student: ${e.message}", Toast.LENGTH_SHORT).show()
-                                showDeleteDialog = null
-                            }
-                        )
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = Color.Red
-                    )
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) {
-                    Text("Cancel")
+                    Text("Close", color = StudentGreen)
                 }
             }
         )

@@ -27,11 +27,15 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var mobileNo by remember { mutableStateOf("") }
     var designation by remember { mutableStateOf("") }
     var department by remember { mutableStateOf("") }
     var age by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var className by remember { mutableStateOf("") }
+    var rollNumber by remember { mutableStateOf("") }
+    var dateOfBirth by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
@@ -50,11 +54,15 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
                             lastName = it.lastName
                             email = it.email
                             phone = it.phone
+                            mobileNo = it.mobileNo
                             designation = it.designation
                             department = it.department
                             age = it.age.toString()
                             gender = it.gender
                             address = it.address
+                            className = it.className
+                            rollNumber = it.rollNumber
+                            dateOfBirth = it.dateOfBirth
                         }
                     }
                     isLoading = false
@@ -169,6 +177,18 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
                         )
 
                         OutlinedTextField(
+                            value = mobileNo,
+                            onValueChange = { mobileNo = it },
+                            label = { Text("Mobile Number") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Phone,
+                                imeAction = ImeAction.Next
+                            ),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
                             value = age,
                             onValueChange = { age = it },
                             label = { Text("Age") },
@@ -268,12 +288,12 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
                                 lastName = lastName,
                                 email = email,
                                 phone = phone,
+                                mobileNo = mobileNo,
                                 type = "staff",
-                                className = "",
-                                rollNumber = "",
+                                className = className,
+                                rollNumber = rollNumber,
                                 gender = gender,
-                                dateOfBirth = "",
-                                mobileNo = phone,
+                                dateOfBirth = dateOfBirth,
                                 address = address,
                                 age = age.toIntOrNull() ?: 0,
                                 designation = designation,

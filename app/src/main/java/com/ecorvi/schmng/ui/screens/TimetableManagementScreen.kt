@@ -412,7 +412,7 @@ fun TimetableManagementScreen(navController: NavController) {
                                 // Admin Controls
                                 IconButton(
                                     onClick = { 
-                                        navController.navigate("add_timetable/${timetable.id}")
+                                        navController.navigate("edit_timetable/${timetable.id}")
                                     }
                                 ) {
                                     Icon(

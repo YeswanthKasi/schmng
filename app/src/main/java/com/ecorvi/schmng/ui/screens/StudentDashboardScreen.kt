@@ -76,6 +76,7 @@ fun StudentDashboardScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
     val currentUser = auth.currentUser
     var student by remember { mutableStateOf<Person?>(null) }
+    var todayTimetable by remember { mutableStateOf<List<Timetable>>(emptyList()) }
     var todaySchedule by remember { mutableStateOf<List<Schedule>>(emptyList()) }
     var pendingFees by remember { mutableStateOf<List<Fee>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -155,7 +156,7 @@ fun StudentDashboardScreen(navController: NavController) {
                                         val days = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
                                         val today = days[calendar.get(Calendar.DAY_OF_WEEK) - 1]
                                         
-                                        // Fetch timetable for student's class
+                                        // Fetch today's timetable
                                         FirebaseFirestore.getInstance()
                                             .collection("timetables")
                                             .whereEqualTo("classGrade", student?.className)
@@ -163,40 +164,31 @@ fun StudentDashboardScreen(navController: NavController) {
                                             .whereEqualTo("isActive", true)
                                             .get()
                                             .addOnSuccessListener { timetablesDocs ->
-                                                todaySchedule = timetablesDocs.mapNotNull { doc ->
-                                                    val timetable = doc.toObject(Timetable::class.java)
-                                                    Schedule(
-                                                        id = timetable.id,
-                                                        title = timetable.subject,
-                                                        description = "Room: ${timetable.roomNumber}",
-                                                        date = today,
-                                                        time = timetable.timeSlot,
-                                                        className = timetable.classGrade,
-                                                        status = "Active"
-                                                    )
-                                                }.sortedBy { it.time }
+                                                todayTimetable = timetablesDocs.mapNotNull { doc ->
+                                                    doc.toObject(Timetable::class.java)
+                                                }.sortedBy { it.timeSlot }
                                                 
+                                                // Fetch today's special schedules
+                                                val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                                                 FirebaseFirestore.getInstance()
-                                                    .collection("fees")
-                                                    .whereEqualTo("status", "Pending")
+                                                    .collection("schedules")
+                                                    .whereEqualTo("date", todayDate)
+                                                    .whereIn("className", listOf(student?.className, "all"))
+                                                    .whereEqualTo("status", "Active")
                                                     .get()
-                                                    .addOnSuccessListener { feesDocs ->
-                                                        pendingFees = feesDocs.mapNotNull { doc ->
-                                                            doc.toObject(Fee::class.java)
-                                                        }.filter { 
-                                                            it.studentId == currentUser.uid || 
-                                                            (it.className == student?.className && it.studentId == "all")
-                                                        }.sortedBy { it.dueDate }
-                                                        
+                                                    .addOnSuccessListener { schedulesDocs ->
+                                                        todaySchedule = schedulesDocs.mapNotNull { doc ->
+                                                            doc.toObject(Schedule::class.java)
+                                                        }.sortedBy { it.time }
                                                         isLoading = false
                                                     }
                                                     .addOnFailureListener { e ->
-                                                        errorMessage = "Failed to fetch fees: ${e.message}"
+                                                        Log.e("StudentDashboard", "Error fetching schedules: ${e.message}")
                                                         isLoading = false
                                                     }
                                             }
                                             .addOnFailureListener { e ->
-                                                errorMessage = "Failed to fetch timetable: ${e.message}"
+                                                Log.e("StudentDashboard", "Error fetching timetable: ${e.message}")
                                                 isLoading = false
                                             }
                                     } else {
