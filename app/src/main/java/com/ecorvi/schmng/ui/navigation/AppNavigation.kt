@@ -123,6 +123,7 @@ fun AppNavigation(
         composable("students") { StudentsScreen(navController) }
         composable("teachers") { TeachersScreen(navController) }
         composable("staff") { StaffScreen(navController) }
+        composable("pending_fees") { PendingFeesScreen(navController) }
         
         // Schedule Management Routes
         composable("schedules") { SchedulesScreen(navController) }
@@ -153,23 +154,12 @@ fun AppNavigation(
         composable("student_announcements") { AnnouncementsScreen(navController) }
         composable("student_teacher_info") { ClassTeacherInfoScreen(navController) }
         
-        // Detail routes with bottom navigation
+        // Profile routes with multiple path support
         composable(
-            route = "student_detail/{studentId}",
+            route = "view_profile/student/{studentId}",
             arguments = listOf(navArgument("studentId") { type = NavType.StringType })
         ) { backStackEntry ->
             val studentId = backStackEntry.arguments?.getString("studentId") ?: ""
-            ProfileScreen(
-                navController = navController,
-                currentRoute = currentRoute,
-                onRouteSelected = onRouteSelected,
-                id = studentId,
-                type = "student"
-            )
-        }
-        
-        composable("teacher_profile/{teacherId}") { backStackEntry ->
-            val teacherId = backStackEntry.arguments?.getString("teacherId") ?: ""
             val currentUser = FirebaseAuth.getInstance().currentUser
             var isAdmin by remember { mutableStateOf(false) }
 
@@ -181,34 +171,6 @@ fun AppNavigation(
                             isAdmin = role?.lowercase() == "admin"
                         },
                         onFailure = { e ->
-                            // Handle error silently, defaulting to non-admin
-                            isAdmin = false
-                        }
-                    )
-                }
-            }
-
-            TeacherProfileScreen(
-                navController = navController,
-                teacherId = teacherId,
-                isAdmin = isAdmin
-            )
-        }
-        
-        composable("student_profile/{studentId}") { backStackEntry ->
-            val studentId = backStackEntry.arguments?.getString("studentId") ?: ""
-            val currentUser = FirebaseAuth.getInstance().currentUser
-            var isAdmin by remember { mutableStateOf(false) }
-
-            LaunchedEffect(currentUser?.uid) {
-                if (currentUser?.uid != null) {
-                    FirestoreDatabase.getUserRole(
-                        userId = currentUser.uid,
-                        onComplete = { role ->
-                            isAdmin = role?.lowercase() == "admin"
-                        },
-                        onFailure = { e ->
-                            // Handle error silently, defaulting to non-admin
                             isAdmin = false
                         }
                     )
@@ -222,6 +184,68 @@ fun AppNavigation(
             )
         }
 
+        composable(
+            route = "student_profile/{studentId}",
+            arguments = listOf(navArgument("studentId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val studentId = backStackEntry.arguments?.getString("studentId") ?: ""
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            var isAdmin by remember { mutableStateOf(false) }
+
+            LaunchedEffect(currentUser?.uid) {
+                if (currentUser?.uid != null) {
+                    FirestoreDatabase.getUserRole(
+                        userId = currentUser.uid,
+                        onComplete = { role ->
+                            isAdmin = role?.lowercase() == "admin"
+                        },
+                        onFailure = { e ->
+                            isAdmin = false
+                        }
+                    )
+                }
+            }
+
+            StudentProfileScreen(
+                navController = navController,
+                studentId = studentId,
+                isAdmin = isAdmin
+            )
+        }
+
+        composable(
+            route = "teacher_profile/{teacherId}",
+            arguments = listOf(navArgument("teacherId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val teacherId = backStackEntry.arguments?.getString("teacherId") ?: ""
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            var isAdmin by remember { mutableStateOf(false) }
+
+            LaunchedEffect(currentUser?.uid) {
+                if (currentUser?.uid != null) {
+                    FirestoreDatabase.getUserRole(
+                        userId = currentUser.uid,
+                        onComplete = { role ->
+                            isAdmin = role?.lowercase() == "admin"
+                        },
+                        onFailure = { e ->
+                            isAdmin = false
+                        }
+                    )
+                }
+            }
+
+            TeacherProfileScreen(
+                navController = navController,
+                teacherId = teacherId,
+                isAdmin = isAdmin
+            )
+        }
+
+        // Fee Management Routes
+        composable("pending_fees") { PendingFeesScreen(navController) }
+        composable("add_fee") { AddFeeScreen(navController) }
+        
         // Staff routes
         composable("staff") { StaffScreen(navController) }
         composable(

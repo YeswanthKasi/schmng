@@ -34,9 +34,24 @@ fun StudentProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(studentId) {
-        isLoading = true
-        student = FirestoreDatabase.getStudent(studentId)
-        isLoading = false
+        try {
+            isLoading = true
+            FirestoreDatabase.getStudent(studentId)?.let { studentData ->
+                student = studentData
+            } ?: run {
+                scope.launch {
+                    snackbarHostState.showSnackbar("Error: Student not found")
+                    navController.popBackStack()
+                }
+            }
+        } catch (e: Exception) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Error: ${e.message}")
+                navController.popBackStack()
+            }
+        } finally {
+            isLoading = false
+        }
     }
 
     Scaffold(

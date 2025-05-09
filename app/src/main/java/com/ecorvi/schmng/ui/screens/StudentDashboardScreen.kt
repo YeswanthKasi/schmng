@@ -362,8 +362,18 @@ fun StudentDashboardScreen(navController: NavController) {
                                         icon = Icons.Default.Person,
                                         color = PrimaryBlue,
                                         onClick = { 
-                                            currentUser?.uid?.let { 
-                                                navController.navigate("view_profile/student/$it") 
+                                            try {
+                                                student?.id?.let { studentId -> 
+                                                    navController.navigate("student_profile/$studentId")
+                                                } ?: run {
+                                                    scope.launch {
+                                                        snackbarHostState.showSnackbar("Error: Student profile not loaded")
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Error: ${e.message}")
+                                                }
                                             }
                                         }
                                     ) {

@@ -109,9 +109,11 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import com.ecorvi.schmng.ui.navigation.BottomNav
+import com.ecorvi.schmng.ui.utils.getCurrentDate
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.random.Random
+import com.ecorvi.schmng.ui.theme.*
 
 // Define primary colors used throughout the dashboard
 private val PrimaryBlue = Color(0xFF1F41BB)    // Main theme color
@@ -276,12 +278,16 @@ fun AdminDashboardScreen(
                 )
             }
             "PENDING FEES" -> {
-                // Create new fee object
+                // Create new fee object with required fields
                 val fee = Fee(
+                    id = "",  // Will be set by Firestore
                     studentName = item,
-                    amount = 0.0, 
-                    dueDate = "", 
-                    description = ""
+                    studentId = "",  // This should be set when selecting a specific student
+                    amount = 0.0,
+                    dueDate = getCurrentDate(),  // Use current date as default
+                    className = "",  // This should be set when selecting a specific student
+                    status = "Pending",
+                    description = "New fee entry"
                 )
                 // Add fee to Firebase
                 FirestoreDatabase.addFee(
@@ -921,7 +927,13 @@ fun AdminDashboardScreen(
                                     AnimatedSummaryCard(
                                         title = "Pending Fees",
                                         icon = Icons.Default.CurrencyRupee,
-                                        onClick = { navController.navigate("pending_fees") },
+                                        onClick = { 
+                                            try {
+                                                navController.navigate("pending_fees")
+                                            } catch (e: Exception) {
+                                                showMessage("Navigation error: ${e.message}")
+                                            }
+                                        },
                                         backgroundColor = FeesRed,
                                         modifier = Modifier
                                     )
