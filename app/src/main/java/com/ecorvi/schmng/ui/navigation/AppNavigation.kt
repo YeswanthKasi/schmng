@@ -62,7 +62,7 @@ fun AppNavigation(
         composable("login") { LoginScreen(navController) }
         composable("register") { RegisterScreen(navController) }
 
-        // Main Screens with Bottom Navigation
+        // Admin Screens with Bottom Navigation
         composable(BottomNavItem.Home.route) { 
             AdminDashboardScreen(
                 navController = navController,
@@ -95,19 +95,34 @@ fun AppNavigation(
             )
         }
 
-        // Other screens without bottom navigation
-        composable("admin_profile") { AdminProfileScreen(navController) }
+        // Student Dashboard and Message Routes
         composable("student_dashboard") { StudentDashboardScreen(navController) }
-        composable("new_message") { NewMessageScreen(navController) }
+        composable("student_messages") { StudentMessagesScreen(navController) }
+        composable("student_new_message") { StudentNewMessageScreen(navController) }
         composable(
-            "chat/{userId}",
-            arguments = listOf(navArgument("userId") { type = NavType.StringType })
+            "student_chat/{chatId}",
+            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
         ) { backStackEntry ->
-            ChatScreen(
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            StudentChatScreen(
                 navController = navController,
-                otherUserId = backStackEntry.arguments?.getString("userId") ?: ""
+                chatId = chatId
             )
         }
+
+        // Admin Message Routes
+        composable("new_message") { NewMessageScreen(navController) }
+        composable(
+            "chat/{chatId}",
+            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            ChatScreen(
+                navController = navController,
+                chatId = chatId
+            )
+        }
+
         composable("schedules") { SchedulesScreen(navController) }
         composable(
             "fee_analytics/{monthIndex}",

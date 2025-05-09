@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,54 +18,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.ecorvi.schmng.ui.data.FirestoreDatabase
-import com.ecorvi.schmng.ui.data.model.Person
-import com.google.firebase.auth.FirebaseAuth
+import com.ecorvi.schmng.ui.data.store.TempMessageStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewMessageScreen(navController: NavController) {
     var searchQuery by remember { mutableStateOf("") }
-    var students by remember { mutableStateOf<List<Person>>(emptyList()) }
-    var teachers by remember { mutableStateOf<List<Person>>(emptyList()) }
-    var staff by remember { mutableStateOf<List<Person>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    // Load users
-    LaunchedEffect(Unit) {
-        FirestoreDatabase.listenForStudentUpdates(
-            onUpdate = { studentList ->
-                students = studentList
-                isLoading = false
-            },
-            onError = { e ->
-                error = e.message
-                isLoading = false
-            }
+    
+    // Get all users from TempMessageStore
+    val users = (1..5).map { userId ->
+        userId.toString() to Triple(
+            TempMessageStore.getUserName(userId.toString()),
+            TempMessageStore.getUserRole(userId.toString()),
+            TempMessageStore.getUserLastSeen(userId.toString())
         )
-
-        FirestoreDatabase.listenForTeacherUpdates(
-            onUpdate = { teacherList ->
-                teachers = teacherList
-                isLoading = false
-            },
-            onError = { e ->
-                error = e.message
-                isLoading = false
-            }
-        )
-
-        FirestoreDatabase.listenForStaffUpdates(
-            onUpdate = { staffList ->
-                staff = staffList
-                isLoading = false
-            },
-            onError = { e ->
-                error = e.message
-                isLoading = false
-            }
-        )
+    }
+    
+    val filteredUsers = users.filter {
+        val (_, userInfo) = it
+        userInfo.first.contains(searchQuery, ignoreCase = true) ||
+        userInfo.second.contains(searchQuery, ignoreCase = true)
     }
 
     Scaffold(
@@ -113,7 +86,7 @@ fun NewMessageScreen(navController: NavController) {
                         tint = Color(0xFF1F41BB)
                     )
                 },
-                shape = MaterialTheme.shapes.medium,
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color(0xFF1F41BB),
                     unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f)
@@ -121,40 +94,17 @@ fun NewMessageScreen(navController: NavController) {
                 singleLine = true
             )
 
-            if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Color(0xFF1F41BB))
-                }
-            } else if (error != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(error ?: "Unknown error occurred", color = Color.Red)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    // Filter and combine all users
-                    val allUsers = (students + teachers + staff).filter { person ->
-                        val searchTerm = searchQuery.lowercase()
-                        person.firstName.lowercase().contains(searchTerm) ||
-                        person.lastName.lowercase().contains(searchTerm) ||
-                        person.email.lowercase().contains(searchTerm)
-                    }
-
-                    items(allUsers) { person ->
-                        UserListItem(
-                            person = person,
-                            onClick = {
-                                navController.navigate("chat/${person.id}")
-                            }
-                        )
-                    }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(filteredUsers) { (userId, userInfo) ->
+                    UserListItem(
+                        userId = userId,
+                        name = userInfo.first,
+                        role = userInfo.second,
+                        lastSeen = userInfo.third,
+                        onClick = { navController.navigate("chat/$userId") }
+                    )
                 }
             }
         }
@@ -163,7 +113,10 @@ fun NewMessageScreen(navController: NavController) {
 
 @Composable
 private fun UserListItem(
-    person: Person,
+    userId: String,
+    name: String,
+    role: String,
+    lastSeen: String,
     onClick: () -> Unit
 ) {
     Surface(
@@ -177,11 +130,10 @@ private fun UserListItem(
     ) {
         Row(
             modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Profile Picture
             Surface(
                 modifier = Modifier
                     .size(48.dp)
@@ -198,23 +150,32 @@ private fun UserListItem(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // User Info
             Column {
                 Text(
-                    text = "${person.firstName} ${person.lastName}",
+                    text = name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    text = when (person.type) {
-                        "student" -> "Student - ${person.className}"
-                        "teacher" -> "Teacher"
-                        "staff" -> "Staff"
-                        else -> person.type.capitalize()
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = role,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF1F41BB)
+                    )
+                    Text(
+                        text = "•",
+                        color = Color.Gray
+                    )
+                    Text(
+                        text = lastSeen,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (lastSeen == "Online") Color(0xFF4CAF50) else Color.Gray
+                    )
+                }
             }
         }
     }

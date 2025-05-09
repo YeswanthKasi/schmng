@@ -3,9 +3,7 @@ package com.ecorvi.schmng.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,41 +17,46 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.ecorvi.schmng.ui.navigation.BottomNav
 import com.ecorvi.schmng.ui.data.model.MessageStatus
-import com.ecorvi.schmng.ui.data.store.TempMessageStore
 import com.ecorvi.schmng.ui.data.store.ChatPreview
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MessagesScreen(
-    navController: NavController,
-    currentRoute: String,
-    onRouteSelected: (String) -> Unit
+fun StudentMessagesScreen(
+    navController: NavController
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var chatPreviews by remember { mutableStateOf(emptyList<ChatPreview>()) }
-    
-    // Load initial data and set up listener only once when the screen is created
-    LaunchedEffect(Unit) {
-        // Initial load
-        chatPreviews = TempMessageStore.getAllChatPreviews()
-        
-        // Set up message update listener
-        TempMessageStore.setOnMessagesUpdatedListener { newPreviews ->
-            // Only update if there are actual changes
-            if (chatPreviews != newPreviews) {
-                chatPreviews = newPreviews
-            }
-        }
-    }
 
-    // Clean up listener when the composable is disposed
-    DisposableEffect(Unit) {
-        onDispose {
-            TempMessageStore.setOnMessagesUpdatedListener(null)
-        }
-    }
+    // Dummy chat previews
+    val dummyChats = listOf(
+        ChatPreview(
+            id = "1",
+            name = "Mrs. Smith",
+            lastMessage = "When is the assignment due?",
+            timestamp = "10:30 AM",
+            status = MessageStatus.READ,
+            unread = false,
+            lastSeen = "Online"
+        ),
+        ChatPreview(
+            id = "2",
+            name = "Mr. Johnson",
+            lastMessage = "The test will be on Monday",
+            timestamp = "Yesterday",
+            status = MessageStatus.DELIVERED,
+            unread = true,
+            lastSeen = "2h ago"
+        ),
+        ChatPreview(
+            id = "3",
+            name = "Ms. Williams",
+            lastMessage = "Great work on your project!",
+            timestamp = "2d ago",
+            status = MessageStatus.READ,
+            unread = false,
+            lastSeen = "1d ago"
+        )
+    )
 
     Scaffold(
         topBar = {
@@ -66,21 +69,23 @@ fun MessagesScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color(0xFF1F41BB)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White.copy(alpha = 0.95f)
                 )
             )
         },
-        bottomBar = {
-            BottomNav(
-                navController = navController,
-                currentRoute = currentRoute,
-                onItemSelected = { item -> onRouteSelected(item.route) }
-            )
-        },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { navController.navigate("new_message") },
+                onClick = { navController.navigate("student_new_message") },
                 containerColor = Color(0xFF1F41BB),
                 contentColor = Color.White
             ) {
@@ -115,7 +120,7 @@ fun MessagesScreen(
                 )
             )
 
-            val filteredChats = chatPreviews.filter {
+            val filteredChats = dummyChats.filter {
                 it.name.contains(searchQuery, ignoreCase = true) ||
                 it.lastMessage.contains(searchQuery, ignoreCase = true)
             }
@@ -131,7 +136,7 @@ fun MessagesScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (searchQuery.isBlank() && chatPreviews.isEmpty()) {
+                        if (searchQuery.isBlank()) {
                             Icon(
                                 Icons.Default.Message,
                                 contentDescription = null,
@@ -144,7 +149,7 @@ fun MessagesScreen(
                                 color = Color.Gray
                             )
                             Text(
-                                "Start a conversation",
+                                "Start a conversation with your teachers",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.Gray
                             )
@@ -176,7 +181,7 @@ fun MessagesScreen(
                     items(filteredChats) { preview ->
                         MessageItem(
                             preview = preview,
-                            onClick = { navController.navigate("chat/${preview.id}") }
+                            onClick = { navController.navigate("student_chat/${preview.id}") }
                         )
                     }
                 }

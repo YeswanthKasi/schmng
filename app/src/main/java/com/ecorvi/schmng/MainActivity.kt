@@ -28,6 +28,7 @@ import com.ecorvi.schmng.ui.components.CommonBackground
 import com.google.android.play.core.appupdate.*
 import com.google.android.play.core.install.model.*
 import com.google.android.play.core.install.InstallStateUpdatedListener
+import com.google.android.play.core.ktx.AppUpdateResult
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.FirebaseApp
@@ -44,12 +45,13 @@ class MainActivity : ComponentActivity() {
     
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
-    private var showUpdateDialog by mutableStateOf(false)
-    private var isUpdating by mutableStateOf(false)
-    private var isUserLoggedIn by mutableStateOf(false)
-    private var isFirstLaunch by mutableStateOf(true)
-    private var isLoading by mutableStateOf(true)
-    private var initialRoute by mutableStateOf("login")
+    private var showUpdateDialog: Boolean by mutableStateOf(false)
+    private var isUpdating: Boolean by mutableStateOf(false)
+    private var isUserLoggedIn: Boolean by mutableStateOf(false)
+    private var isFirstLaunch: Boolean by mutableStateOf(true)
+    private var isLoading: Boolean by mutableStateOf(true)
+    private var initialRoute: String by mutableStateOf("login")
+    private var updateInProgress: Boolean = false
 
     companion object {
         private const val MY_REQUEST_CODE = 100
@@ -63,9 +65,53 @@ class MainActivity : ComponentActivity() {
     }
 
     private val installStateUpdatedListener = InstallStateUpdatedListener { state ->
-        if (state.installStatus() == InstallStatus.DOWNLOADED) {
-            // Show snackbar or dialog to prompt install
-            showUpdateDownloadedDialog()
+        try {
+            when (state.installStatus()) {
+                InstallStatus.DOWNLOADING -> {
+                    if (!updateInProgress) return@InstallStateUpdatedListener
+                    val bytesDownloaded = state.bytesDownloaded()
+                    val totalBytesToDownload = state.totalBytesToDownload()
+                    val progress = (bytesDownloaded * 100) / totalBytesToDownload
+                    Log.d(TAG, "Update download progress: $progress%")
+                    showToast("Downloading update: $progress%")
+                }
+                InstallStatus.DOWNLOADED -> {
+                    if (!updateInProgress) return@InstallStateUpdatedListener
+                    showUpdateDownloadedDialog()
+                }
+                InstallStatus.FAILED -> {
+                    Log.e(TAG, "Update download failed: ${state.installErrorCode()}")
+                    cleanupUpdateResources()
+                    showToast("Update download failed, please try again later")
+                }
+                InstallStatus.CANCELED -> {
+                    Log.d(TAG, "Update cancelled")
+                    cleanupUpdateResources()
+                }
+                InstallStatus.INSTALLED -> {
+                    Log.d(TAG, "Update installed successfully")
+                    cleanupUpdateResources()
+                    showToast("Update installed successfully")
+                }
+                InstallStatus.PENDING -> {
+                    Log.d(TAG, "Update is pending")
+                }
+                else -> {
+                    Log.d(TAG, "Update status: ${state.installStatus()}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in install state listener", e)
+            cleanupUpdateResources()
+        }
+    }
+
+    private fun cleanupUpdateResources() {
+        try {
+            updateInProgress = false
+            appUpdateManager.unregisterListener(installStateUpdatedListener)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up update resources", e)
         }
     }
 
@@ -273,57 +319,151 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkForAppUpdate() {
+        if (updateInProgress) return
+        
         try {
             val appUpdateInfoTask = appUpdateManager.appUpdateInfo
-            appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
-                launchFlexibleUpdateIfAvailable(appUpdateInfo)
-            }
+            appUpdateInfoTask
+                .addOnSuccessListener { appUpdateInfo ->
+                    if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+                        appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
+                    ) {
+                        try {
+                            updateInProgress = true
+                            appUpdateManager.registerListener(installStateUpdatedListener)
+                            
+                            // Show confirmation dialog before starting update
+                            showUpdateAvailableDialog(appUpdateInfo)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error starting update flow", e)
+                            cleanupUpdateResources()
+                        }
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error checking for update", e)
+                    cleanupUpdateResources()
+                }
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking for app update", e)
+            Log.e(TAG, "Error in checkForAppUpdate", e)
+            cleanupUpdateResources()
         }
     }
 
-    private fun launchFlexibleUpdateIfAvailable(appUpdateInfo: AppUpdateInfo) {
-        if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
-            appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
-        ) {
-            appUpdateManager.registerListener(installStateUpdatedListener)
-            appUpdateManager.startUpdateFlowForResult(
-                appUpdateInfo,
-                AppUpdateType.FLEXIBLE,
-                this,
-                REQUEST_CODE_UPDATE
-            )
+    private fun showUpdateAvailableDialog(appUpdateInfo: AppUpdateInfo) {
+        try {
+            AlertDialog.Builder(this)
+                .setTitle("Update Available")
+                .setMessage("A new version of the app is available. Would you like to update now?")
+                .setPositiveButton("Update") { dialog, _ ->
+                    try {
+                        appUpdateManager.startUpdateFlowForResult(
+                            appUpdateInfo,
+                            AppUpdateType.FLEXIBLE,
+                            this,
+                            REQUEST_CODE_UPDATE
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error starting update flow", e)
+                        cleanupUpdateResources()
+                        showToast("Failed to start update")
+                    }
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Later") { dialog, _ ->
+                    cleanupUpdateResources()
+                    dialog.dismiss()
+                }
+                .setOnCancelListener {
+                    cleanupUpdateResources()
+                }
+                .show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing update available dialog", e)
+            cleanupUpdateResources()
         }
     }
 
     private fun showUpdateDownloadedDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Update Ready")
-            .setMessage("An update has been downloaded. Would you like to install it now?")
-            .setPositiveButton("Install") { _, _ ->
-                appUpdateManager.completeUpdate()
-            }
-            .setNegativeButton("Later", null)
-            .show()
+        try {
+            AlertDialog.Builder(this)
+                .setTitle("Update Ready")
+                .setMessage("An update has been downloaded. Would you like to install it now?")
+                .setPositiveButton("Install") { dialog, _ ->
+                    try {
+                        appUpdateManager.completeUpdate()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error completing update", e)
+                        showToast("Failed to install update. Please try again later.")
+                        cleanupUpdateResources()
+                    }
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Later") { dialog, _ ->
+                    dialog.dismiss()
+                }
+                .setOnCancelListener {
+                    // Keep the update available for later
+                }
+                .setCancelable(true)
+                .show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing update dialog", e)
+            cleanupUpdateResources()
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
-            if (appUpdateInfo.installStatus() == InstallStatus.DOWNLOADED) {
-                showUpdateDownloadedDialog()
-            } else {
-                launchFlexibleUpdateIfAvailable(appUpdateInfo)
-            }
+        try {
+            appUpdateManager.appUpdateInfo
+                .addOnSuccessListener { appUpdateInfo ->
+                    when (appUpdateInfo.installStatus()) {
+                        InstallStatus.DOWNLOADED -> {
+                            if (updateInProgress) {
+                                showUpdateDownloadedDialog()
+                            }
+                        }
+                        InstallStatus.FAILED, InstallStatus.CANCELED -> {
+                            cleanupUpdateResources()
+                        }
+                        else -> {
+                            // No action needed
+                        }
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error checking update status in onResume", e)
+                    cleanupUpdateResources()
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onResume", e)
+            cleanupUpdateResources()
         }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_UPDATE) {
-            if (resultCode != RESULT_OK) {
-                Log.d(TAG, "Update flow failed! Result code: $resultCode")
+            when (resultCode) {
+                RESULT_OK -> {
+                    Log.d(TAG, "Update flow started successfully")
+                    // Keep updateInProgress true as the download is starting
+                }
+                RESULT_CANCELED -> {
+                    Log.d(TAG, "Update flow cancelled")
+                    cleanupUpdateResources()
+                    showToast("Update cancelled")
+                }
+                ActivityResult.RESULT_IN_APP_UPDATE_FAILED -> {
+                    Log.e(TAG, "Update flow failed")
+                    cleanupUpdateResources()
+                    showToast("Update failed, please try again later")
+                }
+                else -> {
+                    Log.d(TAG, "Update flow failed with result code: $resultCode")
+                    cleanupUpdateResources()
+                }
             }
         }
     }
@@ -332,7 +472,7 @@ class MainActivity : ComponentActivity() {
         try {
             super.onDestroy()
             scope.cancel()
-            appUpdateManager.unregisterListener(installStateUpdatedListener)
+            cleanupUpdateResources()
             FirestoreDatabase.cleanup()
         } catch (e: Exception) {
             Log.e(TAG, "Error in onDestroy", e)

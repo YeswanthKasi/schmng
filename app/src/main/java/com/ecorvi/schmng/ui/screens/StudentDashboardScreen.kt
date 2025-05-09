@@ -48,10 +48,12 @@ import com.ecorvi.schmng.ui.data.model.Timetable
 import com.google.firebase.messaging.FirebaseMessaging
 import android.util.Log
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.TextStyle
 import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.tasks.await
+import com.ecorvi.schmng.ui.data.store.TempMessageStore
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 private val ScheduleOrange = Color(0xFFFF9800)
@@ -490,6 +492,25 @@ fun StudentDashboardScreen(navController: NavController) {
                                         onClick = { navController.navigate("student_announcements") }
                                     ) {
                                         Text("View latest announcements")
+                                    }
+                                }
+                            }
+
+                            item {
+                                if (isLoading) {
+                                    ShimmerCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(100.dp)
+                                    )
+                                } else {
+                                    DashboardCard(
+                                        title = "Messages",
+                                        icon = Icons.Default.Message,
+                                        color = PrimaryBlue,
+                                        onClick = { navController.navigate("student_messages") }
+                                    ) {
+                                        Text("View and send messages")
                                     }
                                 }
                             }

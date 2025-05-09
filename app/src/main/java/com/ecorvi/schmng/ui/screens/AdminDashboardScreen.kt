@@ -75,6 +75,7 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material.icons.filled.Update
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
@@ -325,19 +326,30 @@ fun AdminDashboardScreen(
 
     // Function to handle user logout
     fun handleLogout() {
-        // Sign out from Firebase
-        auth.signOut()
-        // Clear cached user data
-        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .remove("user_role")
-            .remove("stay_signed_in")
-            .apply()
+        try {
+            // First clear all listeners and subscriptions
+            FirestoreDatabase.cleanup()
+            
+            // Sign out from Firebase
+            auth.signOut()
+            
+            // Clear cached user data
+            context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .clear()  // Clear all preferences
+                .apply()
 
-        // Navigate to login screen
-        navController.navigate("login") {
-            popUpTo("admin_dashboard") { inclusive = true }
-            launchSingleTop = true
+            // Navigate to login screen with proper cleanup
+            navController.navigate("login") {
+                popUpTo(navController.graph.id) {
+                    inclusive = true  // This removes all screens from the back stack
+                }
+                launchSingleTop = true
+            }
+        } catch (e: Exception) {
+            Log.e("AdminDashboard", "Error during logout: ${e.message}")
+            // Still try to navigate to login even if there's an error
+            navController.navigate("login")
         }
     }
 
@@ -813,12 +825,7 @@ fun AdminDashboardScreen(
                                         },
                                         onClick = {
                                             showMenu = false
-                                            FirebaseAuth.getInstance().signOut()
-                                            navController.navigate("login") {
-                                                popUpTo(navController.graph.id) {
-                                                    inclusive = true
-                                                }
-                                            }
+                                            handleLogout()
                                         }
                                     )
                                 }
