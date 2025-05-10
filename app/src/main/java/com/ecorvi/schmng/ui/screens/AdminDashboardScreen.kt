@@ -105,6 +105,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
@@ -115,6 +116,11 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlin.random.Random
 import com.ecorvi.schmng.ui.theme.*
+import com.ecorvi.schmng.models.AttendanceRecord
+import com.ecorvi.schmng.models.AttendanceStatus
+import com.ecorvi.schmng.models.UserType
+import com.ecorvi.schmng.ui.data.model.Person
+import com.ecorvi.schmng.ui.components.AttendancePieChart
 
 // Define primary colors used throughout the dashboard
 private val PrimaryBlue = Color(0xFF1F41BB)    // Main theme color
@@ -177,6 +183,9 @@ fun AdminDashboardScreen(
     var studentCount by remember { mutableStateOf(0) }
     var teacherCount by remember { mutableStateOf(0) }
     var staffCount by remember { mutableStateOf(0) }
+    var studentAttendance by remember { mutableStateOf<List<AttendanceRecord>>(emptyList()) }
+    var teacherAttendance by remember { mutableStateOf<List<AttendanceRecord>>(emptyList()) }
+    var staffAttendance by remember { mutableStateOf<List<AttendanceRecord>>(emptyList()) }
     
     // UI state management
     var showDropdownMenu by remember { mutableStateOf(false) }
@@ -217,11 +226,51 @@ fun AdminDashboardScreen(
                     }
                 }
 
+                // Get today's date in yyyy-MM-dd format
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val today = dateFormat.format(Date())
+
+                // Fetch today's attendance records for each user type
+                val studentAttendanceDeferred = async {
+                    suspendCoroutine<List<AttendanceRecord>> { continuation ->
+                        FirestoreDatabase.fetchAttendanceByDate(
+                            date = today,
+                            userType = UserType.STUDENT,
+                            onComplete = { records -> continuation.resume(records) }
+                        )
+                    }
+                }
+
+                val teacherAttendanceDeferred = async {
+                    suspendCoroutine<List<AttendanceRecord>> { continuation ->
+                        FirestoreDatabase.fetchAttendanceByDate(
+                            date = today,
+                            userType = UserType.TEACHER,
+                            onComplete = { records -> continuation.resume(records) }
+                        )
+                    }
+                }
+
+                val staffAttendanceDeferred = async {
+                    suspendCoroutine<List<AttendanceRecord>> { continuation ->
+                        FirestoreDatabase.fetchAttendanceByDate(
+                            date = today,
+                            userType = UserType.STAFF,
+                            onComplete = { records -> continuation.resume(records) }
+                        )
+                    }
+                }
+
                 try {
                     // Wait for all operations to complete
                     studentCount = studentDeferred.await()
                     teacherCount = teacherDeferred.await()
                     staffCount = staffDeferred.await()
+                    
+                    // Get attendance records
+                    studentAttendance = studentAttendanceDeferred.await()
+                    teacherAttendance = teacherAttendanceDeferred.await()
+                    staffAttendance = staffAttendanceDeferred.await()
                     
                     withContext(Dispatchers.Main) {
                         // Add small delay for smooth transition
@@ -512,7 +561,7 @@ fun AdminDashboardScreen(
                     shadowElevation = 2.dp
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Pie chart placeholder
@@ -690,6 +739,15 @@ fun AdminDashboardScreen(
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                         navController.navigate("schedules")
+                    }
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.CheckCircle, contentDescription = "Attendance") },
+                    label = { Text("Attendance", fontSize = 16.sp) },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("attendance_analytics")
                     }
                 )
                 NavigationDrawerItem(
@@ -911,17 +969,30 @@ fun AdminDashboardScreen(
                                         color = BackgroundColor,
                                         shadowElevation = 2.dp
                                     ) {
+
                                         Column(
-                                            modifier = Modifier.padding(8.dp),
+                                            modifier = Modifier.padding(16.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
+                                            // Text on top
+                                            Text(
+                                                "Total Count",
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    textAlign = TextAlign.Center
+                                                ),
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF1F41BB),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            // Pie Chart below the text
                                             AnalyticsPieChart(
                                                 studentCount = studentCount,
                                                 teacherCount = teacherCount,
                                                 staffCount = staffCount,
                                                 onStudentClick = { navController.navigate("students") },
                                                 onTeacherClick = { navController.navigate("teachers") },
-                                                onStaffClick = { navController.navigate("staff") }
+                                                onStaffClick = { navController.navigate("staff") } // Assuming this navigation exists
                                             )
                                         }
                                     }
@@ -930,6 +1001,186 @@ fun AdminDashboardScreen(
                                     Spacer(modifier = Modifier.height(8.dp))
                                     FeeAnalyticsCard(navController)
                                 }
+                                
+                                // Attendance Analytics Card
+                                item {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp)
+                                            .clickable { navController.navigate("attendance_analytics") },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = BackgroundColor,
+                                        shadowElevation = 2.dp
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "Attendance Overview",
+                                                    style = MaterialTheme.typography.titleMedium.copy(
+                                                        textAlign = TextAlign.Center
+                                                    ),
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF1F41BB),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(15.dp))
+                                            
+                                            // Attendance Overview with Pie Chart
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                // Get unique users and their latest status for today
+                                                val latestStudentStatus = studentAttendance
+                                                    .groupBy { it.userId }
+                                                    .mapValues { (_, records) -> 
+                                                        records.maxByOrNull { it.date }?.status ?: AttendanceStatus.ABSENT 
+                                                    }
+                                                
+                                                val latestTeacherStatus = teacherAttendance
+                                                    .groupBy { it.userId }
+                                                    .mapValues { (_, records) -> 
+                                                        records.maxByOrNull { it.date }?.status ?: AttendanceStatus.ABSENT 
+                                                    }
+                                                    
+                                                val latestStaffStatus = staffAttendance
+                                                    .groupBy { it.userId }
+                                                    .mapValues { (_, records) -> 
+                                                        records.maxByOrNull { it.date }?.status ?: AttendanceStatus.ABSENT 
+                                                    }
+                                                
+                                                // Count present users for each type
+                                                val studentsPresent = latestStudentStatus.values.count { it == AttendanceStatus.PRESENT }
+                                                val teachersPresent = latestTeacherStatus.values.count { it == AttendanceStatus.PRESENT }
+                                                val staffPresent = latestStaffStatus.values.count { it == AttendanceStatus.PRESENT }
+                                                
+                                                // Calculate total present and total users
+                                                val totalPresent = studentsPresent + teachersPresent + staffPresent
+                                                val totalUsers = studentCount + teacherCount + staffCount
+
+                                                // Left side: Pie Chart
+                                                Box(modifier = Modifier.weight(1f)) {
+                                                    AttendancePieChart(
+                                                        present = totalPresent,
+                                                        absent = totalUsers - totalPresent,
+                                                        leave = 0, // We're only showing present vs absent for simplicity
+                                                        total = totalUsers
+                                                    )
+                                                }
+                                                
+                                                // Right side: Legend with counts
+                                                Column(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .padding(start = 16.dp)
+                                                ) {
+
+                                                    // Students
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 4.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(8.dp) // Slightly larger dot
+                                                                    .background(StudentGreen, CircleShape)
+                                                            )
+                                                            Text(
+                                                                "Students",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = Color.DarkGray
+                                                            )
+                                                        }
+                                                        Text(
+                                                            "$studentsPresent out of $studentCount",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = StudentGreen
+                                                        )
+                                                    }
+                                                    
+                                                    // Teachers
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 4.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(8.dp) // Slightly larger dot
+                                                                    .background(TeacherBlue, CircleShape)
+                                                            )
+                                                            Text(
+                                                                "Teachers",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = Color.DarkGray
+                                                            )
+                                                        }
+                                                        Text(
+                                                            "$teachersPresent out of $teacherCount",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = TeacherBlue
+                                                        )
+                                                    }
+                                                    
+                                                    // Staff
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 4.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(8.dp) // Slightly larger dot
+                                                                    .background(StaffPurple, CircleShape)
+                                                            )
+                                                            Text(
+                                                                "Staff",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = Color.DarkGray
+                                                            )
+                                                        }
+                                                        Text(
+                                                            "$staffPresent out of $staffCount",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = StaffPurple
+                                                        )
+                                                    }
+                                                }
+
+                                            }
+                                        }
+                                    }
+                                }
+                                
                                 item {
                                     AnimatedSummaryCard(
                                         title = "Pending Fees",
@@ -1487,10 +1738,12 @@ fun FeeAnalyticsCard(navController: NavController) {
         ) {
             Text(
                 "Monthly Fee",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFF1F41BB),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    textAlign = TextAlign.Center
+                ),
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
+                color = Color(0xFF1F41BB),
+                modifier = Modifier.fillMaxWidth()
             )
             
             if (isLoading) {
@@ -1642,6 +1895,147 @@ private fun QuickStatCard(
                 fontWeight = FontWeight.Bold,
                 color = color
             )
+        }
+    }
+}
+
+@Composable
+private fun AttendanceStatItem(label: String, color: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(color, RoundedCornerShape(2.dp))
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.DarkGray
+            )
+        }
+        Text(
+            text = "0",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = color
+        )
+    }
+}
+
+@Composable
+private fun AttendanceOverviewCard(
+    studentCount: Int,
+    teacherCount: Int,
+    staffCount: Int,
+    studentAttendance: List<AttendanceRecord>,
+    teacherAttendance: List<AttendanceRecord>,
+    staffAttendance: List<AttendanceRecord>
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                "Today's Attendance Overview",
+                style = MaterialTheme.typography.titleMedium,
+                color = colorAccent
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Student Attendance
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(StudentGreen, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Students")
+                }
+                Row {
+                    val presentCount = studentAttendance.count { it.status == AttendanceStatus.PRESENT }
+                    Text(
+                        "$presentCount out of $studentCount present",
+                        color = if (presentCount > 0) StudentGreen else Color.Gray
+                    )
+                }
+            }
+
+            // Teacher Attendance
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(TeacherBlue, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Teachers")
+                }
+                Row {
+                    val presentCount = teacherAttendance.count { it.status == AttendanceStatus.PRESENT }
+                    Text(
+                        "$presentCount out of $teacherCount present",
+                        color = if (presentCount > 0) TeacherBlue else Color.Gray
+                    )
+                }
+            }
+
+            // Staff Attendance
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(StaffPurple, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Non-Teaching Staff")
+                }
+                Row {
+                    val presentCount = staffAttendance.count { it.status == AttendanceStatus.PRESENT }
+                    Text(
+                        "$presentCount out of $staffCount present",
+                        color = if (presentCount > 0) StaffPurple else Color.Gray
+                    )
+                }
+            }
         }
     }
 }

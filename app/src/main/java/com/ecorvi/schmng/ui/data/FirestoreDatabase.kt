@@ -2,6 +2,8 @@ package com.ecorvi.schmng.ui.data
 
 import android.net.Uri
 import android.util.Log
+import com.ecorvi.schmng.models.AttendanceRecord
+import com.ecorvi.schmng.models.UserType
 import com.ecorvi.schmng.ui.data.FirestoreDatabase.db
 import com.ecorvi.schmng.ui.data.model.AdminProfile
 import com.ecorvi.schmng.ui.data.model.Person
@@ -1091,5 +1093,23 @@ object FirestoreDatabase {
             Log.e("Firestore", "Error updating school profile: ${e.message}")
             false
         }
+    }
+
+    fun fetchAttendanceByDate(date: String, userType: UserType, onComplete: (List<AttendanceRecord>) -> Unit) {
+        val db = FirebaseFirestore.getInstance()
+        
+        db.collection("attendance")
+            .document(date)
+            .collection(userType.name.lowercase())
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val records = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(AttendanceRecord::class.java)
+                }
+                onComplete(records)
+            }
+            .addOnFailureListener {
+                onComplete(emptyList())
+            }
     }
 }

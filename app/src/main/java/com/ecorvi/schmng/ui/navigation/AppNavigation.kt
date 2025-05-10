@@ -14,6 +14,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.ecorvi.schmng.models.UserType
 import com.ecorvi.schmng.ui.screens.*
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
@@ -23,6 +24,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import java.util.*
 import com.ecorvi.schmng.ui.screens.StudentProfileScreen
 import com.ecorvi.schmng.ui.screens.TeacherProfileScreen
+import com.ecorvi.schmng.ui.screens.StudentAttendanceScreen
 
 @Composable
 fun AppNavigation(
@@ -168,6 +170,27 @@ fun AppNavigation(
         composable("student_fees") { StudentFeesScreen(navController) }
         composable("student_announcements") { AnnouncementsScreen(navController) }
         composable("student_teacher_info") { ClassTeacherInfoScreen(navController) }
+        composable("student_attendance") { StudentAttendanceScreen(navController) }
+        
+        // Attendance Routes
+        composable("attendance") {
+            AttendanceScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable("attendance_analytics") {
+            AttendanceAnalyticsScreen(navController = navController)
+        }
+        composable(
+            "attendance/{userType}",
+            arguments = listOf(navArgument("userType") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val userType = backStackEntry.arguments?.getString("userType") ?: "STUDENT"
+            AttendanceScreen(
+                onNavigateBack = { navController.popBackStack() },
+                initialUserType = UserType.valueOf(userType)
+            )
+        }
         
         // Profile routes with multiple path support
         composable(

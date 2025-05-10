@@ -254,7 +254,7 @@ fun StudentDashboardScreen(navController: NavController) {
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
-                        Toast.makeText(context, "Attendance feature coming soon", Toast.LENGTH_SHORT).show()
+                        navController.navigate("student_attendance")
                     }
                 )
                 NavigationDrawerItem(
@@ -469,7 +469,7 @@ fun StudentDashboardScreen(navController: NavController) {
                                         icon = Icons.Default.CheckCircleOutline,
                                         color = PrimaryBlue,
                                         onClick = {
-                                            Toast.makeText(context, "Attendance feature coming soon", Toast.LENGTH_SHORT).show()
+                                            navController.navigate("student_attendance")
                                         }
                                     ) {
                                         Text("View your attendance summary")
