@@ -11,6 +11,10 @@
         android:required="false"
         tools:targetApi="33" />
 
+    <!-- Declare hardware features -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="true"/>
+    <uses-feature android:name="android.hardware.faketouch" android:required="false"/>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -20,7 +24,9 @@
         android:roundIcon="@drawable/ecorvilogo"
         android:supportsRtl="true"
         android:theme="@style/Theme.OnboardingJetpackCompose"
-        tools:targetApi="31">
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
+        tools:targetApi="34">
 
         <!-- FCM Default Notification Icon -->
         <meta-data
@@ -37,6 +43,11 @@
             android:name="firebase_inapp_messaging_auto_init_enabled"
             android:value="true" />
 
+        <!-- Declare supported Android versions -->
+        <meta-data
+            android:name="android.max_aspect"
+            android:value="2.4" />
+
         <!-- FCM Service -->
         <service
             android:name=".services.MessagingService"
@@ -50,7 +61,9 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.OnboardingJetpackCompose">
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:theme="@style/Theme.OnboardingJetpackCompose"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

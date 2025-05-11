@@ -11,19 +11,34 @@ plugins {
 }
 android {
     namespace = "com.ecorvi.schmng"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 34
-        versionCode = 33
-        versionName = "1.30"
+        versionCode = 34
+        versionName = "1.31"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
         // Add manifest placeholders properly
         manifestPlaceholders["android.max.aspect"] = "2.4"
+
+        // Declare required features
+        ndk {
+            abiFilters.add("armeabi-v7a")
+            abiFilters.add("arm64-v8a")
+            abiFilters.add("x86")
+            abiFilters.add("x86_64")
+        }
+    }
+
+    // Add packaging options
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 
     signingConfigs {
@@ -64,7 +79,7 @@ android {
 
 dependencies {
     // Add core library desugaring for compatibility with older Android versions
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     implementation("com.google.accompanist:accompanist-placeholder-material:0.32.0")
     implementation("com.google.accompanist:accompanist-placeholder-material:0.32.0")
@@ -78,14 +93,14 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     
     // Add window size compatibility
-    implementation("androidx.window:window:1.2.0")
-    implementation("androidx.window:window-core:1.2.0")
+    implementation("androidx.window:window:1.3.0")
+    implementation("androidx.window:window-core:1.3.0")
     
     // Update lifecycle components versions
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-common-java8:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-common-java8:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
     
     // Update navigation version
     implementation("androidx.navigation:navigation-compose:2.7.7")
@@ -132,7 +147,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    implementation("androidx.compose.runtime:runtime-livedata:1.7.8")
+    implementation("androidx.compose.runtime:runtime-livedata:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 }
 
