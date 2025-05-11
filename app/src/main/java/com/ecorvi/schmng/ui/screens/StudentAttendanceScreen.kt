@@ -34,6 +34,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.ecorvi.schmng.ui.utils.getStartOfMonth
+import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -384,36 +385,98 @@ suspend fun fetchStudentAttendanceRecords(
     val records = mutableListOf<AttendanceRecord>()
     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     val calendar = Calendar.getInstance()
-    calendar.timeInMillis = dateRange.first
-    
-    while (calendar.timeInMillis <= dateRange.second) {
-        val dateStr = dateFormat.format(Date(calendar.timeInMillis))
-        val snapshot = db.collection("attendance")
-            .document(dateStr)
-            .collection("student")
-            .document(studentId)
-            .get()
-            .await()
-        
-        if (snapshot.exists()) {
-            snapshot.toObject(AttendanceRecord::class.java)?.let {
-                records.add(it)
-            }
-        } else {
-            // Add a placeholder record for this date with ABSENT status (to show all days)
-            val record = AttendanceRecord(
-                id = studentId,
-                userId = studentId,
-                userType = UserType.STUDENT,
-                date = calendar.timeInMillis,
-                status = AttendanceStatus.ABSENT
-            )
-            records.add(record)
+
+    try {
+        // Validate inputs
+        if (studentId.isBlank()) {
+            Log.e("Attendance", "Invalid student ID provided")
+            return emptyList()
         }
+
+        if (dateRange.first > dateRange.second) {
+            Log.e("Attendance", "Invalid date range: start date after end date")
+            return emptyList()
+        }
+
+        // Limit date range to reasonable bounds (e.g., max 1 year)
+        val maxRange = 365L * 24 * 60 * 60 * 1000 // 1 year in milliseconds
+        val endDate = minOf(dateRange.second, dateRange.first + maxRange)
         
-        // Move to next day
-        calendar.add(Calendar.DATE, 1)
+        calendar.timeInMillis = dateRange.first
+        val endCalendar = Calendar.getInstance().apply { timeInMillis = endDate }
+
+        Log.d("Attendance", "Fetching records from ${dateFormat.format(Date(dateRange.first))} to ${dateFormat.format(Date(endDate))}")
+
+        while (!calendar.after(endCalendar)) {
+            val currentDate = calendar.timeInMillis
+            val dateStr = dateFormat.format(Date(currentDate))
+            
+            try {
+                Log.d("Attendance", "Fetching record for date: $dateStr")
+                val snapshot = db.collection("attendance")
+                    .document(dateStr)
+                    .collection("student")
+                    .document(studentId)
+                    .get()
+                    .await()
+                
+                if (snapshot.exists()) {
+                    try {
+                        val record = snapshot.toObject(AttendanceRecord::class.java)
+                        if (record != null && record.id.isNotBlank() && record.userId.isNotBlank()) {
+                            // Validate and fix record if needed
+                            if (record.date <= 0L) {
+                                record.date = currentDate
+                            }
+                            if (record.status !in AttendanceStatus.values()) {
+                                record.status = AttendanceStatus.ABSENT
+                            }
+                            records.add(record)
+                            Log.d("Attendance", "Added valid record for date $dateStr")
+                        } else {
+                            Log.w("Attendance", "Invalid record found for date $dateStr")
+                            records.add(createPlaceholderRecord(studentId, currentDate))
+                        }
+                    } catch (e: Exception) {
+                        Log.e("Attendance", "Error deserializing record for date $dateStr: ${e.message}")
+                        e.printStackTrace()
+                        records.add(createPlaceholderRecord(studentId, currentDate))
+                    }
+                } else {
+                    Log.d("Attendance", "No record found for date $dateStr, using placeholder")
+                    records.add(createPlaceholderRecord(studentId, currentDate))
+                }
+            } catch (e: Exception) {
+                Log.e("Attendance", "Error fetching record for date $dateStr: ${e.message}")
+                e.printStackTrace()
+                records.add(createPlaceholderRecord(studentId, currentDate))
+            }
+            
+            calendar.add(Calendar.DATE, 1)
+        }
+
+        Log.d("Attendance", "Successfully fetched ${records.size} records")
+    } catch (e: Exception) {
+        Log.e("Attendance", "Critical error in fetchStudentAttendanceRecords: ${e.message}")
+        e.printStackTrace()
+        // If we have no records at all, create at least one placeholder
+        if (records.isEmpty()) {
+            records.add(createPlaceholderRecord(studentId, dateRange.first))
+        }
     }
     
-    return records
+    return records.sortedByDescending { it.date }
+}
+
+private fun createPlaceholderRecord(studentId: String, timestamp: Long): AttendanceRecord {
+    return AttendanceRecord(
+        id = studentId,
+        userId = studentId,
+        userType = UserType.STUDENT,
+        date = timestamp,
+        status = AttendanceStatus.ABSENT,
+        markedBy = "",
+        remarks = "Auto-generated placeholder record",
+        lastModified = System.currentTimeMillis()
+    )
 } 

@@ -22,3 +22,37 @@
 # Prevent obfuscation of the Person model used in Firestore
 # Prevent obfuscation of all models in your model package
 -keep class com.ecorvi.schmng.ui.data.model.** { *; }
+-keep class com.ecorvi.schmng.models.** { *; }
+
+# Keep Firestore annotations and metadata
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+-keepattributes Signature
+-keepattributes Exceptions
+-keepattributes RuntimeVisibleAnnotations
+-keepattributes RuntimeInvisibleAnnotations
+-keepattributes RuntimeVisibleParameterAnnotations
+-keepattributes RuntimeInvisibleParameterAnnotations
+
+# Keep Firestore serialization info
+-keepclassmembers class com.ecorvi.schmng.models.** {
+    *;
+}
+
+# Specifically keep the AttendanceRecord class and its fields
+-keepclassmembers class com.ecorvi.schmng.models.AttendanceRecord {
+    <init>();
+    <fields>;
+}
+
+# Keep enum classes
+-keepclassmembers enum * { *; }
+
+# Keep Firestore-specific classes
+-keep class com.google.firebase.firestore.** { *; }
+-keep class com.google.firebase.database.** { *; }
+-keep class com.google.android.gms.tasks.** { *; }
+
+# Keep kotlin.Metadata annotations
+-keep class kotlin.Metadata { *; }

@@ -25,17 +25,29 @@ import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.ui.navigation.AppNavigation
 import com.ecorvi.schmng.ui.theme.SchmngTheme
 import com.ecorvi.schmng.ui.components.CommonBackground
-import com.google.android.play.core.appupdate.*
-import com.google.android.play.core.install.model.*
+import com.google.android.play.core.appupdate.AppUpdateInfo
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.install.InstallStateUpdatedListener
-import com.google.android.play.core.ktx.AppUpdateResult
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.InstallStatus
+import com.google.android.play.core.install.model.UpdateAvailability
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
 import java.util.*
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
+import com.google.android.play.core.install.model.ActivityResult
 import kotlinx.coroutines.*
+import android.net.Uri
+import android.app.PendingIntent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkRequest
+import android.os.Handler
+import android.os.Looper
+import com.google.android.play.core.install.InstallState
 
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
@@ -53,6 +65,36 @@ class MainActivity : ComponentActivity() {
     private var initialRoute: String by mutableStateOf("login")
     private var updateInProgress: Boolean = false
 
+    private var updateRetryCount = 0
+    private var lastUpdateCheck = 0L
+    private var isNetworkAvailable = true
+
+    private val connectivityManager by lazy {
+        getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            super.onAvailable(network)
+            isNetworkAvailable = true
+            // If we had a failed update due to network, retry
+            if (updateRetryCount > 0 && updateRetryCount < MAX_UPDATE_RETRIES) {
+                scope.launch {
+                    delay(UPDATE_RETRY_DELAY)
+                    checkForAppUpdate()
+                }
+            }
+        }
+
+        override fun onLost(network: Network) {
+            super.onLost(network)
+            isNetworkAvailable = false
+            if (updateInProgress) {
+                showToast("Network connection lost. Update will continue when connection is restored.")
+            }
+        }
+    }
+
     companion object {
         private const val MY_REQUEST_CODE = 100
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 200
@@ -62,69 +104,86 @@ class MainActivity : ComponentActivity() {
         private const val KEY_FIRST_LAUNCH = "is_first_launch"
         private const val TAG = "MainActivity"
         private const val REQUEST_CODE_UPDATE = 500
+        private const val MAX_UPDATE_RETRIES = 3
+        private const val UPDATE_RETRY_DELAY = 5000L // 5 seconds
     }
 
     private val installStateUpdatedListener = InstallStateUpdatedListener { state ->
         try {
             when (state.installStatus()) {
-                InstallStatus.DOWNLOADING -> {
-                    if (!updateInProgress) return@InstallStateUpdatedListener
-                    val bytesDownloaded = state.bytesDownloaded()
-                    val totalBytesToDownload = state.totalBytesToDownload()
-                    val progress = (bytesDownloaded * 100) / totalBytesToDownload
-                    Log.d(TAG, "Update download progress: $progress%")
-                    showToast("Downloading update: $progress%")
-                }
-                InstallStatus.DOWNLOADED -> {
-                    if (!updateInProgress) return@InstallStateUpdatedListener
-                    showUpdateDownloadedDialog()
-                }
-                InstallStatus.FAILED -> {
-                    Log.e(TAG, "Update download failed: ${state.installErrorCode()}")
-                    cleanupUpdateResources()
-                    showToast("Update download failed, please try again later")
-                }
-                InstallStatus.CANCELED -> {
-                    Log.d(TAG, "Update cancelled")
-                    cleanupUpdateResources()
-                }
-                InstallStatus.INSTALLED -> {
-                    Log.d(TAG, "Update installed successfully")
-                    cleanupUpdateResources()
-                    showToast("Update installed successfully")
-                }
-                InstallStatus.PENDING -> {
-                    Log.d(TAG, "Update is pending")
-                }
-                else -> {
-                    Log.d(TAG, "Update status: ${state.installStatus()}")
-                }
+                InstallStatus.DOWNLOADING -> handleDownloadStatus(state)
+                InstallStatus.DOWNLOADED -> handleDownloadComplete()
+                InstallStatus.FAILED -> handleInstallationError(state)
+                InstallStatus.CANCELED -> handleInstallationCanceled()
+                InstallStatus.INSTALLED -> handleInstallationSuccess()
+                InstallStatus.PENDING -> handleInstallationPending()
+                InstallStatus.INSTALLING -> handleInstalling()
+                else -> Log.d(TAG, "Unhandled install status: ${state.installStatus()}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in install state listener", e)
-            cleanupUpdateResources()
+            Log.e(TAG, "Critical error in install state listener", e)
+            handleUpdateError(e)
+        }
+    }
+
+    private fun getUpdateErrorMessage(errorCode: Int): String {
+        return when (errorCode) {
+            0 -> "Update failed: Unknown error"
+            1 -> "Update failed: Update in progress"
+            2 -> "Update failed: API not available"
+            3 -> "Update failed: Invalid request"
+            4 -> "Update failed: Download not found"
+            5 -> "Update failed: Installation not allowed"
+            6 -> "Update failed: Installation unavailable"
+            7 -> "Update failed: Internal error"
+            else -> "Update failed: Error code $errorCode"
         }
     }
 
     private fun cleanupUpdateResources() {
         try {
             updateInProgress = false
-            appUpdateManager.unregisterListener(installStateUpdatedListener)
+            try {
+                appUpdateManager.unregisterListener(installStateUpdatedListener)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unregistering update listener", e)
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning up update resources", e)
+            Log.e(TAG, "Critical error in cleanup", e)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
+            registerNetworkCallback()
             initializeComponents()
             setupContent()
-            checkForAppUpdate()
+            if (shouldCheckForUpdate()) {
+                checkForAppUpdate()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error in onCreate", e)
             showErrorDialog("Failed to initialize app")
         }
+    }
+
+    private fun registerNetworkCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                val networkRequest = NetworkRequest.Builder().build()
+                connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error registering network callback", e)
+            }
+        }
+    }
+
+    private fun shouldCheckForUpdate(): Boolean {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastCheck = currentTime - lastUpdateCheck
+        // Check if it's been at least 4 hours since last check
+        return timeSinceLastCheck > 4 * 60 * 60 * 1000
     }
 
     private fun initializeComponents() {
@@ -319,97 +378,216 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkForAppUpdate() {
-        if (updateInProgress) return
+        if (!isNetworkAvailable) {
+            Log.d(TAG, "Update check skipped - no network connection")
+            return
+        }
+
+        if (updateInProgress) {
+            Log.d(TAG, "Update check skipped - update already in progress")
+            return
+        }
+
+        if (!isPlayStoreAvailable()) {
+            Log.d(TAG, "Play Store not available on this device")
+            return
+        }
+
+        lastUpdateCheck = System.currentTimeMillis()
         
         try {
             val appUpdateInfoTask = appUpdateManager.appUpdateInfo
             appUpdateInfoTask
                 .addOnSuccessListener { appUpdateInfo ->
-                    if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
-                        appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
-                    ) {
-                        try {
-                            updateInProgress = true
-                            appUpdateManager.registerListener(installStateUpdatedListener)
-                            
-                            // Show confirmation dialog before starting update
-                            showUpdateAvailableDialog(appUpdateInfo)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error starting update flow", e)
-                            cleanupUpdateResources()
-                        }
+                    try {
+                        handleUpdateInfo(appUpdateInfo)
+                    } catch (e: Exception) {
+                        handleUpdateError(e)
                     }
                 }
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "Error checking for update", e)
-                    cleanupUpdateResources()
+                    handleUpdateError(e)
                 }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in checkForAppUpdate", e)
-            cleanupUpdateResources()
+            handleUpdateError(e)
         }
     }
 
-    private fun showUpdateAvailableDialog(appUpdateInfo: AppUpdateInfo) {
+    private fun handleUpdateInfo(appUpdateInfo: AppUpdateInfo) {
+        when (appUpdateInfo.updateAvailability()) {
+            UpdateAvailability.UPDATE_AVAILABLE -> {
+                if (appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
+                    startFlexibleUpdate(appUpdateInfo)
+                } else {
+                    Log.d(TAG, "Flexible update not supported, trying Play Store")
+                    showUpdateAvailableDialog()
+                }
+            }
+            UpdateAvailability.UPDATE_NOT_AVAILABLE -> {
+                Log.d(TAG, "No update available")
+                updateRetryCount = 0
+            }
+            UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
+                Log.d(TAG, "Update already in progress")
+                if (!updateInProgress) {
+                    // Reconnect to existing update
+                    updateInProgress = true
+                    appUpdateManager.registerListener(installStateUpdatedListener)
+                }
+            }
+            else -> {
+                Log.d(TAG, "Unexpected update availability: ${appUpdateInfo.updateAvailability()}")
+            }
+        }
+    }
+
+    private fun startFlexibleUpdate(appUpdateInfo: AppUpdateInfo) {
+        try {
+            updateInProgress = true
+            appUpdateManager.registerListener(installStateUpdatedListener)
+            
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_MUTABLE
+            } else {
+                0
+            }
+            
+            appUpdateManager.startUpdateFlowForResult(
+                appUpdateInfo,
+                AppUpdateType.FLEXIBLE,
+                this,
+                REQUEST_CODE_UPDATE
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting update flow", e)
+            handleUpdateError(e)
+        }
+    }
+
+    private fun handleUpdateError(error: Exception) {
+        Log.e(TAG, "Update error", error)
+        cleanupUpdateResources()
+        
+        if (!isNetworkAvailable) {
+            updateRetryCount++
+            if (updateRetryCount < MAX_UPDATE_RETRIES) {
+                showToast("Will retry update when network is available")
+            } else {
+                updateRetryCount = 0
+                showToast("Unable to check for updates. Please try again later.")
+            }
+        } else {
+            showToast("Update check failed. Please try again later.")
+        }
+    }
+
+    private fun showUpdateAvailableDialog() {
         try {
             AlertDialog.Builder(this)
                 .setTitle("Update Available")
-                .setMessage("A new version of the app is available. Would you like to update now?")
+                .setMessage("A new version is available on the Play Store. Would you like to update?")
                 .setPositiveButton("Update") { dialog, _ ->
-                    try {
-                        appUpdateManager.startUpdateFlowForResult(
-                            appUpdateInfo,
-                            AppUpdateType.FLEXIBLE,
-                            this,
-                            REQUEST_CODE_UPDATE
-                        )
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error starting update flow", e)
-                        cleanupUpdateResources()
-                        showToast("Failed to start update")
-                    }
-                    dialog.dismiss()
-                }
-                .setNegativeButton("Later") { dialog, _ ->
-                    cleanupUpdateResources()
-                    dialog.dismiss()
-                }
-                .setOnCancelListener {
-                    cleanupUpdateResources()
-                }
-                .show()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error showing update available dialog", e)
-            cleanupUpdateResources()
-        }
-    }
-
-    private fun showUpdateDownloadedDialog() {
-        try {
-            AlertDialog.Builder(this)
-                .setTitle("Update Ready")
-                .setMessage("An update has been downloaded. Would you like to install it now?")
-                .setPositiveButton("Install") { dialog, _ ->
-                    try {
-                        appUpdateManager.completeUpdate()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error completing update", e)
-                        showToast("Failed to install update. Please try again later.")
-                        cleanupUpdateResources()
-                    }
+                    openPlayStore()
                     dialog.dismiss()
                 }
                 .setNegativeButton("Later") { dialog, _ ->
                     dialog.dismiss()
-                }
-                .setOnCancelListener {
-                    // Keep the update available for later
                 }
                 .setCancelable(true)
                 .show()
         } catch (e: Exception) {
-            Log.e(TAG, "Error showing update dialog", e)
-            cleanupUpdateResources()
+            Log.e(TAG, "Error showing update available dialog", e)
+            openPlayStore()
+        }
+    }
+
+    private fun handleDownloadStatus(state: InstallState) {
+        if (!updateInProgress) return
+        try {
+            val bytesDownloaded = state.bytesDownloaded()
+            val totalBytesToDownload = state.totalBytesToDownload()
+            if (totalBytesToDownload <= 0) {
+                Log.e(TAG, "Invalid total bytes in download status")
+                return
+            }
+            val progress = (bytesDownloaded * 100) / totalBytesToDownload
+            Log.d(TAG, "Update download progress: $progress%")
+            showToast("Downloading: $progress%")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calculating download progress", e)
+        }
+    }
+
+    private fun handleDownloadComplete() {
+        if (!updateInProgress) return
+        showUpdateChoiceDialog()
+    }
+
+    private fun handleInstallationError(state: InstallState) {
+        val errorCode = try {
+            state.installErrorCode()
+        } catch (e: Exception) {
+            -1
+        }
+        Log.e(TAG, "Update installation failed with code: $errorCode")
+        cleanupUpdateResources()
+        val errorMessage = getUpdateErrorMessage(errorCode)
+        showToast(errorMessage)
+    }
+
+    private fun handleInstallationCanceled() {
+        Log.d(TAG, "Update cancelled by user or system")
+        cleanupUpdateResources()
+        showToast("Update cancelled")
+    }
+
+    private fun handleInstallationSuccess() {
+        Log.d(TAG, "Update installed successfully")
+        cleanupUpdateResources()
+        showToast("Update installed successfully")
+    }
+
+    private fun handleInstallationPending() {
+        Log.d(TAG, "Update is pending")
+        showToast("Update is queued for download")
+    }
+
+    private fun handleInstalling() {
+        Log.d(TAG, "Update is being installed")
+        showToast("Installing update...")
+    }
+
+    private fun showUpdateChoiceDialog() {
+        try {
+            val builder = AlertDialog.Builder(this)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                builder.setIcon(getDrawable(R.drawable.ecorvilogo))
+            }
+            
+            builder.setTitle("Update Downloaded")
+                .setMessage("The update is ready. Would you like to install it now or when you next open the app?")
+                .setPositiveButton("Install Now") { dialog, _ ->
+                    try {
+                        appUpdateManager.completeUpdate()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error starting update installation", e)
+                        showToast("Failed to start installation. Update will be installed on next launch.")
+                        cleanupUpdateResources()
+                    }
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Install Later") { dialog, _ ->
+                    showToast("Update will be installed when you next open the app")
+                    dialog.dismiss()
+                }
+                .setOnCancelListener {
+                    showToast("Update will be installed when you next open the app")
+                }
+                .setCancelable(false)
+                .show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing update choice dialog", e)
+            showToast("Update will be installed when you next open the app")
         }
     }
 
@@ -418,18 +596,30 @@ class MainActivity : ComponentActivity() {
         try {
             appUpdateManager.appUpdateInfo
                 .addOnSuccessListener { appUpdateInfo ->
-                    when (appUpdateInfo.installStatus()) {
-                        InstallStatus.DOWNLOADED -> {
-                            if (updateInProgress) {
-                                showUpdateDownloadedDialog()
+                    try {
+                        when (appUpdateInfo.installStatus()) {
+                            InstallStatus.DOWNLOADED -> {
+                                // If app is reopened and update was not installed, install it now
+                                if (!updateInProgress) {
+                                    showToast("Installing pending update...")
+                                    try {
+                                        appUpdateManager.completeUpdate()
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error completing update on resume", e)
+                                        showToast("Failed to install update. Please restart the app.")
+                                    }
+                                }
+                            }
+                            InstallStatus.FAILED, InstallStatus.CANCELED -> {
+                                cleanupUpdateResources()
+                            }
+                            else -> {
+                                // No action needed
                             }
                         }
-                        InstallStatus.FAILED, InstallStatus.CANCELED -> {
-                            cleanupUpdateResources()
-                        }
-                        else -> {
-                            // No action needed
-                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing install status", e)
+                        cleanupUpdateResources()
                     }
                 }
                 .addOnFailureListener { e ->
@@ -437,7 +627,7 @@ class MainActivity : ComponentActivity() {
                     cleanupUpdateResources()
                 }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in onResume", e)
+            Log.e(TAG, "Critical error in onResume", e)
             cleanupUpdateResources()
         }
     }
@@ -451,18 +641,19 @@ class MainActivity : ComponentActivity() {
                     // Keep updateInProgress true as the download is starting
                 }
                 RESULT_CANCELED -> {
-                    Log.d(TAG, "Update flow cancelled")
+                    Log.d(TAG, "Update flow cancelled by user")
                     cleanupUpdateResources()
                     showToast("Update cancelled")
                 }
                 ActivityResult.RESULT_IN_APP_UPDATE_FAILED -> {
                     Log.e(TAG, "Update flow failed")
                     cleanupUpdateResources()
-                    showToast("Update failed, please try again later")
+                    showToast("Update failed to start. Please try again later.")
                 }
                 else -> {
-                    Log.d(TAG, "Update flow failed with result code: $resultCode")
+                    Log.d(TAG, "Update flow returned unexpected result code: $resultCode")
                     cleanupUpdateResources()
+                    showToast("Update process interrupted")
                 }
             }
         }
@@ -471,6 +662,13 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         try {
             super.onDestroy()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    connectivityManager.unregisterNetworkCallback(networkCallback)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error unregistering network callback", e)
+                }
+            }
             scope.cancel()
             cleanupUpdateResources()
             FirestoreDatabase.cleanup()
@@ -478,4 +676,37 @@ class MainActivity : ComponentActivity() {
             Log.e(TAG, "Error in onDestroy", e)
         }
     }
+
+    private fun isPlayStoreAvailable(): Boolean {
+        val playStorePackage = "com.android.vending"
+        return try {
+            packageManager.getPackageInfo(playStorePackage, 0)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun openPlayStore() {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("market://details?id=$packageName")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            // If Play Store app is not available, open in browser
+            try {
+                val webIntent = Intent(Intent.ACTION_VIEW).apply {
+                    data = Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(webIntent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error opening Play Store", e)
+                showToast("Unable to open Play Store")
+            }
+        }
+    }
 }
+

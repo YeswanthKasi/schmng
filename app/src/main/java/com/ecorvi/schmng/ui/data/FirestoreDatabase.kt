@@ -3,6 +3,7 @@ package com.ecorvi.schmng.ui.data
 import android.net.Uri
 import android.util.Log
 import com.ecorvi.schmng.models.AttendanceRecord
+import com.ecorvi.schmng.models.AttendanceStatus
 import com.ecorvi.schmng.models.UserType
 import com.ecorvi.schmng.ui.data.FirestoreDatabase.db
 import com.ecorvi.schmng.ui.data.model.AdminProfile
@@ -1096,20 +1097,77 @@ object FirestoreDatabase {
     }
 
     fun fetchAttendanceByDate(date: String, userType: UserType, onComplete: (List<AttendanceRecord>) -> Unit) {
-        val db = FirebaseFirestore.getInstance()
-        
-        db.collection("attendance")
-            .document(date)
-            .collection(userType.name.lowercase())
-            .get()
-            .addOnSuccessListener { snapshot ->
-                val records = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(AttendanceRecord::class.java)
-                }
-                onComplete(records)
-            }
-            .addOnFailureListener {
+        try {
+            val db = FirebaseFirestore.getInstance()
+            Log.d("Firestore", "Starting attendance fetch for date: $date, userType: ${userType.name}")
+            
+            if (date.isBlank()) {
+                Log.e("Firestore", "Invalid date provided")
                 onComplete(emptyList())
+                return
             }
+
+            db.collection("attendance")
+                .document(date)
+                .collection(userType.name.lowercase())
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    try {
+                        Log.d("Firestore", "Got snapshot with ${snapshot.documents.size} documents")
+                        val records = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                Log.d("Firestore", "Processing document: ${doc.id}")
+                                val record = doc.toObject(AttendanceRecord::class.java)
+                                
+                                // Validate record
+                                if (record == null) {
+                                    Log.w("Firestore", "Failed to deserialize document ${doc.id}")
+                                    return@mapNotNull null
+                                }
+                                
+                                // Ensure required fields are present
+                                if (record.id.isBlank() || record.userId.isBlank()) {
+                                    Log.w("Firestore", "Invalid record found in ${doc.id}: missing id or userId")
+                                    return@mapNotNull null
+                                }
+                                
+                                // Validate date and userType
+                                if (record.date <= 0L) {
+                                    Log.w("Firestore", "Invalid date in record ${doc.id}")
+                                    record.date = System.currentTimeMillis()
+                                }
+                                
+                                // Ensure status is valid
+                                if (record.status !in AttendanceStatus.values()) {
+                                    Log.w("Firestore", "Invalid status in record ${doc.id}")
+                                    record.status = AttendanceStatus.ABSENT
+                                }
+                                
+                                record
+                            } catch (e: Exception) {
+                                Log.e("Firestore", "Error processing document ${doc.id}: ${e.message}")
+                                e.printStackTrace()
+                                null
+                            }
+                        }
+                        
+                        Log.d("Firestore", "Successfully processed ${records.size} valid records")
+                        onComplete(records)
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error processing snapshot: ${e.message}")
+                        e.printStackTrace()
+                        onComplete(emptyList())
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Firestore", "Error fetching attendance: ${e.message}")
+                    e.printStackTrace()
+                    onComplete(emptyList())
+                }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Critical error in fetchAttendanceByDate: ${e.message}")
+            e.printStackTrace()
+            onComplete(emptyList())
+        }
     }
 }
