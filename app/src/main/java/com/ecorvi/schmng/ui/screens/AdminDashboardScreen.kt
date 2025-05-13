@@ -500,81 +500,59 @@ fun AdminDashboardScreen(
     // Loading shimmer effect component with improved animations
     @Composable
     fun DashboardShimmer() {
-        // Create infinite transition for shimmer animation with smoother timing
-        val transition = rememberInfiniteTransition(label = "shimmer")
-        val translateAnim = transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1000f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 1000,  // Faster animation for better responsiveness
-                    easing = FastOutSlowInEasing
-                ),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "shimmer"
-        )
-
-        // Enhanced shimmer gradient colors for better visibility
-        val shimmerColorShades = listOf(
-            Color.LightGray.copy(alpha = 0.8f),    // More visible start color
-            Color.LightGray.copy(alpha = 0.3f),    // Softer middle color
-            Color.LightGray.copy(alpha = 0.8f)     // More visible end color
-        )
-
-        // Create shimmer brush with improved animation
-        val brush = Brush.linearGradient(
-            colors = shimmerColorShades,
-            start = Offset(translateAnim.value - 1000f, translateAnim.value - 1000f),
-            end = Offset(translateAnim.value, translateAnim.value)
-        )
-
-        // Enhanced shimmer layout
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White.copy(alpha = 0.95f)),  // Match dashboard background
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
+                .background(Color.White.copy(alpha = 0.95f)),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(16.dp)
         ) {
-            // AI Search bar shimmer with rounded corners
+            // AI Search bar shimmer
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(brush)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                        .height(60.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ShimmerLoading(
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .height(56.dp),
+                        cornerRadius = 28
+                    )
+                }
             }
 
-            // Analytics Card shimmer with proper elevation and shape
+            // Analytics Card shimmer
             item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    color = BackgroundColor,
-                    shadowElevation = 2.dp
+                    colors = CardDefaults.cardColors(containerColor = BackgroundColor),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier.padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Pie chart placeholder
-                        Box(
-                            modifier = Modifier
-                                .size(200.dp)
-                                .clip(RoundedCornerShape(100.dp))  // Circle shape for pie chart
-                                .background(brush)
+                        // Title
+                        ShimmerText(
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            width = 120
                         )
+                        
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        // Legend items shimmer
-                        repeat(2) {
+                        // Pie chart placeholder
+                        ShimmerCircle(
+                            size = 200
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Legend items
+                        repeat(3) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -582,67 +560,126 @@ fun AdminDashboardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Legend label shimmer
-                                Box(
-                                    modifier = Modifier
-                                        .width(100.dp)
-                                        .height(16.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(brush)
-                                )
-                                // Legend value shimmer
-                                Box(
-                                    modifier = Modifier
-                                        .width(40.dp)
-                                        .height(16.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(brush)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    ShimmerCircle(size = 8)
+                                    ShimmerText(width = 80)
+                                }
+                                ShimmerText(width = 40)
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Pending Fees Card shimmer
+            // Monthly Fee Analytics Card shimmer
             item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    color = BackgroundColor,
-                    shadowElevation = 2.dp
+                    colors = CardDefaults.cardColors(containerColor = BackgroundColor),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.padding(16.dp)
                     ) {
-                        // Icon placeholder
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(brush)
+                        ShimmerText(
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            width = 100
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        // Text placeholder
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(24.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(brush)
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Bar graph placeholder
+                        ShimmerLoading(
+                                    modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp),
+                            cornerRadius = 8
                         )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Month labels
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            repeat(6) {
+                                ShimmerText(width = 30)
+                            }
+                        }
                     }
                 }
             }
 
+            // Attendance Overview Card shimmer
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = BackgroundColor),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        ShimmerText(
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            width = 160
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Left side: Pie Chart
+                            ShimmerCircle(
+                                modifier = Modifier.weight(1f),
+                                size = 120
+                            )
+                            
+                            // Right side: Legend
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 16.dp)
+                            ) {
+                                repeat(3) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            ShimmerCircle(size = 8)
+                                            ShimmerText(width = 60)
+                                        }
+                                        ShimmerText(width = 80)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
+            // Pending Fees Card shimmer
+            item {
+                ShimmerCard(
+                    height = 80,
+                    showContent = false
+                        )
+                    }
         }
     }
 
@@ -1694,7 +1731,6 @@ private fun AttendanceCountRow(
 
 @Composable
 fun FeeAnalyticsCard(navController: NavController) {
-    var isLoading by remember { mutableStateOf(true) }
     var selectedMonth by remember { mutableStateOf<Int?>(null) }
     
     // Fixed monthly data for first 6 months
@@ -1707,11 +1743,6 @@ fun FeeAnalyticsCard(navController: NavController) {
             125000, // May
             140000  // Jun
         )
-    }
-    
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(1000)
-        isLoading = false
     }
 
     // Handle navigation when a month is selected
@@ -1746,14 +1777,6 @@ fun FeeAnalyticsCard(navController: NavController) {
                 modifier = Modifier.fillMaxWidth()
             )
             
-            if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = PrimaryBlue)
-                }
-            } else {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1859,7 +1882,6 @@ fun FeeAnalyticsCard(navController: NavController) {
                                     fontSize = 12.sp,
                                     modifier = Modifier.padding(top = 4.dp)
                                 )
-                            }
                         }
                     }
                 }

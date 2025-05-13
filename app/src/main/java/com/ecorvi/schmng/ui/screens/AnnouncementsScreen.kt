@@ -39,7 +39,11 @@ data class Announcement(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AnnouncementsScreen(navController: NavController) {
+fun AnnouncementsScreen(
+    navController: NavController,
+    currentRoute: String? = null,
+    onRouteSelected: ((String) -> Unit)? = null
+) {
     var announcements by remember { mutableStateOf<List<Announcement>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -80,15 +84,20 @@ fun AnnouncementsScreen(navController: NavController) {
             topBar = {
                 TopAppBar(
                     title = { Text("Announcements") },
-                    navigationIcon = {
-                        IconButton(onClick = { navController.navigateUp() }) {
-                            Icon(Icons.Default.ArrowBack, "Back")
-                        }
-                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.White.copy(alpha = 0.95f)
                     )
                 )
+            },
+            bottomBar = {
+                if (currentRoute != null && onRouteSelected != null) {
+                    StudentBottomNavigation(
+                        currentRoute = currentRoute,
+                        onNavigate = { item ->
+                            onRouteSelected(item.route)
+                        }
+                    )
+                }
             }
         ) { padding ->
             Box(

@@ -6,8 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,26 +25,25 @@ import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Timetable
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 import java.util.*
 import java.text.SimpleDateFormat
 
 private fun formatTimeSlot(time: String): String {
     return try {
-        val parts = time.split(" - ").map { it.trim() }
+        val parts = time.split("-").map { it.trim() }
         if (parts.size != 2) return time
-        if (parts[0].contains("AM") || parts[0].contains("PM")) {
-            return time
-        }
-        val timeFormat = SimpleDateFormat("h:mm a", Locale.US)
+        
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
+        val outputFormat = SimpleDateFormat("h:mm a", Locale.US)
         timeFormat.isLenient = false
-        try {
-            val startTime = timeFormat.parse(parts[0])
-            val endTime = timeFormat.parse(parts[1])
-            if (startTime == null || endTime == null) return time
-            "${timeFormat.format(startTime)} - ${timeFormat.format(endTime)}"
-        } catch (e: Exception) {
-            time
-        }
+        
+        val startTime = timeFormat.parse(parts[0])
+        val endTime = timeFormat.parse(parts[1])
+        
+        if (startTime == null || endTime == null) return time
+        
+        "${outputFormat.format(startTime)} - ${outputFormat.format(endTime)}"
     } catch (e: Exception) {
         time
     }
@@ -48,19 +51,15 @@ private fun formatTimeSlot(time: String): String {
 
 private fun parseTimeForSorting(timeSlot: String): Int {
     return try {
-        val startTime = timeSlot.split(" - ")[0].trim()
-        val timeFormat = if (startTime.contains("AM") || startTime.contains("PM")) {
-            SimpleDateFormat("h:mm a", Locale.US)
-        } else {
-            SimpleDateFormat("H:mm", Locale.US)
-        }
+        val startTime = timeSlot.split("-")[0].trim()
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
         timeFormat.isLenient = false
         val date = timeFormat.parse(startTime) ?: return 0
         val calendar = Calendar.getInstance()
         calendar.time = date
         calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
     } catch (e: Exception) {
-        0
+        0 // Return 0 if parsing fails
     }
 }
 
@@ -72,8 +71,22 @@ fun StudentTimetableScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var timeSlots by remember { mutableStateOf<List<String>>(emptyList()) }
-    val daysOfWeek = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    val currentDay = getCurrentDay()
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    
+    val daysOfWeek = remember {
+        mapOf(
+            "Monday" to "Mon",
+            "Tuesday" to "Tue",
+            "Wednesday" to "Wed",
+            "Thursday" to "Thu",
+            "Friday" to "Fri",
+            "Saturday" to "Sat"
+        )
+    }
+
     val currentUser = FirebaseAuth.getInstance().currentUser
 
     // Fetch student's class and timetable data
@@ -170,21 +183,66 @@ fun StudentTimetableScreen(navController: NavController) {
                     Text("No class assigned. Please contact your administrator.")
                 }
             } else {
-                Text(
-                    text = "Class: $studentClass",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                // Today's highlight and class info
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Class: $studentClass",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Today: ${daysOfWeek[currentDay] ?: currentDay}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    // Quick navigation to today's schedule
+                    IconButton(
+                        onClick = {
+                            // Find current time slot
+                            val currentTime = Calendar.getInstance()
+                            val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
+                            val currentMinute = currentTime.get(Calendar.MINUTE)
+                            
+                            // Find the closest time slot
+                            val targetIndex = timeSlots.indexOfFirst { slot ->
+                                val slotTime = parseTimeForSorting(slot)
+                                val currentTimeMinutes = currentHour * 60 + currentMinute
+                                slotTime >= currentTimeMinutes
+                            }.coerceAtLeast(0)
+                            
+                            scope.launch {
+                                listState.animateScrollToItem(targetIndex + 1) // +1 to account for header
+                                Toast.makeText(context, "Scrolled to current time slot", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Today,
+                            contentDescription = "Today's Schedule",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
 
                 // Grid layout with time slots as rows and days as columns
-                LazyColumn {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f)
+                ) {
                     item {
                         // Header row with days
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(50.dp)
-                                .border(0.5.dp, MaterialTheme.colorScheme.outline)
+                                .background(MaterialTheme.colorScheme.primaryContainer)
                         ) {
                             // Empty cell for time slot column
                             Box(
@@ -201,16 +259,22 @@ fun StudentTimetableScreen(navController: NavController) {
                                 )
                             }
                             // Day headers
-                            daysOfWeek.forEach { day ->
+                            daysOfWeek.forEach { (fullDay, shortDay) ->
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
-                                        .border(0.5.dp, MaterialTheme.colorScheme.outline),
+                                        .border(0.5.dp, MaterialTheme.colorScheme.outline)
+                                        .background(
+                                            if (fullDay == currentDay) 
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                            else 
+                                                Color.Transparent
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = day,
+                                        text = shortDay,
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center
@@ -221,12 +285,13 @@ fun StudentTimetableScreen(navController: NavController) {
                     }
 
                     // Time slot rows
-                    items(timeSlots.filter { it.isNotBlank() }.size) { index ->
-                        val timeSlot = timeSlots[index]
+                    val filteredTimeSlots = timeSlots.filter { it.isNotBlank() }
+                    items(filteredTimeSlots.size) { index ->
+                        val timeSlot = filteredTimeSlots[index]
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(80.dp)
+                                .height(90.dp)
                                 .border(0.5.dp, MaterialTheme.colorScheme.outline)
                         ) {
                             // Time slot column
@@ -238,52 +303,62 @@ fun StudentTimetableScreen(navController: NavController) {
                                     .padding(2.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                val formattedTimeSlot = try {
-                                    formatTimeSlot(timeSlot)
-                                } catch (e: Exception) {
-                                    timeSlot
-                                }
                                 Text(
-                                    text = formattedTimeSlot,
+                                    text = try {
+                                        formatTimeSlot(timeSlot)
+                                    } catch (e: Exception) {
+                                        timeSlot
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     textAlign = TextAlign.Center
                                 )
                             }
 
                             // Day columns
-                            daysOfWeek.forEach { day ->
+                            daysOfWeek.forEach { (fullDay, _) ->
                                 val entry = timetables.find {
                                     it.timeSlot.trim().equals(timeSlot.trim(), ignoreCase = true) &&
-                                    it.dayOfWeek.trim().equals(day.trim(), ignoreCase = true)
+                                    it.dayOfWeek.trim().equals(fullDay.trim(), ignoreCase = true)
                                 }
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
                                         .border(0.5.dp, MaterialTheme.colorScheme.outline)
+                                        .background(
+                                            if (fullDay == currentDay) 
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                                            else 
+                                                Color.Transparent
+                                        )
                                         .padding(4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (entry != null) {
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.fillMaxWidth()
+                                            verticalArrangement = Arrangement.Center
                                         ) {
                                             Text(
                                                 text = entry.subject,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                textAlign = TextAlign.Center,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = entry.teacher,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                textAlign = TextAlign.Center
+                                                textAlign = TextAlign.Center,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
                                             )
+                                            if (entry.teacher.isNotBlank()) {
+                                                Text(
+                                                    text = entry.teacher,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.secondary,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
                                             if (entry.roomNumber.isNotBlank()) {
                                                 Text(
                                                     text = entry.roomNumber,
                                                     style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.secondary,
                                                     textAlign = TextAlign.Center
                                                 )
                                             }
@@ -294,7 +369,53 @@ fun StudentTimetableScreen(navController: NavController) {
                         }
                     }
                 }
+
+                // Quick Tips Section
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Quick Tips",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "• Current day's schedule is highlighted",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = "• Tap the calendar icon to jump to today's schedule",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = "• Room numbers are shown for each class",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+private fun getCurrentDay(): String {
+    val calendar = Calendar.getInstance()
+    return when (calendar.get(Calendar.DAY_OF_WEEK)) {
+        Calendar.MONDAY -> "Monday"
+        Calendar.TUESDAY -> "Tuesday"
+        Calendar.WEDNESDAY -> "Wednesday"
+        Calendar.THURSDAY -> "Thursday"
+        Calendar.FRIDAY -> "Friday"
+        Calendar.SATURDAY -> "Saturday"
+        else -> "Monday" // Default to Monday for Sunday
     }
 } 

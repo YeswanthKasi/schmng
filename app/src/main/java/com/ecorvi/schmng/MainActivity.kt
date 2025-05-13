@@ -512,7 +512,6 @@ class MainActivity : ComponentActivity() {
             }
             val progress = (bytesDownloaded * 100) / totalBytesToDownload
             Log.d(TAG, "Update download progress: $progress%")
-            showToast("Downloading: $progress%")
         } catch (e: Exception) {
             Log.e(TAG, "Error calculating download progress", e)
         }

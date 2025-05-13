@@ -52,6 +52,17 @@ fun TimetableManagementScreen(navController: NavController) {
     val currentUser = FirebaseAuth.getInstance().currentUser
     var isAdmin by remember { mutableStateOf(false) }
 
+    val daysOfWeek = remember {
+        mapOf(
+            "Monday" to "Mon",
+            "Tuesday" to "Tue",
+            "Wednesday" to "Wed",
+            "Thursday" to "Thu",
+            "Friday" to "Fri",
+            "Saturday" to "Sat"
+        )
+    }
+
     // Check if user is admin
     LaunchedEffect(currentUser?.uid) {
         if (currentUser?.uid != null) {
@@ -229,24 +240,24 @@ fun TimetableManagementScreen(navController: NavController) {
                 }
 
                 // Day Selection Dropdown
-                Box(
-                    modifier = Modifier.weight(1f)
-                ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
                             .clickable { showDayDropdown = true }
+                            .padding(8.dp),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
                     ) {
                         Row(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                                .fillMaxWidth()
+                                .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Day: $selectedDay",
+                                text = "Day: ${daysOfWeek[selectedDay] ?: selectedDay}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier
                                     .weight(0.9f)
@@ -269,11 +280,11 @@ fun TimetableManagementScreen(navController: NavController) {
                         expanded = showDayDropdown,
                         onDismissRequest = { showDayDropdown = false }
                     ) {
-                        listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday").forEach { day ->
+                        daysOfWeek.forEach { (fullDay, shortDay) ->
                             DropdownMenuItem(
-                                text = { Text(day) },
+                                text = { Text("$shortDay ($fullDay)") },
                                 onClick = {
-                                    selectedDay = day
+                                    selectedDay = fullDay
                                     showDayDropdown = false
                                 }
                             )

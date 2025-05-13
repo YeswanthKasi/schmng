@@ -38,7 +38,11 @@ import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudentAttendanceScreen(navController: NavController) {
+fun StudentAttendanceScreen(
+    navController: NavController,
+    currentRoute: String? = null,
+    onRouteSelected: ((String) -> Unit)? = null
+) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
@@ -105,12 +109,20 @@ fun StudentAttendanceScreen(navController: NavController) {
         topBar = {
             TopAppBar(
                 title = { Text("My Attendance") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White.copy(alpha = 0.95f)
+                )
             )
+        },
+        bottomBar = {
+            if (currentRoute != null && onRouteSelected != null) {
+                StudentBottomNavigation(
+                    currentRoute = currentRoute,
+                    onNavigate = { item ->
+                        onRouteSelected(item.route)
+                    }
+                )
+            }
         }
     ) { padding ->
         Column(

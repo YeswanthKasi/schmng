@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -22,108 +23,137 @@ import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
 import java.util.*
 
+private val PrimaryBlue = Color(0xFF1F41BB)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudentScheduleScreen(navController: NavController) {
+fun StudentScheduleScreen(
+    navController: NavController,
+    currentRoute: String,
+    onRouteSelected: (String) -> Unit
+) {
     var schedules by remember { mutableStateOf<List<Schedule>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    val currentUser = FirebaseAuth.getInstance().currentUser
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // Fetch schedules for the student's class
-    LaunchedEffect(currentUser?.uid) {
-        if (currentUser?.uid != null) {
-            FirestoreDatabase.getStudent(currentUser.uid)?.let { student ->
-                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-                FirestoreDatabase.fetchSchedules(
-                    onComplete = { allSchedules ->
-                        schedules = allSchedules.filter { 
-                            it.className == student.className || it.className == "all"
-                        }.sortedBy { it.time }
-                        isLoading = false
-                    },
-                    onFailure = { e ->
-                        errorMessage = e.message
-                        isLoading = false
-                    }
-                )
-            }
+    LaunchedEffect(Unit) {
+        try {
+            // Fetch schedules from Firestore
+            FirestoreDatabase.fetchSchedules(
+                onComplete = { fetchedSchedules ->
+                    schedules = fetchedSchedules
+                    isLoading = false
+                },
+                onFailure = { e ->
+                    errorMessage = e.message
+                    isLoading = false
+                }
+            )
+        } catch (e: Exception) {
+            errorMessage = e.message
+            isLoading = false
         }
     }
 
-    CommonBackground {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("My Schedule") },
-                    navigationIcon = {
-                        IconButton(onClick = { navController.navigateUp() }) {
-                            Icon(Icons.Default.ArrowBack, "Back")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.White.copy(alpha = 0.95f)
-                    )
-                )
-            }
-        ) { padding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                } else if (errorMessage != null) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
                     Text(
-                        text = errorMessage ?: "Unknown error",
-                        color = Color.Red,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp)
+                        "My Schedule",
+                        color = PrimaryBlue,
+                        fontWeight = FontWeight.Bold
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(schedules) { schedule ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = Color.White
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
-                                ) {
-                                    Text(
-                                        text = schedule.title,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Time: ${schedule.time}",
-                                        color = Color.Gray
-                                    )
-                                    if (schedule.description.isNotBlank()) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = schedule.description,
-                                            color = Color.Gray
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White.copy(alpha = 0.95f)
+                )
+            )
+        },
+        bottomBar = {
+            StudentBottomNavigation(
+                currentRoute = currentRoute,
+                onNavigate = { item ->
+                    onRouteSelected(item.route)
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (errorMessage != null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = errorMessage ?: "An error occurred",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(schedules) { schedule ->
+                        ScheduleCard(schedule = schedule)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun ScheduleCard(schedule: Schedule) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.95f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = schedule.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = PrimaryBlue
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Time: ${schedule.time}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Gray
+            )
+            if (schedule.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = schedule.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
             }
         }
     }

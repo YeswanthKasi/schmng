@@ -45,13 +45,15 @@ fun AppNavigation(
     
     // Create a function to handle route selection
     val onRouteSelected: (String) -> Unit = { route ->
-        currentRoute = route
-        navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
+        if (currentRoute != route) {
+            currentRoute = route
+            navController.navigate(route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
             }
-            launchSingleTop = true
-            restoreState = true
         }
     }
 
@@ -97,19 +99,64 @@ fun AppNavigation(
             )
         }
 
-        // Student Dashboard and Message Routes
-        composable("student_dashboard") { StudentDashboardScreen(navController) }
-        composable("student_messages") { StudentMessagesScreen(navController) }
-        composable("student_new_message") { StudentNewMessageScreen(navController) }
-        composable(
-            "student_chat/{chatId}",
-            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
-            StudentChatScreen(
+        // Student Bottom Navigation Screens
+        composable(StudentBottomNavItem.Home.route) { 
+            StudentDashboardScreen(
                 navController = navController,
-                chatId = chatId
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
             )
+        }
+
+        composable(StudentBottomNavItem.Schedule.route) {
+            StudentScheduleScreen(
+                navController = navController,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        composable(StudentBottomNavItem.Attendance.route) {
+            StudentAttendanceScreen(
+                navController = navController,
+                currentRoute = StudentBottomNavItem.Attendance.route,
+                onRouteSelected = { route -> onRouteSelected(route) }
+            )
+        }
+
+        composable(StudentBottomNavItem.Notices.route) {
+            AnnouncementsScreen(
+                navController = navController,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        composable(StudentBottomNavItem.Profile.route) {
+            StudentProfileScreen(
+                navController = navController,
+                studentId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                isAdmin = false,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        // Other student screens (non-bottom nav)
+        composable("student_timetable") { 
+            StudentTimetableScreen(navController) 
+        }
+
+        composable("student_teacher_info") { 
+            StudentTeacherInfoScreen(navController) 
+        }
+
+        composable("student_messages") { 
+            StudentMessagesScreen(navController) 
+        }
+
+        composable("student_new_message") { 
+            StudentNewMessageScreen(navController) 
         }
 
         // Admin Message Routes
@@ -165,12 +212,7 @@ fun AppNavigation(
         }
         
         // Student-specific Routes
-        composable("student_schedule") { StudentScheduleScreen(navController) }
-        composable("student_timetable") { StudentTimetableScreen(navController) }
         composable("student_fees") { StudentFeesScreen(navController) }
-        composable("student_announcements") { AnnouncementsScreen(navController) }
-        composable("student_teacher_info") { StudentTeacherInfoScreen(navController) }
-        composable("student_attendance") { StudentAttendanceScreen(navController) }
         
         // Attendance Routes
         composable("attendance") {

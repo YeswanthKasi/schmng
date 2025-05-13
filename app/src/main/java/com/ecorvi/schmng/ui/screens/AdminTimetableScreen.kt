@@ -165,7 +165,16 @@ fun AdminTimetableScreen(navController: NavController) {
     var timeSlotToDelete by remember { mutableStateOf<String?>(null) }
     var showClassFilterForTeacher by remember { mutableStateOf(false) }
 
-    val daysOfWeek = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    val daysOfWeek = remember {
+        mapOf(
+            "Monday" to "Mon",
+            "Tuesday" to "Tue",
+            "Wednesday" to "Wed",
+            "Thursday" to "Thu",
+            "Friday" to "Fri",
+            "Saturday" to "Sat"
+        )
+    }
 
     // Default time slots from 9 AM to 5 PM
     val defaultTimeSlots = listOf(
@@ -561,8 +570,8 @@ fun AdminTimetableScreen(navController: NavController) {
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            // Day columns headers
-                            daysOfWeek.forEach { day ->
+                            // Day columns headers with shortened names
+                            daysOfWeek.forEach { (_, shortDay) ->
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -570,7 +579,7 @@ fun AdminTimetableScreen(navController: NavController) {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        day,
+                                        shortDay,
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.bodySmall
                                     )
@@ -608,9 +617,9 @@ fun AdminTimetableScreen(navController: NavController) {
                                 )
                             }
                             // Day columns
-                            daysOfWeek.forEach { day ->
+                            daysOfWeek.forEach { (fullDay, _) ->
                                 val entry = timetables.find { 
-                                    it.timeSlot == timeSlot && it.dayOfWeek == day 
+                                    it.timeSlot == timeSlot && it.dayOfWeek == fullDay 
                                 }
                                 Box(
                                     modifier = Modifier
@@ -619,7 +628,7 @@ fun AdminTimetableScreen(navController: NavController) {
                                         .border(0.5.dp, MaterialTheme.colorScheme.outline)
                                         .clickable {
                                             dialogTimeSlot = timeSlot
-                                            dialogDay = day
+                                            dialogDay = fullDay
                                             dialogSubject = entry?.subject ?: ""
                                             dialogTeacher = entry?.teacher ?: ""
                                             dialogRoom = entry?.roomNumber ?: ""
@@ -631,25 +640,24 @@ fun AdminTimetableScreen(navController: NavController) {
                                 ) {
                                     if (entry != null) {
                                         Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.fillMaxWidth()
+                                            horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Text(
                                                 text = entry.subject,
-                                                style = MaterialTheme.typography.bodyMedium,
+                                                style = MaterialTheme.typography.bodySmall,
                                                 textAlign = TextAlign.Center,
                                                 fontWeight = FontWeight.Bold
                                             )
                                             Text(
                                                 text = entry.teacher,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                textAlign = TextAlign.Center
+                                                color = MaterialTheme.colorScheme.secondary
                                             )
                                             if (entry.roomNumber.isNotBlank()) {
                                                 Text(
                                                     text = entry.roomNumber,
                                                     style = MaterialTheme.typography.bodySmall,
-                                                    textAlign = TextAlign.Center
+                                                    color = MaterialTheme.colorScheme.secondary
                                                 )
                                             }
                                         }

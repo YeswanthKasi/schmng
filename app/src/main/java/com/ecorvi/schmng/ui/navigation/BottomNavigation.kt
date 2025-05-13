@@ -15,9 +15,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
 
 // Sealed class for bottom navigation items
-sealed class BottomNavItem(val route: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String) {
+sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
     object Home : BottomNavItem("admin_dashboard", Icons.Default.Home, "Home")
     object Profile : BottomNavItem("profile", Icons.Default.Person, "Profile")
     object Notifications : BottomNavItem("notifications", Icons.Default.Notifications, "Notifications")

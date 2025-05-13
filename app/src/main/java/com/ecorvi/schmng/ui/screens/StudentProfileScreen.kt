@@ -24,7 +24,9 @@ private val StudentGreen = Color(0xFF4CAF50) // Green color for student theme
 fun StudentProfileScreen(
     navController: NavController,
     studentId: String,
-    isAdmin: Boolean = false
+    isAdmin: Boolean = false,
+    currentRoute: String? = null,
+    onRouteSelected: ((String) -> Unit)? = null
 ) {
     var student by remember { mutableStateOf<Person?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -65,12 +67,14 @@ fun StudentProfileScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = StudentGreen
-                        )
+                    if (currentRoute == null) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = StudentGreen
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -87,6 +91,16 @@ fun StudentProfileScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            if (currentRoute != null && onRouteSelected != null) {
+                StudentBottomNavigation(
+                    currentRoute = currentRoute,
+                    onNavigate = { item ->
+                        onRouteSelected(item.route)
+                    }
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->

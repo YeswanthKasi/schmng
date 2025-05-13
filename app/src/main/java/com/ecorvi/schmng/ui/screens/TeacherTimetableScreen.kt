@@ -36,6 +36,17 @@ fun TeacherTimetableScreen(navController: NavController) {
     var teachersList by remember { mutableStateOf<List<Person>>(emptyList()) }
     val currentUser = FirebaseAuth.getInstance().currentUser
 
+    val daysOfWeek = remember {
+        mapOf(
+            "Monday" to "Mon",
+            "Tuesday" to "Tue",
+            "Wednesday" to "Wed",
+            "Thursday" to "Thu",
+            "Friday" to "Fri",
+            "Saturday" to "Sat"
+        )
+    }
+
     // Time slots configuration
     val timeSlots = remember {
         listOf(
@@ -254,11 +265,11 @@ fun TeacherTimetableScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday").forEach { day ->
+                daysOfWeek.forEach { (fullDay, shortDay) ->
                     FilterChip(
-                        selected = selectedDay == day,
-                        onClick = { selectedDay = day },
-                        label = { Text(day.take(3)) }
+                        selected = selectedDay == fullDay,
+                        onClick = { selectedDay = fullDay },
+                        label = { Text(shortDay) }
                     )
                 }
             }
@@ -324,14 +335,14 @@ fun TeacherTimetableScreen(navController: NavController) {
 
 private fun getCurrentDay(): String {
     val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
-    val currentDay = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
+    val currentDay = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
     return when (currentDay) {
-        java.util.Calendar.MONDAY -> "Monday"
-        java.util.Calendar.TUESDAY -> "Tuesday"
-        java.util.Calendar.WEDNESDAY -> "Wednesday"
-        java.util.Calendar.THURSDAY -> "Thursday"
-        java.util.Calendar.FRIDAY -> "Friday"
-        java.util.Calendar.SATURDAY -> "Saturday"
+        Calendar.MONDAY -> "Monday"
+        Calendar.TUESDAY -> "Tuesday"
+        Calendar.WEDNESDAY -> "Wednesday"
+        Calendar.THURSDAY -> "Thursday"
+        Calendar.FRIDAY -> "Friday"
+        Calendar.SATURDAY -> "Saturday"
         else -> "Monday" // Default to Monday if it's Sunday
     }
 } 
