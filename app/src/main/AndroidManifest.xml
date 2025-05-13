@@ -4,6 +4,8 @@
     package="com.ecorvi.schmng">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+    <uses-permission android:name="android.permission.AUTHENTICATE_ACCOUNTS" />
 
     <!-- Request notifications only on Android 13+ -->
     <uses-permission

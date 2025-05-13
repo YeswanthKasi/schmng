@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Timetable
+import com.ecorvi.schmng.ui.utils.Constants
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,7 +98,7 @@ fun ViewTimetableScreen(navController: NavController) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(listOf("1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th")) { classOption ->
+                items(Constants.CLASS_OPTIONS) { classOption ->
                     FilterChip(
                         selected = selectedClass == classOption,
                         onClick = { selectedClass = classOption },

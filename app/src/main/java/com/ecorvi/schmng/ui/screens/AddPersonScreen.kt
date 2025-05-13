@@ -41,6 +41,17 @@ import kotlinx.coroutines.launch
 private val StudentGreen = Color(0xFF4CAF50) // Green color for student theme
 private val TeacherBlue = Color(0xFF1F41BB) // Blue color for teacher theme
 
+// Helper function to format class name
+fun formatClassForStorage(className: String): String {
+    return if (className.endsWith("st")) {
+        "Class ${className.replace("st", "")}"
+    } else if (!className.startsWith("Class ")) {
+        "Class $className"
+    } else {
+        className
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddPersonScreen(
@@ -131,7 +142,7 @@ fun AddPersonScreen(
                     "createdAt" to com.google.firebase.Timestamp.now(),
                     "userId" to userId,
                     "type" to personTypeValue,
-                    "className" to selectedClass
+                    "className" to formatClassForStorage(selectedClass)
                 )
                 batch.set(userDocRef, userData)
 
@@ -150,7 +161,7 @@ fun AddPersonScreen(
                     password = password,
                     phone = phone.trim(),
                     type = personTypeValue,
-                    className = selectedClass,
+                    className = formatClassForStorage(selectedClass),
                     rollNumber = rollNumber.trim(),
                     gender = gender,
                     dateOfBirth = dateOfBirth.trim(),
@@ -200,7 +211,7 @@ fun AddPersonScreen(
             email = email.trim(),
             phone = phone.trim(),
             type = personTypeValue,
-            className = selectedClass,
+            className = formatClassForStorage(selectedClass),
             rollNumber = rollNumber.trim(),
             gender = gender,
             dateOfBirth = dateOfBirth.trim(),
@@ -277,7 +288,7 @@ fun AddPersonScreen(
                             "createdAt" to com.google.firebase.Timestamp.now(),
                             "userId" to userId,
                             "type" to personTypeValue,
-                            "className" to selectedClass
+                            "className" to formatClassForStorage(selectedClass)
                         )
                         batch.set(userDocRef, userData)
 
@@ -294,7 +305,7 @@ fun AddPersonScreen(
                             password = password,
                             phone = phone.trim(),
                             type = personTypeValue,
-                            className = selectedClass,
+                            className = formatClassForStorage(selectedClass),
                             rollNumber = rollNumber.trim(),
                             gender = gender,
                             dateOfBirth = dateOfBirth.trim(),
@@ -348,7 +359,7 @@ fun AddPersonScreen(
             password = password, // optional, not used for login
             phone = phone.trim(),
             type = personTypeValue,
-            className = selectedClass,
+            className = formatClassForStorage(selectedClass),
             rollNumber = rollNumber.trim(),
             gender = gender,
             dateOfBirth = dateOfBirth.trim(),

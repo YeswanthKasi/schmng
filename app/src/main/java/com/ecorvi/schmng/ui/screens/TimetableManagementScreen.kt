@@ -31,11 +31,12 @@ import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.text.style.TextOverflow
 import com.ecorvi.schmng.ui.data.model.Person
+import com.ecorvi.schmng.ui.utils.Constants
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimetableManagementScreen(navController: NavController) {
-    var selectedClass by remember { mutableStateOf("1st") }
+    var selectedClass by remember { mutableStateOf("Class 1") }
     var selectedDay by remember { mutableStateOf(getCurrentDay()) }
     var selectedTeacher by remember { mutableStateOf<String?>(null) }
     var timetables by remember { mutableStateOf<List<Timetable>>(emptyList()) }
@@ -215,7 +216,7 @@ fun TimetableManagementScreen(navController: NavController) {
                         expanded = showClassDropdown,
                         onDismissRequest = { showClassDropdown = false }
                     ) {
-                        listOf("1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th").forEach { classOption ->
+                        Constants.CLASS_OPTIONS.forEach { classOption ->
                             DropdownMenuItem(
                                 text = { Text(classOption) },
                                 onClick = {

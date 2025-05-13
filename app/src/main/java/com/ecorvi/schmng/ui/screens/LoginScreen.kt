@@ -2,12 +2,14 @@ package com.ecorvi.schmng.ui.screens
 
 import android.Manifest
 import android.content.Context
+import android.content.IntentSender
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings.Global.putString
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -57,12 +59,20 @@ import androidx.compose.ui.text.style.TextAlign
 import android.util.Log
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.DocumentReference
+import com.google.android.gms.auth.api.credentials.*
+import android.app.Activity
+import com.google.android.gms.common.api.ResolvableApiException
+import kotlinx.coroutines.tasks.await
+
+private const val REQUEST_SAVE_CREDENTIALS = 123
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(navController: NavController) {
     val context = LocalContext.current
     val activity = context as ComponentActivity
+    val credentialsClient = remember { Credentials.getClient(activity) }
+    val scope = rememberCoroutineScope()
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -80,6 +90,48 @@ fun LoginScreen(navController: NavController) {
     var errorMessage by rememberSaveable { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var staySignedIn by rememberSaveable { mutableStateOf(false) }
+
+    // Credential request launcher
+    val credentialRequestLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val credential = result.data?.getParcelableExtra<Credential>(Credential.EXTRA_KEY)
+            credential?.let { cred ->
+                email = cred.id ?: ""
+                password = cred.password ?: ""
+                // Remove auto-login, just fill the fields
+            }
+        }
+    }
+
+    // Request saved credentials on screen launch
+    LaunchedEffect(Unit) {
+        val request = CredentialRequest.Builder()
+            .setPasswordLoginSupported(true)
+            .build()
+
+        try {
+            val result = credentialsClient.request(request).await()
+            result.credential?.let { cred ->
+                email = cred.id ?: ""
+                password = cred.password ?: ""
+                // Remove auto-login, just fill the fields
+            }
+        } catch (e: Exception) {
+            when (e) {
+                is ResolvableApiException -> {
+                    // Show credential picker
+                    credentialRequestLauncher.launch(
+                        IntentSenderRequest.Builder(e.resolution).build()
+                    )
+                }
+                else -> {
+                    Log.e("LoginScreen", "Error getting credentials", e)
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -266,7 +318,8 @@ fun LoginScreen(navController: NavController) {
                             Text(
                                 text = "Stay signed in",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFF1F41BB)
+                                color = Color(0xFF1F41BB),
+                                modifier = Modifier.clickable { staySignedIn = !staySignedIn }
                             )
                         }
 
@@ -414,6 +467,30 @@ fun LoginUser(
     auth.signInWithEmailAndPassword(email, password)
         .addOnCompleteListener { task ->
             if (task.isSuccessful) {
+                // Save credentials if login successful and stay signed in is checked
+                if (staySignedIn) {
+                    val credential = Credential.Builder(email)
+                        .setPassword(password)
+                        .build()
+
+                    val credentialsClient = Credentials.getClient(context as Activity)
+                    credentialsClient.save(credential).addOnCompleteListener { saveTask ->
+                        if (saveTask.isSuccessful) {
+                            Log.d("LoginScreen", "Credentials saved successfully")
+                        } else {
+                            if (saveTask.exception is ResolvableApiException) {
+                                // Try to resolve the save request
+                                try {
+                                    val rae = saveTask.exception as ResolvableApiException
+                                    rae.startResolutionForResult(context as Activity, REQUEST_SAVE_CREDENTIALS)
+                                } catch (e: IntentSender.SendIntentException) {
+                                    Log.e("LoginScreen", "Failed to send resolution", e)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 val user = auth.currentUser
                 
                 // Log successful login event

@@ -45,7 +45,7 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
     val timeSlotParam = backStackEntry?.savedStateHandle?.get<String>("timeSlot")
 
     // Form state
-    var classGrade by remember { mutableStateOf(classGradeParam ?: "1st") }
+    var classGrade by remember { mutableStateOf(classGradeParam ?: "Class 1") }
     var dayOfWeek by remember { mutableStateOf(dayOfWeekParam ?: "Monday") }
     var timeSlot by remember { mutableStateOf(timeSlotParam ?: "08:00") }
     var subject by remember { mutableStateOf("") }
@@ -131,8 +131,8 @@ fun AddTimetableScreen(navController: NavController, timetableId: String? = null
         }
     }
 
-    // Constants
-    val classes = listOf("1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th")
+    // Initialize classes list
+    val classes = Constants.CLASS_OPTIONS
     val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
     val timeSlots = listOf(
         "9:00 - 9:45",

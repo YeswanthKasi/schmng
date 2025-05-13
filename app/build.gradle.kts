@@ -17,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 34
-        versionCode = 34
-        versionName = "1.31"
+        versionCode = 35
+        versionName = "1.32"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -149,5 +149,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("androidx.compose.runtime:runtime-livedata:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation("com.google.android.gms:play-services-auth:20.7.0")
+    implementation("com.google.android.gms:play-services-auth-api-phone:18.0.2")
 }
 

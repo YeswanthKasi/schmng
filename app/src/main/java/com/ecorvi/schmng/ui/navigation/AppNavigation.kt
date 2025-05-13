@@ -169,7 +169,7 @@ fun AppNavigation(
         composable("student_timetable") { StudentTimetableScreen(navController) }
         composable("student_fees") { StudentFeesScreen(navController) }
         composable("student_announcements") { AnnouncementsScreen(navController) }
-        composable("student_teacher_info") { ClassTeacherInfoScreen(navController) }
+        composable("student_teacher_info") { StudentTeacherInfoScreen(navController) }
         composable("student_attendance") { StudentAttendanceScreen(navController) }
         
         // Attendance Routes

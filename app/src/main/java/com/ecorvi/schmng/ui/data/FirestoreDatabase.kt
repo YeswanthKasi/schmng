@@ -157,8 +157,17 @@ object FirestoreDatabase {
 
     // Add a student to Firestore
     fun addStudent(student: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        // Standardize class format to "Class X"
+        val standardizedStudent = if (student.className.endsWith("st")) {
+            student.copy(className = "Class ${student.className.replace("st", "")}")
+        } else if (!student.className.startsWith("Class ")) {
+            student.copy(className = "Class ${student.className}")
+        } else {
+            student
+        }
+
         val newStudentRef = studentsCollection.document()
-        val studentWithId = student.copy(id = newStudentRef.id)
+        val studentWithId = standardizedStudent.copy(id = newStudentRef.id)
 
         newStudentRef.set(studentWithId)
             .addOnSuccessListener {
@@ -173,8 +182,17 @@ object FirestoreDatabase {
 
     // Add a teacher to Firestore
     fun addTeacher(teacher: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        // Standardize class format to "Class X"
+        val standardizedTeacher = if (teacher.className.endsWith("st")) {
+            teacher.copy(className = "Class ${teacher.className.replace("st", "")}")
+        } else if (!teacher.className.startsWith("Class ")) {
+            teacher.copy(className = "Class ${teacher.className}")
+        } else {
+            teacher
+        }
+
         val newTeacherRef = teachersCollection.document()
-        val teacherWithId = teacher.copy(id = newTeacherRef.id)
+        val teacherWithId = standardizedTeacher.copy(id = newTeacherRef.id)
 
         newTeacherRef.set(teacherWithId)
             .addOnSuccessListener {
@@ -540,8 +558,18 @@ object FirestoreDatabase {
             onFailure(Exception("Invalid student ID"))
             return
         }
+
+        // Standardize class format to "Class X"
+        val standardizedStudent = if (student.className.endsWith("st")) {
+            student.copy(className = "Class ${student.className.replace("st", "")}")
+        } else if (!student.className.startsWith("Class ")) {
+            student.copy(className = "Class ${student.className}")
+        } else {
+            student
+        }
+
         studentsCollection.document(student.id)
-            .set(student)
+            .set(standardizedStudent)
             .addOnSuccessListener {
                 Log.d("Firestore", "Student with ID: ${student.id} updated successfully")
                 onSuccess()
@@ -552,16 +580,21 @@ object FirestoreDatabase {
             }
     }
 
-    // Update teacher by ID
+    // Update teacher in Firestore
     fun updateTeacher(teacher: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-        if (teacher.id.isBlank()) {
-            onFailure(Exception("Invalid teacher ID"))
-            return
+        // Standardize class format to "Class X"
+        val standardizedTeacher = if (teacher.className.endsWith("st")) {
+            teacher.copy(className = "Class ${teacher.className.replace("st", "")}")
+        } else if (!teacher.className.startsWith("Class ")) {
+            teacher.copy(className = "Class ${teacher.className}")
+        } else {
+            teacher
         }
-        teachersCollection.document(teacher.id)
-            .set(teacher)
+
+        teachersCollection.document(standardizedTeacher.id)
+            .set(standardizedTeacher)
             .addOnSuccessListener {
-                Log.d("Firestore", "Teacher with ID: ${teacher.id} updated successfully")
+                Log.d("Firestore", "Teacher updated successfully")
                 onSuccess()
             }
             .addOnFailureListener { e ->
