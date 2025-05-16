@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.ecorvi.schmng.ui.data.model.Timetable
 import com.google.firebase.messaging.FirebaseMessaging
 import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.CircleShape
@@ -61,6 +62,7 @@ import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
+import com.ecorvi.schmng.ui.components.TeacherAttendanceCard
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 private val ScheduleOrange = Color(0xFFFF9800)
@@ -322,6 +324,10 @@ fun StudentDashboardScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val context = LocalContext.current
     
+    // Get app version
+    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+    val versionName = packageInfo.versionName
+    
     // Current day
     val currentDay = getCurrentDayOfWeek()
     var selectedDay by remember { mutableStateOf(currentDay) }
@@ -428,103 +434,151 @@ fun StudentDashboardScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "Menu",
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Divider()
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                    label = { Text("My Profile") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        student?.id?.let { 
-                            navController.navigate("view_profile/student/$it") 
+            ModalDrawerSheet(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(300.dp),
+                drawerContainerColor = Color.White
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White)
+                ) {
+                    // Top section with menu items
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Menu",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Divider()
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
+                            label = { Text("My Profile") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                student?.id?.let { 
+                                    navController.navigate("view_profile/student/$it") 
+                                }
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.Schedule, contentDescription = "Schedule") },
+                            label = { Text("My Schedule") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                navController.navigate("student_schedule")
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.CheckCircleOutline, contentDescription = "Attendance") },
+                            label = { Text("My Attendance") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                navController.navigate("student_attendance")
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.Announcement, contentDescription = "Announcements") },
+                            label = { Text("Announcements") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                navController.navigate("student_announcements")
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.Message, contentDescription = "Messages") },
+                            label = { Text("Messages") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                navController.navigate("student_messages")
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.DirectionsBus, contentDescription = "School Bus") },
+                            label = { Text("School Bus") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                Toast.makeText(
+                                    context,
+                                    "School Bus tracking coming soon",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.School, contentDescription = "Class Teacher") },
+                            label = { Text("Class Teacher") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                navController.navigate("student_teacher_info")
+                            }
+                        )
+                        Divider()
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.Help, contentDescription = "Help") },
+                            label = { Text("Help") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                handleHelpClick()
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.Logout, contentDescription = "Logout") },
+                            label = { Text("Logout") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                handleLogout()
+                            }
+                        )
+                    }
+
+                    // Bottom section with version and updates
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White)
+                            .padding(16.dp)
+                    ) {
+                        Divider()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Version $versionName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        TextButton(
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                Toast.makeText(
+                                    context,
+                                    "You are using the latest version",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Check for Updates",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PrimaryBlue
+                            )
                         }
                     }
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Schedule, contentDescription = "Schedule") },
-                    label = { Text("My Schedule") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        navController.navigate("student_schedule")
-                    }
-                )
-                NavigationDrawerItem(
-                    icon = {
-                        Icon(
-                            Icons.Default.CheckCircleOutline,
-                            contentDescription = "Attendance"
-                        )
-                    },
-                    label = { Text("My Attendance") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        navController.navigate("student_attendance")
-                    }
-                )
-                NavigationDrawerItem(
-                    icon = {
-                        Icon(
-                            Icons.Default.Announcement,
-                            contentDescription = "Announcements"
-                        )
-                    },
-                    label = { Text("Announcements") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        navController.navigate("student_announcements")
-                    }
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.School, contentDescription = "Class Teacher") },
-                    label = { Text("Class Teacher") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        navController.navigate("student_teacher_info")
-                    }
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.DirectionsBus, contentDescription = "School Bus") },
-                    label = { Text("School Bus") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        Toast.makeText(
-                            context,
-                            "School Bus tracking coming soon",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                )
-                Divider()
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Help, contentDescription = "Help") },
-                    label = { Text("Help") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        handleHelpClick()
-                    }
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Logout, contentDescription = "Logout") },
-                    label = { Text("Logout") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        handleLogout()
-                    }
-                )
+                }
             }
         }
     ) {
@@ -596,46 +650,40 @@ fun StudentDashboardScreen(
                                 )
                             }
 
-                            // Timetable Overview
+                            // Teacher Attendance Card
+                            item {
+                                student?.className?.let { className ->
+                                    TeacherAttendanceCard(className = className)
+                                }
+                            }
+
+                            // Today's Schedule Card
                             item {
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = STANDARD_PADDING)
-                                        .graphicsLayer {
-                                            clip = true
-                                            shape = RoundedCornerShape(CARD_CORNER_RADIUS)
-                                            alpha = CARD_BACKGROUND_ALPHA
-                                        },
-                                    shape = RoundedCornerShape(CARD_CORNER_RADIUS),
+                                        .padding(horizontal = 20.dp, vertical = 8.dp),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = CardBackgroundColor.copy(alpha = CARD_BACKGROUND_ALPHA),
-                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                        containerColor = Color.White
                                     ),
-                                    elevation = CardDefaults.cardElevation(
-                                        defaultElevation = CARD_ELEVATION,
-                                        pressedElevation = CARD_PRESSED_ELEVATION,
-                                        focusedElevation = CARD_ELEVATION,
-                                        hoveredElevation = CARD_ELEVATION
-                                    )
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+                                    shape = RoundedCornerShape(20.dp)
                                 ) {
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(STANDARD_PADDING)
+                                            .padding(18.dp)
                                     ) {
                                         Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = HALF_PADDING),
+                                            modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
                                                 text = "Today's Schedule",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = PrimaryBlue,
-                                                fontWeight = FontWeight.Bold
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = PrimaryBlue
                                             )
                                             IconButton(
                                                 onClick = { navController.navigate("student_timetable") }
@@ -647,12 +695,12 @@ fun StudentDashboardScreen(
                                                 )
                                             }
                                         }
-
+                                        Spacer(Modifier.height(8.dp))
                                         // Day selector row
                                         Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                                .padding(bottom = HALF_PADDING),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 8.dp),
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
@@ -664,8 +712,7 @@ fun StudentDashboardScreen(
                                                         .clip(CircleShape)
                                                         .clickable { selectedDay = day }
                                                         .background(
-                                                            if (isSelected) PrimaryBlue
-                                                            else MaterialTheme.colorScheme.surface
+                                                            if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.surface
                                                         )
                                                         .border(
                                                             width = 1.dp,
@@ -684,497 +731,122 @@ fun StudentDashboardScreen(
                                                 }
                                             }
                                         }
-                                        
                                         // Timetable content
                                         if (timeSlots.isEmpty()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
                                                     .height(200.dp),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 CircularProgressIndicator(color = PrimaryBlue)
-                                                }
-                                            } else {
+                                            }
+                                        } else {
                                             Column(
                                                 modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                // Header
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(PrimaryBlue.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                                                        .padding(vertical = 10.dp, horizontal = 8.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
                                                 ) {
-                                                    // Header
-                                                        Row(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                        .padding(vertical = HALF_PADDING),
-                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                        ) {
+                                                    Text(
+                                                        text = "Time",
+                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = PrimaryBlue,
+                                                        modifier = Modifier.weight(1.2f)
+                                                    )
+                                                    Text(
+                                                        text = "Subject",
+                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = PrimaryBlue,
+                                                        modifier = Modifier.weight(1.1f)
+                                                    )
+                                                    Text(
+                                                        text = "Teacher",
+                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = PrimaryBlue,
+                                                        modifier = Modifier.weight(1.1f)
+                                                    )
+                                                    Text(
+                                                        text = "Room",
+                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = PrimaryBlue,
+                                                        modifier = Modifier.weight(0.7f),
+                                                        textAlign = TextAlign.End
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(4.dp))
+                                                // Time slots
+                                                timeSlots.forEachIndexed { idx, timeSlot ->
+                                                    val classForThisSlot = weeklyTimetable.find {
+                                                        it.timeSlot == timeSlot &&
+                                                        normalizeDayName(it.dayOfWeek) == normalizeDayName(selectedDay)
+                                                    }
+                                                    val isFilled = classForThisSlot != null
+                                                    val timeText = if (idx == 0 && timeSlot.contains("-")) {
+                                                        val parts = timeSlot.split("-")
+                                                        if (parts.size == 2) parts[0].trim() + "-\n" + parts[1].trim() else timeSlot
+                                                    } else timeSlot
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = timeText,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            color = if (isFilled) PrimaryBlue else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                                            fontWeight = if (isFilled) FontWeight.Medium else FontWeight.Normal,
+                                                            modifier = Modifier.weight(1.2f)
+                                                        )
+                                                        if (isFilled) {
                                                             Text(
-                                                                text = "Time",
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                fontWeight = FontWeight.Bold,
-                                                                modifier = Modifier.weight(1.2f)
+                                                                text = classForThisSlot!!.subject,
+                                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                                                color = Color.Black,
+                                                                modifier = Modifier.weight(1.1f)
                                                             )
                                                             Text(
-                                                                text = "Subject",
+                                                                text = classForThisSlot.teacher,
                                                                 style = MaterialTheme.typography.bodyMedium,
-                                                                fontWeight = FontWeight.Bold,
-                                                                modifier = Modifier.weight(1f)
+                                                                color = Color.Black.copy(alpha = 0.85f),
+                                                                modifier = Modifier.weight(1.1f)
                                                             )
                                                             Text(
-                                                                text = "Teacher",
+                                                                text = classForThisSlot.roomNumber,
                                                                 style = MaterialTheme.typography.bodyMedium,
-                                                                fontWeight = FontWeight.Bold,
-                                                                modifier = Modifier.weight(1f)
+                                                                color = Color.Black.copy(alpha = 0.85f),
+                                                                modifier = Modifier.weight(0.7f),
+                                                                textAlign = TextAlign.End
+                                                            )
+                                                        } else {
+                                                            Text(
+                                                                text = "-",
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                                                modifier = Modifier.weight(1.1f),
+                                                                textAlign = TextAlign.Center
                                                             )
                                                             Text(
-                                                                text = "Room",
+                                                                text = "-",
                                                                 style = MaterialTheme.typography.bodyMedium,
-                                                                fontWeight = FontWeight.Bold,
-                                                                modifier = Modifier.weight(0.5f),
+                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                                                modifier = Modifier.weight(1.1f),
+                                                                textAlign = TextAlign.Center
+                                                            )
+                                                            Text(
+                                                                text = "-",
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                                                modifier = Modifier.weight(0.7f),
                                                                 textAlign = TextAlign.End
                                                             )
                                                         }
-
-                                                        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-
-                                                // Time slots
-                                                LazyColumn(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(200.dp)
-                                                ) {
-                                                    items(timeSlots) { timeSlot ->
-                                                        val classForThisSlot = weeklyTimetable.find { 
-                                                            it.timeSlot == timeSlot && 
-                                                            normalizeDayName(it.dayOfWeek) == normalizeDayName(selectedDay)
-                                                        }
-
-                                                        Row(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .padding(vertical = 8.dp),
-                                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                                            verticalAlignment = Alignment.CenterVertically
-                                                        ) {
-                                                            Text(
-                                                                text = timeSlot,
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                color = MaterialTheme.colorScheme.primary,
-                                                                modifier = Modifier.weight(1.2f)
-                                                            )
-                                                            if (classForThisSlot != null) {
-                                                                Text(
-                                                                    text = classForThisSlot.subject,
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    fontWeight = FontWeight.Bold,
-                                                                    modifier = Modifier.weight(1f)
-                                                                )
-                                                                Text(
-                                                                    text = classForThisSlot.teacher,
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    modifier = Modifier.weight(1f)
-                                                                )
-                                                                Text(
-                                                                    text = classForThisSlot.roomNumber,
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    modifier = Modifier.weight(0.5f),
-                                                                    textAlign = TextAlign.End
-                                                                )
-                                                            } else {
-                                                                Text(
-                                                                    text = "-",
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    modifier = Modifier.weight(1f),
-                                                                    textAlign = TextAlign.Center
-                                                                )
-                                                                Text(
-                                                                    text = "-",
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    modifier = Modifier.weight(1f),
-                                                                    textAlign = TextAlign.Center
-                                                                )
-                                                                Text(
-                                                                    text = "-",
-                                                                    style = MaterialTheme.typography.bodyMedium,
-                                                                    modifier = Modifier.weight(0.5f),
-                                                                    textAlign = TextAlign.End
-                                                                )
-                                                            }
-                                                        }
-                                                        if (timeSlot != timeSlots.last()) {
-                                                            Divider(
-                                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                                                                modifier = Modifier.padding(vertical = 4.dp)
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Academic Cards
-                            item {
-                                Column(
-                                    modifier = Modifier.padding(horizontal = STANDARD_PADDING)
-                                ) {
-                                    Text(
-                                        "Academic",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = PrimaryBlue,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(bottom = HALF_PADDING)
-                                    )
-                                    
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(STANDARD_PADDING),
-                                        contentPadding = PaddingValues(horizontal = HALF_PADDING)
-                                    ) {
-                                        item {
-                                            // Attendance Card
-                                            Card(
-                                                modifier = Modifier
-                                                    .width(280.dp)
-                                                    .height(180.dp)
-                                                    .graphicsLayer {
-                                                        clip = true
-                                                        shape = RoundedCornerShape(CARD_CORNER_RADIUS)
-                                                        alpha = CARD_BACKGROUND_ALPHA
-                                                    },
-                                                shape = RoundedCornerShape(CARD_CORNER_RADIUS),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = CardBackgroundColor.copy(alpha = CARD_BACKGROUND_ALPHA),
-                                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                                ),
-                                                elevation = CardDefaults.cardElevation(
-                                                    defaultElevation = CARD_ELEVATION,
-                                                    pressedElevation = CARD_PRESSED_ELEVATION,
-                                                    focusedElevation = CARD_ELEVATION,
-                                                    hoveredElevation = CARD_ELEVATION
-                                                ),
-                                                onClick = { navController.navigate("student_attendance") }
-                                            ) {
-                                            Column(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .padding(STANDARD_PADDING),
-                                                    verticalArrangement = Arrangement.SpaceBetween
-                                                ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                                    ) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .size(ICON_BOX_SIZE)
-                                                                .background(AttendanceGreen.copy(alpha = 0.1f), CircleShape),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.CheckCircleOutline,
-                                                                contentDescription = null,
-                                                                tint = AttendanceGreen,
-                                                                modifier = Modifier.size(24.dp)
-                                                            )
-                                                        }
-                                                Text(
-                                                            text = "My Attendance",
-                                                            style = MaterialTheme.typography.titleMedium,
-                                                            color = AttendanceGreen,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    }
-                                                    
-                                                Text(
-                                                        text = "View your attendance summary",
-                                                        modifier = Modifier.padding(vertical = HALF_PADDING)
-                                                    )
-                                                    
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.End,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                Text(
-                                                            text = "View",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = AttendanceGreen
-                                                        )
-                                                        Icon(
-                                                            imageVector = Icons.Default.ChevronRight,
-                                                            contentDescription = "Navigate",
-                                                            tint = AttendanceGreen,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                }
-                                }
-                            }
-
-                            item {
-                                            // Notice Board Card
-                                            Card(
-                                                modifier = Modifier
-                                                    .width(280.dp)
-                                                    .height(180.dp)
-                                                    .graphicsLayer {
-                                                        clip = true
-                                                        shape = RoundedCornerShape(CARD_CORNER_RADIUS)
-                                                        alpha = CARD_BACKGROUND_ALPHA
-                                                    },
-                                                shape = RoundedCornerShape(CARD_CORNER_RADIUS),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = CardBackgroundColor.copy(alpha = CARD_BACKGROUND_ALPHA),
-                                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                                ),
-                                                elevation = CardDefaults.cardElevation(
-                                                    defaultElevation = CARD_ELEVATION,
-                                                    pressedElevation = CARD_PRESSED_ELEVATION,
-                                                    focusedElevation = CARD_ELEVATION,
-                                                    hoveredElevation = CARD_ELEVATION
-                                                ),
-                                                onClick = { navController.navigate("student_announcements") }
-                                            ) {
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .padding(STANDARD_PADDING),
-                                                    verticalArrangement = Arrangement.SpaceBetween
-                                                ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                                    ) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .size(ICON_BOX_SIZE)
-                                                                .background(NoticeBlue.copy(alpha = 0.1f), CircleShape),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Announcement,
-                                                                contentDescription = null,
-                                                                tint = NoticeBlue,
-                                                                modifier = Modifier.size(24.dp)
-                                                            )
-                                                        }
-                                                        Text(
-                                                            text = "Notice Board",
-                                                            style = MaterialTheme.typography.titleMedium,
-                                                            color = NoticeBlue,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    }
-                                                    
-                                                    Text(
-                                                        text = "View latest announcements",
-                                                        modifier = Modifier.padding(vertical = HALF_PADDING)
-                                                    )
-                                                    
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.End,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Text(
-                                                            text = "View",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = NoticeBlue
-                                                        )
-                                                        Icon(
-                                                            imageVector = Icons.Default.ChevronRight,
-                                                            contentDescription = "Navigate",
-                                                            tint = NoticeBlue,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Communication Cards
-                            item {
-                                Column(
-                                    modifier = Modifier.padding(horizontal = STANDARD_PADDING)
-                                ) {
-                                    Text(
-                                        "Communication",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = PrimaryBlue,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(bottom = HALF_PADDING)
-                                    )
-                                    
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(STANDARD_PADDING),
-                                        contentPadding = PaddingValues(horizontal = HALF_PADDING)
-                                    ) {
-                                        item {
-                                            // Messages Card
-                                            Card(
-                                                modifier = Modifier
-                                                    .width(280.dp)
-                                                    .height(180.dp)
-                                                    .graphicsLayer {
-                                                        clip = true
-                                                        shape = RoundedCornerShape(CARD_CORNER_RADIUS)
-                                                        alpha = CARD_BACKGROUND_ALPHA
-                                                    },
-                                                shape = RoundedCornerShape(CARD_CORNER_RADIUS),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = CardBackgroundColor.copy(alpha = CARD_BACKGROUND_ALPHA),
-                                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                                ),
-                                                elevation = CardDefaults.cardElevation(
-                                                    defaultElevation = CARD_ELEVATION,
-                                                    pressedElevation = CARD_PRESSED_ELEVATION,
-                                                    focusedElevation = CARD_ELEVATION,
-                                                    hoveredElevation = CARD_ELEVATION
-                                                ),
-                                                onClick = { navController.navigate("student_messages") }
-                                            ) {
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .padding(STANDARD_PADDING),
-                                                    verticalArrangement = Arrangement.SpaceBetween
-                                                ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                                    ) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .size(ICON_BOX_SIZE)
-                                                                .background(MessageBlue.copy(alpha = 0.1f), CircleShape),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Message,
-                                                                contentDescription = null,
-                                                                tint = MessageBlue,
-                                                                modifier = Modifier.size(24.dp)
-                                                            )
-                                                        }
-                                                        Text(
-                                                            text = "Messages",
-                                                            style = MaterialTheme.typography.titleMedium,
-                                                            color = MessageBlue,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    }
-                                                    
-                                                    Text(
-                                                        text = "View and send messages",
-                                                        modifier = Modifier.padding(vertical = HALF_PADDING)
-                                                    )
-                                                    
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.End,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Text(
-                                                            text = "View",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MessageBlue
-                                                        )
-                                                        Icon(
-                                                            imageVector = Icons.Default.ChevronRight,
-                                                            contentDescription = "Navigate",
-                                                            tint = MessageBlue,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                }
-                                }
-                            }
-
-                            item {
-                                            // School Bus Card
-                                            Card(
-                                                modifier = Modifier
-                                                    .width(280.dp)
-                                                    .height(180.dp)
-                                                    .graphicsLayer {
-                                                        clip = true
-                                                        shape = RoundedCornerShape(CARD_CORNER_RADIUS)
-                                                        alpha = CARD_BACKGROUND_ALPHA
-                                                    },
-                                                shape = RoundedCornerShape(CARD_CORNER_RADIUS),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = CardBackgroundColor.copy(alpha = CARD_BACKGROUND_ALPHA),
-                                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                                ),
-                                                elevation = CardDefaults.cardElevation(
-                                                    defaultElevation = CARD_ELEVATION,
-                                                    pressedElevation = CARD_PRESSED_ELEVATION,
-                                                    focusedElevation = CARD_ELEVATION,
-                                                    hoveredElevation = CARD_ELEVATION
-                                                ),
-                                        onClick = {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "School Bus tracking coming soon",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            ) {
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .padding(STANDARD_PADDING),
-                                                    verticalArrangement = Arrangement.SpaceBetween
-                                                ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                                    ) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .size(ICON_BOX_SIZE)
-                                                                .background(BusOrange.copy(alpha = 0.1f), CircleShape),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.DirectionsBus,
-                                                                contentDescription = null,
-                                                                tint = BusOrange,
-                                                                modifier = Modifier.size(24.dp)
-                                                            )
-                                                        }
-                                                        Text(
-                                                            text = "School Bus",
-                                                            style = MaterialTheme.typography.titleMedium,
-                                                            color = BusOrange,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    }
-                                                    
-                                                    Text(
-                                                        text = "Track your school bus",
-                                                        modifier = Modifier.padding(vertical = HALF_PADDING)
-                                                    )
-                                                    
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.End,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Text(
-                                                            text = "View",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = BusOrange
-                                                        )
-                                                        Icon(
-                                                            imageVector = Icons.Default.ChevronRight,
-                                                            contentDescription = "Navigate",
-                                                            tint = BusOrange,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
                                                     }
                                                 }
                                             }

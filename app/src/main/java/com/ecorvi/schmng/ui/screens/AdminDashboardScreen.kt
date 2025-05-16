@@ -1219,18 +1219,28 @@ fun AdminDashboardScreen(
                                 }
                                 
                                 item {
-                                    AnimatedSummaryCard(
-                                        title = "Pending Fees",
-                                        icon = Icons.Default.CurrencyRupee,
-                                        onClick = { 
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    AnimatedSummaryRow(
+                                        leftTitle = "Manage Teacher Absences",
+                                        rightTitle = "Pending Fees",
+                                        leftIcon = Icons.Default.PersonOff,
+                                        rightIcon = Icons.Default.CurrencyRupee,
+                                        leftClick = { 
+                                            try {
+                                                navController.navigate("manage_teacher_absences")
+                                            } catch (e: Exception) {
+                                                showMessage("Navigation error: ${e.message}")
+                                            }
+                                        },
+                                        rightClick = { 
                                             try {
                                                 navController.navigate("pending_fees")
                                             } catch (e: Exception) {
                                                 showMessage("Navigation error: ${e.message}")
                                             }
                                         },
-                                        backgroundColor = FeesRed,
-                                        modifier = Modifier
+                                        leftColor = Color(0xFFE57373), // Light red for absences
+                                        rightColor = FeesRed
                                     )
                                 }
                             }

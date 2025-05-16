@@ -223,6 +223,9 @@ fun AppNavigation(
         composable("attendance_analytics") {
             AttendanceAnalyticsScreen(navController = navController)
         }
+        composable("manage_teacher_absences") {
+            ManageTeacherAbsencesScreen(navController = navController)
+        }
         composable(
             "attendance/{userType}",
             arguments = listOf(navArgument("userType") { type = NavType.StringType })
