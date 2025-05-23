@@ -853,19 +853,27 @@ object FirestoreDatabase {
         onFailure: (Exception) -> Unit
     ) {
         timetablesCollection
-            .whereEqualTo("teacherName", teacherName)
+            .whereEqualTo("teacher", teacherName)
+            .whereEqualTo("active", true)
             .get()
             .addOnSuccessListener { querySnapshot ->
                 val timetables = querySnapshot.documents.mapNotNull { doc ->
                     try {
-                        val timetable = doc.toObject(Timetable::class.java)
-                        timetable?.id = doc.id
+                        val timetable = Timetable()
+                        timetable.id = doc.id
+                        timetable.classGrade = doc.getString("classGrade") ?: ""
+                        timetable.dayOfWeek = doc.getString("dayOfWeek") ?: ""
+                        timetable.timeSlot = doc.getString("timeSlot") ?: ""
+                        timetable.subject = doc.getString("subject") ?: ""
+                        timetable.teacher = doc.getString("teacher") ?: ""
+                        timetable.roomNumber = doc.getString("roomNumber") ?: ""
+                        timetable.isActive = doc.getBoolean("active") ?: true
                         timetable
                     } catch (e: Exception) {
                         Log.e("Firestore", "Error converting document to Timetable: ${e.message}")
                         null
                     }
-                }
+                }.sortedBy { it.timeSlot }
                 onComplete(timetables)
             }
             .addOnFailureListener { e ->
@@ -970,8 +978,8 @@ object FirestoreDatabase {
     fun listenForTimeSlotUpdates(
         onUpdate: (List<String>) -> Unit,
         onError: (Exception) -> Unit
-    ) {
-        timeSlotsCollection
+    ): ListenerRegistration {
+        return timeSlotsCollection
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.e("Firestore", "Error listening for time slot updates: ${error.message}")

@@ -25,6 +25,10 @@ import java.util.*
 import com.ecorvi.schmng.ui.screens.StudentProfileScreen
 import com.ecorvi.schmng.ui.screens.TeacherProfileScreen
 import com.ecorvi.schmng.ui.screens.StudentAttendanceScreen
+import com.ecorvi.schmng.ui.screens.admin.AdminNoticeScreen
+import com.ecorvi.schmng.ui.screens.teacher.TeacherDashboardScreen
+import com.ecorvi.schmng.ui.screens.teacher.TeacherNoticeCreateScreen
+import com.ecorvi.schmng.ui.screens.teacher.TeacherNoticeListScreen
 
 @Composable
 fun AppNavigation(
@@ -125,7 +129,7 @@ fun AppNavigation(
         }
 
         composable(StudentBottomNavItem.Notices.route) {
-            AnnouncementsScreen(
+            NoticeListScreen(
                 navController = navController,
                 currentRoute = currentRoute,
                 onRouteSelected = onRouteSelected
@@ -386,6 +390,36 @@ fun AppNavigation(
                     personId = personId
                 )
             }
+        }
+
+        // Teacher Routes
+        composable("teacher_dashboard") {
+            TeacherDashboardScreen(
+                navController = navController,
+                viewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+            )
+        }
+
+        // Admin routes
+        composable("admin_notices") {
+            AdminNoticeScreen(navController = navController)
+        }
+
+        // Teacher notice routes
+        composable("teacher_notice_list") {
+            TeacherNoticeListScreen(navController = navController)
+        }
+        composable("teacher_notice_create") {
+            TeacherNoticeCreateScreen(navController = navController)
+        }
+        composable(
+            "teacher_notice_create/{noticeId}",
+            arguments = listOf(navArgument("noticeId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            TeacherNoticeCreateScreen(
+                navController = navController,
+                noticeId = backStackEntry.arguments?.getString("noticeId")
+            )
         }
     }
 }

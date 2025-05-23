@@ -263,23 +263,34 @@ fun AddPersonScreen(
         }
     }
 
-    fun savePersonWithAdmin(adminPassword: String) {
+    fun savePersonWithAdmin() {
         if (!validateInputs()) return
 
         isLoading = true
         val auth = FirebaseAuth.getInstance()
         val db = FirebaseFirestore.getInstance()
-        val batch = db.batch()
 
-        // 1. Create the new user (student/teacher/staff)
+        // Store the current admin user
+        val currentAdmin = auth.currentUser
+        if (currentAdmin == null) {
+            isLoading = false
+            errorMessage = "Admin not logged in"
+            showErrorDialog = true
+            return
+        }
+
+        // First create the authentication account
         auth.createUserWithEmailAndPassword(email, password)
             .addOnSuccessListener { authResult ->
                 val userId = authResult.user?.uid ?: return@addOnSuccessListener
 
-                // 2. Immediately sign back in as admin
-                auth.signInWithEmailAndPassword(adminEmail, adminPassword)
+                // Sign back in as admin immediately
+                auth.signInWithEmailAndPassword(currentAdmin.email ?: "", adminPassword)
                     .addOnSuccessListener {
-                        // 3. Now do the Firestore writes as admin
+                        // Start a Firestore batch
+                        val batch = db.batch()
+
+                        // Create user document
                         val userDocRef = db.collection("users").document(userId)
                         val userData = mapOf(
                             "role" to personType,
@@ -292,6 +303,7 @@ fun AddPersonScreen(
                         )
                         batch.set(userDocRef, userData)
 
+                        // Create person document
                         val personDocRef = when (personType) {
                             "student" -> db.collection("students").document(userId)
                             "teacher" -> db.collection("teachers").document(userId)
@@ -315,6 +327,14 @@ fun AddPersonScreen(
                         )
                         batch.set(personDocRef, person)
 
+                        // Update auth user profile
+                        authResult.user?.updateProfile(
+                            com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                .setDisplayName("$firstName $lastName")
+                                .build()
+                        )
+
+                        // Commit Firestore batch
                         batch.commit()
                             .addOnSuccessListener {
                                 isLoading = false
@@ -325,23 +345,24 @@ fun AddPersonScreen(
                                 }
                             }
                             .addOnFailureListener { e ->
-                                authResult.user?.delete()?.addOnCompleteListener {
-                                    isLoading = false
-                                    errorMessage = "Error saving ${personType}: ${e.message}"
-                                    showErrorDialog = true
-                                }
+                                // If Firestore fails, delete the auth user
+                                authResult.user?.delete()
+                                isLoading = false
+                                errorMessage = "Error saving user data: ${e.message}"
+                                showErrorDialog = true
                             }
                     }
                     .addOnFailureListener { e ->
-                        // Could not sign back in as admin
+                        // If admin re-login fails, delete the created user
+                        authResult.user?.delete()
                         isLoading = false
-                        errorMessage = "Failed to sign back in as admin: ${e.message}"
+                        errorMessage = "Error re-authenticating admin: ${e.message}"
                         showErrorDialog = true
                     }
             }
             .addOnFailureListener { e ->
                 isLoading = false
-                errorMessage = "Error creating user: ${e.message}"
+                errorMessage = "Error creating user authentication: ${e.message}"
                 showErrorDialog = true
             }
     }
@@ -350,41 +371,82 @@ fun AddPersonScreen(
         if (!validateInputs()) return
 
         isLoading = true
+        val auth = FirebaseAuth.getInstance()
         val db = FirebaseFirestore.getInstance()
-        val person = Person(
-            id = db.collection(personType + "s").document().id, // generate a new ID
-            firstName = firstName.trim(),
-            lastName = lastName.trim(),
-            email = email.trim(),
-            password = password, // optional, not used for login
-            phone = phone.trim(),
-            type = personTypeValue,
-            className = formatClassForStorage(selectedClass),
-            rollNumber = rollNumber.trim(),
-            gender = gender,
-            dateOfBirth = dateOfBirth.trim(),
-            mobileNo = mobileNo.trim(),
-            address = address.trim(),
-            age = age.toIntOrNull() ?: 0
-        )
-        val collection = when (personType) {
-            "student" -> db.collection("students")
-            "teacher" -> db.collection("teachers")
-            else -> db.collection("non_teaching_staff")
-        }
-        collection.document(person.id)
-            .set(person)
-            .addOnSuccessListener {
-                isLoading = false
-                showMessage("${personType.capitalize()} added successfully")
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar("${personType.capitalize()} added successfully")
-                    navController.popBackStack()
+
+        // Create authentication account first
+        auth.createUserWithEmailAndPassword(email, password)
+            .addOnSuccessListener { authResult ->
+                val userId = authResult.user?.uid ?: return@addOnSuccessListener
+
+                // Create user document
+                val userDocRef = db.collection("users").document(userId)
+                val userData = mapOf(
+                    "role" to personType,
+                    "email" to email,
+                    "name" to "$firstName $lastName",
+                    "createdAt" to com.google.firebase.Timestamp.now(),
+                    "userId" to userId,
+                    "type" to personTypeValue,
+                    "className" to formatClassForStorage(selectedClass)
+                )
+
+                // Create person document
+                val personDocRef = when (personType) {
+                    "student" -> db.collection("students").document(userId)
+                    "teacher" -> db.collection("teachers").document(userId)
+                    else -> db.collection("non_teaching_staff").document(userId)
                 }
+                val person = Person(
+                    id = userId,
+                    firstName = firstName.trim(),
+                    lastName = lastName.trim(),
+                    email = email.trim(),
+                    password = password,
+                    phone = phone.trim(),
+                    type = personTypeValue,
+                    className = formatClassForStorage(selectedClass),
+                    rollNumber = rollNumber.trim(),
+                    gender = gender,
+                    dateOfBirth = dateOfBirth.trim(),
+                    mobileNo = mobileNo.trim(),
+                    address = address.trim(),
+                    age = age.toIntOrNull() ?: 0
+                )
+
+                // Use batch write for atomicity
+                val batch = db.batch()
+                batch.set(userDocRef, userData)
+                batch.set(personDocRef, person)
+
+                // Update auth user profile
+                authResult.user?.updateProfile(
+                    com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                        .setDisplayName("$firstName $lastName")
+                        .build()
+                )
+
+                // Commit the batch
+                batch.commit()
+                    .addOnSuccessListener {
+                        isLoading = false
+                        showMessage("${personType.capitalize()} added successfully")
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("${personType.capitalize()} added successfully")
+                            navController.popBackStack()
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        // If Firestore fails, delete the auth user
+                        authResult.user?.delete()
+                        isLoading = false
+                        errorMessage = "Error saving user data: ${e.message}"
+                        showErrorDialog = true
+                    }
             }
             .addOnFailureListener { e ->
                 isLoading = false
-                errorMessage = "Error saving ${personType}: ${e.message}"
+                errorMessage = "Error creating user authentication: ${e.message}"
                 showErrorDialog = true
             }
     }
@@ -763,7 +825,7 @@ fun AddPersonScreen(
                                 if (isEditMode) {
                                     validateAndSavePerson()
                                 } else {
-                                    savePersonDirectly()
+                                    savePersonDirectly()  // Use savePersonDirectly instead of showing admin dialog
                                 }
                             },
                             modifier = Modifier
@@ -910,34 +972,6 @@ fun AddPersonScreen(
                             ) {
                                 Text("Close")
                             }
-                        }
-                    )
-                }
-
-                // Show dialog to get admin password only
-                if (showAdminLoginDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showAdminLoginDialog = false },
-                        title = { Text("Admin Authentication Required") },
-                        text = {
-                            Column {
-                                Text("Please enter your admin password to confirm this action.")
-                                OutlinedTextField(
-                                    value = adminPassword,
-                                    onValueChange = { adminPassword = it },
-                                    label = { Text("Admin Password") },
-                                    visualTransformation = PasswordVisualTransformation()
-                                )
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                showAdminLoginDialog = false
-                                savePersonWithAdmin(adminPassword)
-                            }) { Text("Continue") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showAdminLoginDialog = false }) { Text("Cancel") }
                         }
                     )
                 }

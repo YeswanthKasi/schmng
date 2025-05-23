@@ -106,7 +106,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     private fun saveTokenToPrefs(token: String) {
         try {
-            getSharedPreferences("fcm_prefs", MODE_PRIVATE)
+            getSharedPreferences("app_prefs", MODE_PRIVATE)
                 .edit()
                 .putString("fcm_token", token)
                 .apply()
@@ -118,11 +118,26 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     private fun updateTokenInFirestore(token: String) {
         try {
-            val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+            val userId = FirebaseAuth.getInstance().currentUser?.uid
+            if (userId == null) {
+                Log.d(TAG, "No user logged in, skipping token update")
+                return
+            }
+
+            // Check if user wants to stay signed in
+            val staySignedIn = getSharedPreferences("app_prefs", MODE_PRIVATE)
+                .getBoolean("stay_signed_in", false)
+            
+            if (!staySignedIn) {
+                Log.d(TAG, "User not staying signed in, skipping token update")
+                return
+            }
+
             val tokenData = hashMapOf(
                 "fcm_token" to token,
                 "last_updated" to System.currentTimeMillis(),
-                "platform" to "android"
+                "platform" to "android",
+                "app_version" to getAppVersion()
             )
 
             FirebaseFirestore.getInstance()
@@ -137,6 +152,15 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating token", e)
+        }
+    }
+
+    private fun getAppVersion(): String {
+        return try {
+            val pInfo = packageManager.getPackageInfo(packageName, 0)
+            pInfo.versionName ?: "unknown"
+        } catch (e: Exception) {
+            "unknown"
         }
     }
 }

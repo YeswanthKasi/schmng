@@ -247,16 +247,51 @@ class MainActivity : ComponentActivity() {
             }
 
             val auth = FirebaseAuth.getInstance()
+            val currentUser = auth.currentUser
             val staySignedIn = prefs.getBoolean(KEY_STAY_SIGNED_IN, false)
-            isUserLoggedIn = auth.currentUser != null && staySignedIn
-
-            if (!staySignedIn && auth.currentUser != null) {
+            val credentialsSaved = prefs.getBoolean("credentials_saved", false)
+            
+            // Synchronize the auth state with preferences
+            when {
+                currentUser != null && staySignedIn -> {
+                    // Valid logged in state
+                    isUserLoggedIn = true
+                    determineInitialRoute(auth)
+                }
+                currentUser != null && !staySignedIn -> {
+                    // User should be logged out
+                    scope.launch {
+                        try {
+                            FirestoreDatabase.cleanup()
                 auth.signOut()
-                clearUserData()
+                            // Only clear auth-related preferences
+                            prefs.edit()
+                                .remove(KEY_USER_ROLE)
+                                .remove(KEY_STAY_SIGNED_IN)
+                                .remove("fcm_token")
+                                .apply()
+                            isUserLoggedIn = false
+                            resetToLogin()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error during cleanup", e)
+                            resetToLogin()
+                        }
+                    }
+                }
+                else -> {
+                    // Not logged in
                 isUserLoggedIn = false
+                    if (!credentialsSaved && !isFirstLaunch) {
+                        // If credentials were never saved and it's not first launch,
+                        // show login screen
+                        resetToLogin()
+                    } else {
+                        // Show welcome screen on first launch or if credentials were saved
+                        initialRoute = "welcome"
+                        isLoading = false
+                    }
+                }
             }
-
-            determineInitialRoute(auth)
         } catch (e: Exception) {
             Log.e(TAG, "Error setting up initial state", e)
             resetToLogin()
@@ -310,8 +345,12 @@ class MainActivity : ComponentActivity() {
             prefs.edit().apply {
                 remove(KEY_USER_ROLE)
                 remove(KEY_STAY_SIGNED_IN)
+                remove("fcm_token")
                 apply()
             }
+            
+            // Clear any cached Firestore data
+            FirestoreDatabase.cleanup()
         } catch (e: Exception) {
             Log.e(TAG, "Error clearing user data", e)
         }
@@ -328,6 +367,7 @@ class MainActivity : ComponentActivity() {
             "admin" -> "admin_dashboard"
             "student" -> "student_dashboard"
             "parent" -> "parent_dashboard"
+            "teacher" -> "teacher_dashboard"
             else -> "login"
         }
     }

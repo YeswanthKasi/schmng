@@ -51,6 +51,8 @@ import kotlinx.coroutines.tasks.await
 import android.util.Log
 import androidx.compose.foundation.text.KeyboardOptions
 import com.ecorvi.schmng.ui.navigation.BottomNavItem
+import com.ecorvi.schmng.ui.navigation.StudentBottomNavItem
+import com.google.android.gms.auth.api.credentials.IdentityProviders
 
 private const val REQUEST_SAVE_CREDENTIALS = 123
 
@@ -108,8 +110,45 @@ fun LoginScreen(navController: NavController) {
         }
     }
 
+    // Request saved credentials on launch
+    LaunchedEffect(Unit) {
+        try {
+            val request = CredentialRequest.Builder()
+                .setPasswordLoginSupported(true)
+                .setAccountTypes(IdentityProviders.GOOGLE)
+                .build()
+
+            credentialsClient.request(request)
+                .addOnSuccessListener { result ->
+                    result?.credential?.let { credential ->
+                        email = credential.id ?: ""
+                        password = credential.password ?: ""
+                    }
+                }
+                .addOnFailureListener { e ->
+                    when (e) {
+                        is ResolvableApiException -> {
+                            // Show credential picker dialog
+                            try {
+                                credentialRequestLauncher.launch(
+                                    IntentSenderRequest.Builder(e.resolution).build()
+                                )
+                            } catch (e: IntentSender.SendIntentException) {
+                                Log.e("LoginScreen", "Error launching credential picker", e)
+                            }
+                        }
+                        else -> {
+                            Log.e("LoginScreen", "Error getting credentials", e)
+                        }
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e("LoginScreen", "Error requesting credentials", e)
+        }
+    }
+
     // Check if this is first time login
-    val prefs = context.getSharedPreferences("login_prefs", Context.MODE_PRIVATE)
+    val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     val isFirstLogin = remember { prefs.getBoolean("is_first_login", true) }
 
     // If there are saved credentials, just fill the fields
@@ -173,8 +212,11 @@ fun LoginScreen(navController: NavController) {
                         credentialsClient.save(credential).addOnCompleteListener { task ->
                             if (task.isSuccessful) {
                                 Log.d("LoginScreen", "Credentials saved successfully")
-                                // Mark first login as complete
-                                prefs.edit().putBoolean("is_first_login", false).apply()
+                                // Mark first login as complete and save credentials preference
+                                prefs.edit()
+                                    .putBoolean("is_first_login", false)
+                                    .putBoolean("credentials_saved", true)
+                                    .apply()
                                 // Navigate after credentials are saved
                                 if (loginSuccessful && userRole.isNotEmpty()) {
                                     navigateToRoleDashboard(navController, userRole)
@@ -184,19 +226,26 @@ fun LoginScreen(navController: NavController) {
                                     try {
                                         val rae = task.exception as ResolvableApiException
                                         credentialSaveLauncher.launch(
-                                            IntentSenderRequest.Builder(rae.resolution).build()
+                                            IntentSenderRequest.Builder(rae.resolution)
+                                                .build()
                                         )
-                                        // Mark first login as complete after resolution
-                                        prefs.edit().putBoolean("is_first_login", false).apply()
-                                        // The navigation will happen in the credentialSaveLauncher result
                                     } catch (e: IntentSender.SendIntentException) {
                                         Log.e("LoginScreen", "Failed to send resolution", e)
-                                        // If there's an exception, still navigate
+                                    } finally {
+                                        // Mark first login as complete
+                                        prefs.edit()
+                                            .putBoolean("is_first_login", false)
+                                            .apply()
+                                        // Navigate even if saving failed
                                         if (loginSuccessful && userRole.isNotEmpty()) {
                                             navigateToRoleDashboard(navController, userRole)
                                         }
                                     }
                                 } else {
+                                    // Mark first login as complete
+                                    prefs.edit()
+                                        .putBoolean("is_first_login", false)
+                                        .apply()
                                     // Navigate even if credential saving failed
                                     if (loginSuccessful && userRole.isNotEmpty()) {
                                         navigateToRoleDashboard(navController, userRole)
@@ -578,31 +627,13 @@ fun LoginUser(
     auth.signInWithEmailAndPassword(email, password)
         .addOnCompleteListener { task ->
             if (task.isSuccessful) {
-                // Save credentials if login successful and stay signed in is checked
-                if (staySignedIn) {
-                    val credential = Credential.Builder(email)
-                        .setPassword(password)
-                        .build()
-
-                    val credentialsClient = Credentials.getClient(context as Activity)
-                    credentialsClient.save(credential).addOnCompleteListener { saveTask ->
-                        if (saveTask.isSuccessful) {
-                            Log.d("LoginScreen", "Credentials saved successfully")
-                        } else {
-                            if (saveTask.exception is ResolvableApiException) {
-                                // Try to resolve the save request
-                                try {
-                                    val rae = saveTask.exception as ResolvableApiException
-                                    rae.startResolutionForResult(context as Activity, REQUEST_SAVE_CREDENTIALS)
-                                } catch (e: IntentSender.SendIntentException) {
-                                    Log.e("LoginScreen", "Failed to send resolution", e)
-                                }
-                            }
-                        }
-                    }
-                }
-
                 val user = auth.currentUser
+                
+                // Save stay signed in preference immediately
+                context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("stay_signed_in", staySignedIn)
+                    .apply()
                 
                 // Log successful login event
                 val params = Bundle().apply {
@@ -611,53 +642,41 @@ fun LoginUser(
                     putString("user_id", user?.uid ?: "")
                 }
                 analytics.logEvent(FirebaseAnalytics.Event.LOGIN, params)
-                
-                // Also log a custom event for in-app messaging
-                val inAppParams = Bundle().apply {
-                    putString("event_type", "user_login")
-                    putString("user_id", user?.uid ?: "")
-                }
-                analytics.logEvent("trigger_in_app_message", inAppParams)
-                
-                // Save stay signed in preference
-                context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-                    .edit()
-                    .putBoolean("stay_signed_in", staySignedIn)
-                    .apply()
 
                 // Get FCM token and update in Firestore
                 FirebaseMessaging.getInstance().token
                     .addOnCompleteListener { tokenTask ->
-                        if (tokenTask.isSuccessful) {
-                            val token = tokenTask.result
                             val userDoc = FirebaseFirestore.getInstance()
                                 .collection("users")
                                 .document(user?.uid ?: "")
 
-                            // Update token and timestamps
                             val updates = hashMapOf<String, Any>(
-                                "fcmToken" to token,
-                                "tokenUpdatedAt" to FieldValue.serverTimestamp(),
-                                "lastActive" to FieldValue.serverTimestamp()
-                            )
+                            "lastActive" to FieldValue.serverTimestamp(),
+                            "staySignedIn" to staySignedIn  // Also store in Firestore
+                        )
+
+                        // Only update token if successfully retrieved
+                        if (tokenTask.isSuccessful) {
+                            val token = tokenTask.result
+                            updates["fcmToken"] = token
+                            updates["tokenUpdatedAt"] = FieldValue.serverTimestamp()
+                            
+                            // Save token in SharedPreferences
+                            context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                                .edit()
+                                .putString("fcm_token", token)
+                                .apply()
+                        }
 
                             userDoc.update(updates)
                                 .addOnSuccessListener {
-                                    Log.d("LoginScreen", "FCM token updated successfully")
+                                Log.d("LoginScreen", "User data updated successfully")
                                     // Continue with role check and callback
                                     fetchUserRoleAndNotify(userDoc, context, delayNavigation, onLoginResult)
                                 }
                                 .addOnFailureListener { e ->
-                                    Log.e("LoginScreen", "Failed to update FCM token", e)
+                                Log.e("LoginScreen", "Failed to update user data", e)
                                     // Continue anyway as this is not critical
-                                    fetchUserRoleAndNotify(userDoc, context, delayNavigation, onLoginResult)
-                                }
-                        } else {
-                            Log.e("LoginScreen", "Failed to get FCM token", tokenTask.exception)
-                            // Continue without token update
-                            val userDoc = FirebaseFirestore.getInstance()
-                                .collection("users")
-                                .document(user?.uid ?: "")
                             fetchUserRoleAndNotify(userDoc, context, delayNavigation, onLoginResult)
                         }
                     }
@@ -720,6 +739,11 @@ private fun navigateToRoleDashboard(navController: NavController, role: String) 
         }
         "student" -> {
             navController.navigate(StudentBottomNavItem.Home.route) {
+                popUpTo("login") { inclusive = true }
+            }
+        }
+        "teacher" -> {
+            navController.navigate("teacher_dashboard") {
                 popUpTo("login") { inclusive = true }
             }
         }

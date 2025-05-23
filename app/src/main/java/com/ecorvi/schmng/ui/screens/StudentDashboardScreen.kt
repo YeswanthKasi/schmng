@@ -63,6 +63,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import com.ecorvi.schmng.ui.components.TeacherAttendanceCard
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ecorvi.schmng.viewmodels.AttendanceViewModel
+import com.ecorvi.schmng.ui.navigation.StudentBottomNavItem
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 private val ScheduleOrange = Color(0xFFFF9800)
@@ -103,38 +106,6 @@ sealed class StudentDashboardUiState {
     object Loading : StudentDashboardUiState()
     data class Success(val student: Person) : StudentDashboardUiState()
     data class Error(val message: String) : StudentDashboardUiState()
-}
-
-sealed class StudentBottomNavItem(
-    val route: String,
-    val title: String,
-    val icon: ImageVector
-) {
-    object Home : StudentBottomNavItem(
-        route = "student_dashboard",
-        title = "Home",
-        icon = Icons.Default.Home
-    )
-    object Schedule : StudentBottomNavItem(
-        route = "student_schedule",
-        title = "Schedule",
-        icon = Icons.Default.Schedule
-    )
-    object Attendance : StudentBottomNavItem(
-        route = "student_attendance",
-        title = "Attendance",
-        icon = Icons.Default.CheckCircleOutline
-    )
-    object Notices : StudentBottomNavItem(
-        route = "student_announcements",
-        title = "Notices",
-        icon = Icons.Default.Announcement
-    )
-    object Profile : StudentBottomNavItem(
-        route = "student_profile",
-        title = "Profile",
-        icon = Icons.Default.Person
-    )
 }
 
 // Function for getting current day
@@ -653,7 +624,10 @@ fun StudentDashboardScreen(
                             // Teacher Attendance Card
                             item {
                                 student?.className?.let { className ->
-                                    TeacherAttendanceCard(className = className)
+                                    TeacherAttendanceCard(
+                                        className = className,
+                                        viewModel = viewModel()
+                                    )
                                 }
                             }
 

@@ -761,6 +761,15 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Announcement, contentDescription = "Notices") },
+                    label = { Text("Notices", fontSize = 16.sp) },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("admin_notices")
+                    }
+                )
+                NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Schedule, contentDescription = "Timetable") },
                     label = { Text("Timetable", fontSize = 16.sp) },
                     selected = false,
