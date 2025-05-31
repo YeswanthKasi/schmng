@@ -21,6 +21,8 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 
 import java.util.*
+import com.ecorvi.schmng.models.LeaveApplication
+import java.text.SimpleDateFormat
 
 object FirestoreDatabase {
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
@@ -1210,5 +1212,87 @@ object FirestoreDatabase {
             e.printStackTrace()
             onComplete(emptyList())
         }
+    }
+
+    fun submitLeave(
+        leave: LeaveApplication,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        val appliedAt = leave.appliedAt
+        val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(appliedAt))
+        val leaveWithDateKey = leave.copy()
+        val leaveMap = leaveWithDateKey.toMap().toMutableMap()
+        leaveMap["dateKey"] = dateKey
+        db.collection("leave_applications")
+            .add(leaveMap)
+            .addOnSuccessListener { docRef ->
+                docRef.update("id", docRef.id)
+                    .addOnSuccessListener { onSuccess() }
+                    .addOnFailureListener { onFailure(it) }
+            }
+            .addOnFailureListener { onFailure(it) }
+    }
+
+    fun listenToTeacherLeaves(
+        teacherId: String,
+        onUpdate: (List<LeaveApplication>) -> Unit,
+        onError: (Exception) -> Unit
+    ) = db.collection("leave_applications")
+        .whereEqualTo("teacherId", teacherId)
+        .addSnapshotListener { snapshot, e ->
+            if (e != null) {
+                onError(e)
+                return@addSnapshotListener
+            }
+            onUpdate(snapshot?.documents?.mapNotNull { it.toObject(LeaveApplication::class.java)?.copy(id = it.id) } ?: emptyList())
+        }
+
+    fun getLeaveDetails(
+        leaveId: String,
+        onSuccess: (LeaveApplication?) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        db.collection("leave_applications").document(leaveId)
+            .get()
+            .addOnSuccessListener { doc ->
+                onSuccess(doc.toObject(LeaveApplication::class.java)?.copy(id = doc.id))
+            }
+            .addOnFailureListener { onFailure(it) }
+    }
+
+    fun listenToAllLeaves(
+        status: String?,
+        onUpdate: (List<LeaveApplication>) -> Unit,
+        onError: (Exception) -> Unit
+    ) = db.collection("leave_applications")
+        .let { if (status != null && status != "all") it.whereEqualTo("status", status) else it }
+        .addSnapshotListener { snapshot, e ->
+            if (e != null) {
+                onError(e)
+                return@addSnapshotListener
+            }
+            onUpdate(snapshot?.documents?.mapNotNull { it.toObject(LeaveApplication::class.java)?.copy(id = it.id) } ?: emptyList())
+        }
+
+    fun updateLeaveStatus(
+        leaveId: String,
+        status: String,
+        adminRemarks: String,
+        adminId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        db.collection("leave_applications").document(leaveId)
+            .update(
+                mapOf(
+                    "status" to status,
+                    "adminRemarks" to adminRemarks,
+                    "reviewedBy" to adminId,
+                    "reviewedAt" to System.currentTimeMillis()
+                )
+            )
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { onFailure(it) }
     }
 }

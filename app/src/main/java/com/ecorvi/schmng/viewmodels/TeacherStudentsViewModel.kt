@@ -44,32 +44,36 @@ class TeacherStudentsViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Get teacher's classes
+                // Get teacher's class (single class as string)
                 val teacherDoc = db.collection("teachers").document(userId).get().await()
-                val teacherClasses = (teacherDoc.get("classes") as? List<*>)?.mapNotNull { it as? String }
-                    ?: emptyList()
+                val className = teacherDoc.getString("className")
+                val teacherClasses = if (!className.isNullOrBlank()) listOf(className) else emptyList()
 
                 // Get all students in teacher's classes
-                val studentsQuery = db.collection("students")
-                    .whereIn("class", teacherClasses)
-                    .get()
-                    .await()
+                if (teacherClasses.isNotEmpty()) {
+                    val studentsQuery = db.collection("students")
+                        .whereIn("className", teacherClasses)
+                        .get()
+                        .await()
 
-                allStudents = studentsQuery.documents.mapNotNull { doc ->
-                    val data = doc.data ?: return@mapNotNull null
-                    StudentInfo(
-                        id = doc.id,
-                        firstName = data["firstName"] as? String ?: "",
-                        lastName = data["lastName"] as? String ?: "",
-                        className = data["class"] as? String ?: ""
-                    )
+                    allStudents = studentsQuery.documents.mapNotNull { doc ->
+                        val data = doc.data ?: return@mapNotNull null
+                        StudentInfo(
+                            id = doc.id,
+                            firstName = data["firstName"] as? String ?: "",
+                            lastName = data["lastName"] as? String ?: "",
+                            className = data["className"] as? String ?: ""
+                        )
+                    }
+                } else {
+                    allStudents = emptyList()
                 }
 
                 _studentsState.value = _studentsState.value.copy(
                     students = allStudents,
                     classes = allStudents.map { it.className }.toSet(),
                     isLoading = false,
-                    error = null
+                    error = if (teacherClasses.isEmpty()) "No classes assigned to this teacher." else null
                 )
             } catch (e: Exception) {
                 _studentsState.value = _studentsState.value.copy(

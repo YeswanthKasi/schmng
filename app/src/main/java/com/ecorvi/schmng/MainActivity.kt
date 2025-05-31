@@ -241,11 +241,7 @@ class MainActivity : ComponentActivity() {
 
     private fun setupInitialState() {
         try {
-            isFirstLaunch = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
-            if (isFirstLaunch) {
-                prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
-            }
-
+            val hasSeenWelcome = prefs.getBoolean("has_seen_welcome", false)
             val auth = FirebaseAuth.getInstance()
             val currentUser = auth.currentUser
             val staySignedIn = prefs.getBoolean(KEY_STAY_SIGNED_IN, false)
@@ -263,7 +259,7 @@ class MainActivity : ComponentActivity() {
                     scope.launch {
                         try {
                             FirestoreDatabase.cleanup()
-                auth.signOut()
+                            auth.signOut()
                             // Only clear auth-related preferences
                             prefs.edit()
                                 .remove(KEY_USER_ROLE)
@@ -271,7 +267,13 @@ class MainActivity : ComponentActivity() {
                                 .remove("fcm_token")
                                 .apply()
                             isUserLoggedIn = false
-                            resetToLogin()
+                            initialRoute = if (!hasSeenWelcome) {
+                                prefs.edit().putBoolean("has_seen_welcome", true).apply()
+                                "welcome"
+                            } else {
+                                "login"
+                            }
+                            isLoading = false
                         } catch (e: Exception) {
                             Log.e(TAG, "Error during cleanup", e)
                             resetToLogin()
@@ -280,16 +282,14 @@ class MainActivity : ComponentActivity() {
                 }
                 else -> {
                     // Not logged in
-                isUserLoggedIn = false
-                    if (!credentialsSaved && !isFirstLaunch) {
-                        // If credentials were never saved and it's not first launch,
-                        // show login screen
-                        resetToLogin()
+                    isUserLoggedIn = false
+                    initialRoute = if (!hasSeenWelcome) {
+                        prefs.edit().putBoolean("has_seen_welcome", true).apply()
+                        "welcome"
                     } else {
-                        // Show welcome screen on first launch or if credentials were saved
-                        initialRoute = "welcome"
-                        isLoading = false
+                        "login"
                     }
+                    isLoading = false
                 }
             }
         } catch (e: Exception) {
@@ -300,9 +300,13 @@ class MainActivity : ComponentActivity() {
 
     private fun determineInitialRoute(auth: FirebaseAuth) {
         try {
+            val hasSeenWelcome = prefs.getBoolean("has_seen_welcome", false)
+            
             when {
-                isFirstLaunch -> {
+                !hasSeenWelcome -> {
+                    // First time app launch - show welcome screen
                     initialRoute = "welcome"
+                    prefs.edit().putBoolean("has_seen_welcome", true).apply()
                     isLoading = false
                 }
                 isUserLoggedIn -> {

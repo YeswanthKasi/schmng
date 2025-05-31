@@ -26,9 +26,18 @@ import com.ecorvi.schmng.ui.screens.StudentProfileScreen
 import com.ecorvi.schmng.ui.screens.TeacherProfileScreen
 import com.ecorvi.schmng.ui.screens.StudentAttendanceScreen
 import com.ecorvi.schmng.ui.screens.admin.AdminNoticeScreen
+import com.ecorvi.schmng.ui.screens.teacher.TeacherAttendanceScreen
 import com.ecorvi.schmng.ui.screens.teacher.TeacherDashboardScreen
 import com.ecorvi.schmng.ui.screens.teacher.TeacherNoticeCreateScreen
 import com.ecorvi.schmng.ui.screens.teacher.TeacherNoticeListScreen
+import com.ecorvi.schmng.ui.screens.teacher.TeacherStudentsScreen
+import com.ecorvi.schmng.viewmodels.TeacherStudentsViewModel
+import com.ecorvi.schmng.viewmodels.AttendanceViewModel
+import com.ecorvi.schmng.ui.screens.teacher.TeacherLeaveListScreen
+import com.ecorvi.schmng.ui.screens.teacher.TeacherLeaveApplyScreen
+import com.ecorvi.schmng.ui.screens.teacher.TeacherLeaveDetailsScreen
+import com.ecorvi.schmng.ui.screens.admin.AdminLeaveListScreen
+import com.ecorvi.schmng.ui.screens.admin.AdminLeaveDetailsScreen
 
 @Composable
 fun AppNavigation(
@@ -400,6 +409,22 @@ fun AppNavigation(
             )
         }
 
+        composable("teacher_attendance") {
+            TeacherAttendanceScreen(
+                navController = navController,
+                viewModel = androidx.lifecycle.viewmodel.compose.viewModel<AttendanceViewModel>()
+            )
+        }
+
+        composable("teacher_profile") {
+            val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+            TeacherProfileScreen(
+                navController = navController,
+                teacherId = currentUserId,
+                isAdmin = false
+            )
+        }
+
         // Admin routes
         composable("admin_notices") {
             AdminNoticeScreen(navController = navController)
@@ -419,6 +444,42 @@ fun AppNavigation(
             TeacherNoticeCreateScreen(
                 navController = navController,
                 noticeId = backStackEntry.arguments?.getString("noticeId")
+            )
+        }
+
+        composable("teacher_students") {
+            TeacherStudentsScreen(
+                navController = navController,
+                viewModel = androidx.lifecycle.viewmodel.compose.viewModel<TeacherStudentsViewModel>()
+            )
+        }
+
+        // Teacher leave routes
+        composable("teacher_leave_list") {
+            TeacherLeaveListScreen(navController = navController)
+        }
+        composable("teacher_leave_apply") {
+            TeacherLeaveApplyScreen(navController = navController)
+        }
+        composable(
+            "teacher_leave_details/{leaveId}",
+            arguments = listOf(navArgument("leaveId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            TeacherLeaveDetailsScreen(
+                navController = navController,
+                leaveId = backStackEntry.arguments?.getString("leaveId") ?: ""
+            )
+        }
+        composable("admin_leave_list") {
+            AdminLeaveListScreen(navController = navController)
+        }
+        composable(
+            "admin_leave_details/{leaveId}",
+            arguments = listOf(navArgument("leaveId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            AdminLeaveDetailsScreen(
+                navController = navController,
+                leaveId = backStackEntry.arguments?.getString("leaveId") ?: ""
             )
         }
     }

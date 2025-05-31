@@ -378,6 +378,12 @@ fun TeacherDashboardScreen(
                         title = "Students",
                         onClick = { navController.navigate("teacher_students") }
                     )
+                    DashboardCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Event,
+                        title = "Leave",
+                        onClick = { navController.navigate("teacher_leave_list") }
+                    )
                 }
 
                 Row(

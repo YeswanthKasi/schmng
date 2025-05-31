@@ -63,6 +63,8 @@ fun LoginScreen(navController: NavController) {
     val activity = context as ComponentActivity
     val credentialsClient = remember { Credentials.getClient(activity) }
     val scope = rememberCoroutineScope()
+    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val credentialsSaved = remember { prefs.getBoolean("credentials_saved", false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -112,50 +114,11 @@ fun LoginScreen(navController: NavController) {
 
     // Request saved credentials on launch
     LaunchedEffect(Unit) {
+        // Request credentials immediately when screen loads, not waiting for field focus
         try {
             val request = CredentialRequest.Builder()
                 .setPasswordLoginSupported(true)
                 .setAccountTypes(IdentityProviders.GOOGLE)
-                .build()
-
-            credentialsClient.request(request)
-                .addOnSuccessListener { result ->
-                    result?.credential?.let { credential ->
-                        email = credential.id ?: ""
-                        password = credential.password ?: ""
-                    }
-                }
-                .addOnFailureListener { e ->
-                    when (e) {
-                        is ResolvableApiException -> {
-                            // Show credential picker dialog
-                            try {
-                                credentialRequestLauncher.launch(
-                                    IntentSenderRequest.Builder(e.resolution).build()
-                                )
-                            } catch (e: IntentSender.SendIntentException) {
-                                Log.e("LoginScreen", "Error launching credential picker", e)
-                            }
-                        }
-                        else -> {
-                            Log.e("LoginScreen", "Error getting credentials", e)
-                        }
-                    }
-                }
-        } catch (e: Exception) {
-            Log.e("LoginScreen", "Error requesting credentials", e)
-        }
-    }
-
-    // Check if this is first time login
-    val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val isFirstLogin = remember { prefs.getBoolean("is_first_login", true) }
-
-    // If there are saved credentials, just fill the fields
-    LaunchedEffect(Unit) {
-        if (!isFirstLogin) {
-            val request = CredentialRequest.Builder()
-                .setPasswordLoginSupported(true)
                 .build()
 
             try {
@@ -177,8 +140,13 @@ fun LoginScreen(navController: NavController) {
                     }
                 }
             }
+        } catch (e: Exception) {
+            Log.e("LoginScreen", "Error setting up credential request", e)
         }
     }
+
+    // Check if this is first time login
+    val isFirstLogin = remember { prefs.getBoolean("is_first_login", true) }
 
     // If login was successful and showSaveCredentialsDialog changed to false, navigate to dashboard
     LaunchedEffect(showSaveCredentialsDialog) {
@@ -192,9 +160,6 @@ fun LoginScreen(navController: NavController) {
         AlertDialog(
             onDismissRequest = { 
                 showSaveCredentialsDialog = false
-                // Mark first login as complete even if dialog is dismissed
-                prefs.edit().putBoolean("is_first_login", false).apply()
-                // Navigate after dialog is dismissed
                 if (loginSuccessful && userRole.isNotEmpty()) {
                     navigateToRoleDashboard(navController, userRole)
                 }
@@ -212,44 +177,30 @@ fun LoginScreen(navController: NavController) {
                         credentialsClient.save(credential).addOnCompleteListener { task ->
                             if (task.isSuccessful) {
                                 Log.d("LoginScreen", "Credentials saved successfully")
-                                // Mark first login as complete and save credentials preference
+                                // Save the flag indicating credentials have been saved
                                 prefs.edit()
-                                    .putBoolean("is_first_login", false)
                                     .putBoolean("credentials_saved", true)
                                     .apply()
-                                // Navigate after credentials are saved
+                                
                                 if (loginSuccessful && userRole.isNotEmpty()) {
                                     navigateToRoleDashboard(navController, userRole)
                                 }
-                            } else {
-                                if (task.exception is ResolvableApiException) {
-                                    try {
-                                        val rae = task.exception as ResolvableApiException
-                                        credentialSaveLauncher.launch(
-                                            IntentSenderRequest.Builder(rae.resolution)
-                                                .build()
-                                        )
-                                    } catch (e: IntentSender.SendIntentException) {
-                                        Log.e("LoginScreen", "Failed to send resolution", e)
-                                    } finally {
-                                        // Mark first login as complete
-                                        prefs.edit()
-                                            .putBoolean("is_first_login", false)
-                                            .apply()
-                                        // Navigate even if saving failed
-                                        if (loginSuccessful && userRole.isNotEmpty()) {
-                                            navigateToRoleDashboard(navController, userRole)
-                                        }
-                                    }
-                                } else {
-                                    // Mark first login as complete
-                                    prefs.edit()
-                                        .putBoolean("is_first_login", false)
-                                        .apply()
-                                    // Navigate even if credential saving failed
+                            } else if (task.exception is ResolvableApiException) {
+                                try {
+                                    val rae = task.exception as ResolvableApiException
+                                    credentialSaveLauncher.launch(
+                                        IntentSenderRequest.Builder(rae.resolution).build()
+                                    )
+                                } catch (e: IntentSender.SendIntentException) {
+                                    Log.e("LoginScreen", "Failed to send resolution", e)
+                                } finally {
                                     if (loginSuccessful && userRole.isNotEmpty()) {
                                         navigateToRoleDashboard(navController, userRole)
                                     }
+                                }
+                            } else {
+                                if (loginSuccessful && userRole.isNotEmpty()) {
+                                    navigateToRoleDashboard(navController, userRole)
                                 }
                             }
                         }
@@ -262,9 +213,6 @@ fun LoginScreen(navController: NavController) {
                 TextButton(
                     onClick = {
                         showSaveCredentialsDialog = false
-                        // Mark first login as complete even if user doesn't want to save
-                        prefs.edit().putBoolean("is_first_login", false).apply()
-                        // Navigate after user declines to save credentials
                         if (loginSuccessful && userRole.isNotEmpty()) {
                             navigateToRoleDashboard(navController, userRole)
                         }
@@ -489,7 +437,6 @@ fun LoginScreen(navController: NavController) {
                                 isLoading = false
                             } else {
                                 errorMessage = ""
-                                // Reset login status
                                 loginSuccessful = false
                                 userRole = ""
                                 
@@ -499,7 +446,7 @@ fun LoginScreen(navController: NavController) {
                                     staySignedIn = staySignedIn,
                                     context = context,
                                     navController = navController,
-                                    delayNavigation = isFirstLogin
+                                    delayNavigation = !credentialsSaved
                                 ) { success, role, message ->
                                     isLoading = false
                                     if (success) {
@@ -510,11 +457,11 @@ fun LoginScreen(navController: NavController) {
                                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                         }
                                         
-                                        // Show save credentials dialog on first successful login
-                                        if (isFirstLogin) {
+                                        // Only show save credentials dialog if credentials haven't been saved before
+                                        if (!credentialsSaved) {
                                             showSaveCredentialsDialog = true
                                         } else {
-                                            // If not first login, navigate immediately
+                                            // If credentials are already saved, navigate immediately
                                             navigateToRoleDashboard(navController, userRole)
                                         }
                                     } else {
