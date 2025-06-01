@@ -457,12 +457,21 @@ fun StudentDashboardScreen(
                             }
                         )
                         NavigationDrawerItem(
-                            icon = { Icon(Icons.Default.Announcement, contentDescription = "Announcements") },
-                            label = { Text("Announcements") },
+                            icon = { Icon(Icons.Default.Announcement, contentDescription = "Notices") },
+                            label = { Text("Notices") },
                             selected = false,
                             onClick = {
                                 scope.launch { drawerState.close() }
-                                navController.navigate("student_announcements")
+                                navController.navigate(StudentBottomNavItem.Notices.route)
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.Event, contentDescription = "Class Events") },
+                            label = { Text("Class Events") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                navController.navigate("student_class_events")
                             }
                         )
                         NavigationDrawerItem(

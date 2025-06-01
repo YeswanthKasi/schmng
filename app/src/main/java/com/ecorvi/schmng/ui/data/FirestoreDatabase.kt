@@ -4,6 +4,7 @@ import android.net.Uri
 import android.util.Log
 import com.ecorvi.schmng.models.AttendanceRecord
 import com.ecorvi.schmng.models.AttendanceStatus
+import com.ecorvi.schmng.models.ClassEvent
 import com.ecorvi.schmng.models.UserType
 import com.ecorvi.schmng.ui.data.FirestoreDatabase.db
 import com.ecorvi.schmng.ui.data.model.AdminProfile
@@ -22,6 +23,7 @@ import kotlinx.coroutines.tasks.await
 
 import java.util.*
 import com.ecorvi.schmng.models.LeaveApplication
+import com.ecorvi.schmng.ui.data.model.Student
 import java.text.SimpleDateFormat
 
 object FirestoreDatabase {
@@ -32,6 +34,7 @@ object FirestoreDatabase {
     private val schedulesCollection = db.collection("schedules")
     private val feesCollection = db.collection("fees")
     private val timetablesCollection = db.collection("timetables")
+    private val classEventsCollection = db.collection("class_events")
 
     val studentsCollection: CollectionReference = db.collection("students")
     val teachersCollection: CollectionReference = db.collection("teachers")
@@ -1294,5 +1297,93 @@ object FirestoreDatabase {
             )
             .addOnSuccessListener { onSuccess() }
             .addOnFailureListener { onFailure(it) }
+    }
+
+    suspend fun getStudentsByClass(className: String): List<Student> {
+        return try {
+            val snapshot = db.collection("users")
+                .whereEqualTo("role", "student")
+                .whereEqualTo("className", className)
+                .get()
+                .await()
+
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(Student::class.java)?.copy(userId = doc.id)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getUserFCMToken(userId: String): String? {
+        return try {
+            val doc = db.collection("users")
+                .document(userId)
+                .get()
+                .await()
+
+            doc.getString("fcmToken")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun getTeacherAssignedClass(teacherId: String): String? {
+        return try {
+            val doc = teachersCollection.document(teacherId).get().await()
+            doc.getString("className")
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting teacher's assigned class: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getStudentClass(
+        studentId: String,
+        onComplete: (String?) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        try {
+            val doc = studentsCollection.document(studentId).get().await()
+            onComplete(doc.getString("className"))
+        } catch (e: Exception) {
+            onFailure(e)
+        }
+    }
+
+    suspend fun getClassEvents(
+        className: String,
+        onComplete: (List<ClassEvent>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        try {
+            Log.d("Firestore", "Fetching class events for class: $className with status: active")
+            // Simplify the query to match index exactly
+            val snapshot = classEventsCollection
+                .whereEqualTo("targetClass", className)
+                .whereEqualTo("status", "active")
+                .orderBy("eventDate", Query.Direction.DESCENDING)  // Only order by eventDate
+                .get()
+                .await()
+            
+            Log.d("Firestore", "Found ${snapshot.documents.size} events")
+            val events = snapshot.documents.mapNotNull { doc ->
+                try {
+                    doc.toObject(ClassEvent::class.java)?.also { event ->
+                        event.id = doc.id
+                        Log.d("Firestore", "Event details - Title: ${event.title}, Class: ${event.targetClass}, Status: ${event.status}, Date: ${event.eventDate}")
+                    }
+                } catch (e: Exception) {
+                    Log.e("Firestore", "Error converting document to ClassEvent: ${e.message}", e)
+                    null
+                }
+            }
+            Log.d("Firestore", "Successfully processed ${events.size} events")
+            onComplete(events)
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error fetching class events: ${e.message}", e)
+            e.printStackTrace()
+            onFailure(e)
+        }
     }
 }

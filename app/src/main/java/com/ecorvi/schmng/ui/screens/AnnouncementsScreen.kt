@@ -14,17 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.ecorvi.schmng.models.ClassEvent
 import com.ecorvi.schmng.ui.components.CommonBackground
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.analytics.ktx.analytics
-import com.google.firebase.analytics.ktx.logEvent
-import com.google.firebase.ktx.Firebase
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -45,126 +41,129 @@ fun AnnouncementsScreen(
     onRouteSelected: ((String) -> Unit)? = null
 ) {
     var announcements by remember { mutableStateOf<List<Announcement>>(emptyList()) }
+    var classEvents by remember { mutableStateOf<List<ClassEvent>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val currentUser = FirebaseAuth.getInstance().currentUser
 
-    // Log screen view for in-app messaging
-    LaunchedEffect(Unit) {
-        Firebase.analytics.logEvent("view_announcements", Bundle().apply {
-            putString("user_id", currentUser?.uid ?: "")
-        })
-    }
-
-    // Fetch announcements for the student's class
+    // Fetch announcements and class events
     LaunchedEffect(currentUser?.uid) {
         if (currentUser?.uid != null) {
-            FirestoreDatabase.getStudent(currentUser.uid)?.let { student ->
-                FirebaseFirestore.getInstance()
-                    .collection("announcements")
-                    .get()
-                    .addOnSuccessListener { documents ->
-                        announcements = documents.mapNotNull { doc ->
-                            doc.toObject(Announcement::class.java)
-                        }.filter {
-                            it.targetClass == "all" || it.targetClass == student.className
-                        }.sortedByDescending { it.date }
-                        isLoading = false
-                    }
-                    .addOnFailureListener { e ->
-                        errorMessage = e.message
-                        isLoading = false
-                    }
+            try {
+                // Get student's class
+                val student = FirestoreDatabase.getStudent(currentUser.uid)
+                if (student != null) {
+                    // Fetch announcements
+                    FirebaseFirestore.getInstance()
+                        .collection("announcements")
+                        .whereIn("targetClass", listOf("all", student.className))
+                        .get()
+                        .addOnSuccessListener { documents ->
+                            announcements = documents.mapNotNull { doc ->
+                                try {
+                                    Announcement(
+                                        id = doc.id,
+                                        title = doc.getString("title") ?: "",
+                                        content = doc.getString("content") ?: "",
+                                        date = doc.getString("date") ?: "",
+                                        targetClass = doc.getString("targetClass") ?: "all",
+                                        priority = doc.getString("priority") ?: "normal"
+                                    )
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            }
+                        }
+
+                    // Fetch class events
+                    FirebaseFirestore.getInstance()
+                        .collection("class_events")
+                        .whereEqualTo("targetClass", student.className)
+                        .whereEqualTo("status", "active")
+                        .get()
+                        .addOnSuccessListener { documents ->
+                            classEvents = documents.mapNotNull { doc ->
+                                doc.toObject(ClassEvent::class.java)
+                            }
+                            isLoading = false
+                        }
+                        .addOnFailureListener { e ->
+                            errorMessage = e.message
+                            isLoading = false
+                        }
+                }
+            } catch (e: Exception) {
+                errorMessage = e.message
+                isLoading = false
             }
         }
     }
 
-    CommonBackground {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Announcements") },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.White.copy(alpha = 0.95f)
-                    )
-                )
-            },
-            bottomBar = {
-                if (currentRoute != null && onRouteSelected != null) {
-                    StudentBottomNavigation(
-                        currentRoute = currentRoute,
-                        onNavigate = { item ->
-                            onRouteSelected(item.route)
-                        }
-                    )
-                }
-            }
-        ) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Announcements & Events") }
+            )
+        }
+    ) { padding ->
+        if (isLoading) {
             Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (errorMessage != null) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = errorMessage ?: "Unknown error",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        } else {
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
+                    .padding(padding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                } else if (errorMessage != null) {
-                    Text(
-                        text = errorMessage ?: "Unknown error",
-                        color = Color.Red,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp)
-                    )
-                } else if (announcements.isEmpty()) {
-                    Text(
-                        text = "No announcements",
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp)
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(announcements) { announcement ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = when (announcement.priority) {
-                                        "high" -> Color(0xFFFFEBEE)
-                                        "medium" -> Color(0xFFFFF3E0)
-                                        else -> Color.White
-                                    }
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
-                                ) {
-                                    Text(
-                                        text = announcement.title,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = announcement.date,
-                                        color = Color.Gray,
-                                        fontSize = 12.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = announcement.content,
-                                        color = Color.DarkGray
-                                    )
-                                }
-                            }
-                        }
+                // Show class events first
+                if (classEvents.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Upcoming Class Events",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    items(classEvents.sortedBy { it.eventDate }) { event ->
+                        EventCard(event = event)
+                    }
+
+                    item {
+                        Divider(modifier = Modifier.padding(vertical = 16.dp))
+                    }
+                }
+
+                // Then show announcements
+                if (announcements.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "General Announcements",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    items(announcements) { announcement ->
+                        AnnouncementCard(announcement = announcement)
                     }
                 }
             }
@@ -172,44 +171,98 @@ fun AnnouncementsScreen(
     }
 }
 
-@Preview(showBackground = true, device = Devices.PIXEL_4)
 @Composable
-fun AnnouncementsScreenPreview() {
-    val sampleAnnouncements = listOf(
-        Announcement(
-            title = "Important Meeting",
-            content = "There will be a mandatory meeting for all students.",
-            date = "2023-12-01",
-            targetClass = "all",
-            priority = "high"
-        ),
-        Announcement(
-            title = "Homework Reminder",
-            content = "Don't forget to submit your homework by Friday.",
-            date = "2023-11-28",
-            targetClass = "Class A",
-            priority = "medium"
-        ),
-        Announcement(
-            title = "School Trip",
-            content = "Details about the upcoming school trip.",
-            date = "2023-11-25",
-            targetClass = "Class B",
-            priority = "normal"
-        ),
-        Announcement(
-            title = "Test Alert",
-            content = "Reminder about the math test on December 5th.",
-            date = "2023-11-20",
-            targetClass = "all",
-            priority = "high"
+private fun EventCard(event: ClassEvent) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when (event.priority) {
+                "urgent" -> Color(0xFFFFEBEE)
+                "important" -> Color(0xFFFFF3E0)
+                else -> MaterialTheme.colorScheme.surface
+            }
         )
-    )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = event.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = event.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+                        .format(Date(event.eventDate)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Text(
+                    text = event.type.capitalize(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
 
-    // Simulate a simplified version of the screen
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        items(sampleAnnouncements) { announcement ->
-           Text(text = announcement.title, modifier = Modifier.padding(8.dp))
+@Composable
+private fun AnnouncementCard(announcement: Announcement) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when (announcement.priority) {
+                "urgent" -> Color(0xFFFFEBEE)
+                "important" -> Color(0xFFFFF3E0)
+                else -> MaterialTheme.colorScheme.surface
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = announcement.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = announcement.content,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = announcement.date,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

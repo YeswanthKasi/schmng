@@ -17,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 34
-        versionCode = 39
-        versionName = "1.36"
+        versionCode = 40
+        versionName = "1.37"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -121,6 +121,9 @@ dependencies {
     implementation("com.google.firebase:firebase-perf-ktx")
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
+
+    // Firebase Functions
+    implementation("com.google.firebase:firebase-functions-ktx:20.4.0")
 
     testImplementation(libs.junit)
     implementation(libs.google.play.app.update)

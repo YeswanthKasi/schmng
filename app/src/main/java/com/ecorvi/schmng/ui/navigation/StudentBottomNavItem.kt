@@ -25,7 +25,7 @@ sealed class StudentBottomNavItem(
         icon = Icons.Default.CheckCircleOutline
     )
     object Notices : StudentBottomNavItem(
-        route = "student_announcements",
+        route = "student_notices",
         title = "Notices",
         icon = Icons.Default.Announcement
     )

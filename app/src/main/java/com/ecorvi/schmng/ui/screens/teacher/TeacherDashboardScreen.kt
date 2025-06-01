@@ -381,8 +381,8 @@ fun TeacherDashboardScreen(
                     DashboardCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Event,
-                        title = "Leave",
-                        onClick = { navController.navigate("teacher_leave_list") }
+                        title = "Events",
+                        onClick = { navController.navigate("teacher_events") }
                     )
                 }
 
@@ -401,6 +401,12 @@ fun TeacherDashboardScreen(
                         icon = Icons.Default.Person,
                         title = "Profile",
                         onClick = { navController.navigate("teacher_profile") }
+                    )
+                    DashboardCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.EventNote,
+                        title = "Leave",
+                        onClick = { navController.navigate("teacher_leave_list") }
                     )
                 }
 

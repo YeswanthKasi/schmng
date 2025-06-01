@@ -38,6 +38,8 @@ import com.ecorvi.schmng.ui.screens.teacher.TeacherLeaveApplyScreen
 import com.ecorvi.schmng.ui.screens.teacher.TeacherLeaveDetailsScreen
 import com.ecorvi.schmng.ui.screens.admin.AdminLeaveListScreen
 import com.ecorvi.schmng.ui.screens.admin.AdminLeaveDetailsScreen
+import com.ecorvi.schmng.ui.screens.student.ClassEventsScreen
+import com.ecorvi.schmng.ui.screens.teacher.ClassEventManagementScreen
 
 @Composable
 fun AppNavigation(
@@ -58,15 +60,12 @@ fun AppNavigation(
     
     // Create a function to handle route selection
     val onRouteSelected: (String) -> Unit = { route ->
-        if (currentRoute != route) {
-            currentRoute = route
-            navController.navigate(route) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    saveState = true
-                }
-                launchSingleTop = true
-                restoreState = true
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
             }
+            launchSingleTop = true
+            restoreState = true
         }
     }
 
@@ -447,6 +446,13 @@ fun AppNavigation(
             )
         }
 
+        // Class Event Management routes
+        composable("teacher_events") {
+            ClassEventManagementScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         composable("teacher_students") {
             TeacherStudentsScreen(
                 navController = navController,
@@ -480,6 +486,24 @@ fun AppNavigation(
             AdminLeaveDetailsScreen(
                 navController = navController,
                 leaveId = backStackEntry.arguments?.getString("leaveId") ?: ""
+            )
+        }
+
+        // Student Class Events Screen (separate from Notices)
+        composable("student_class_events") {
+            ClassEventsScreen(
+                navController = navController,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        // Other student screens
+        composable("student_announcements") { 
+            NoticeListScreen(
+                navController = navController,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
             )
         }
     }

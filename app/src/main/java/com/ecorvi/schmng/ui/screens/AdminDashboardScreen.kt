@@ -813,23 +813,28 @@ fun AdminDashboardScreen(
                         Toast.makeText(context, "Bus Tracking is coming soon!", Toast.LENGTH_SHORT).show()
                     }
                 )
-                Spacer(modifier = Modifier.weight(0.2f))
+                Spacer(modifier = Modifier.weight(1f))
 
-                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                // Version and Update section
                 Column(
-                    modifier = Modifier.padding(start = 16.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
+                    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
                     Text(
                         text = "Version ${packageInfo.versionName}",
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                        color = Color.Gray
+                        color = Color.Gray,
+                        maxLines = 1
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .clickable { checkForUpdates() }
                             .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -838,12 +843,16 @@ fun AdminDashboardScreen(
                             tint = PrimaryBlue,
                             modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Check for Updates",
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                            color = PrimaryBlue
+                            color = PrimaryBlue,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
