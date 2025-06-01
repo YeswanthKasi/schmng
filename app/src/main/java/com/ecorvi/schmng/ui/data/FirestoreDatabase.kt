@@ -20,15 +20,19 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
+import com.google.firebase.functions.ktx.functions
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 import java.util.*
 import com.ecorvi.schmng.models.LeaveApplication
-import com.ecorvi.schmng.ui.data.model.Student
+import com.ecorvi.schmng.models.Student
 import java.text.SimpleDateFormat
 
 object FirestoreDatabase {
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
-
+    private val functions = Firebase.functions
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     
     private val schedulesCollection = db.collection("schedules")
@@ -161,18 +165,29 @@ object FirestoreDatabase {
     }
 
     // Add a student to Firestore
-    fun addStudent(student: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
-        // Standardize class format to "Class X"
-        val standardizedStudent = if (student.className.endsWith("st")) {
-            student.copy(className = "Class ${student.className.replace("st", "")}")
-        } else if (!student.className.startsWith("Class ")) {
-            student.copy(className = "Class ${student.className}")
-        } else {
-            student
+    fun addStudent(student: Student, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        // Validate required fields
+        when {
+            student.className.isBlank() -> {
+                onFailure(IllegalArgumentException("Student must have a class name"))
+                return
+            }
+            student.firstName.isBlank() -> {
+                onFailure(IllegalArgumentException("Student must have a first name"))
+                return
+            }
+            student.lastName.isBlank() -> {
+                onFailure(IllegalArgumentException("Student must have a last name"))
+                return
+            }
+            student.email.isBlank() -> {
+                onFailure(IllegalArgumentException("Student must have an email"))
+                return
+            }
         }
 
         val newStudentRef = studentsCollection.document()
-        val studentWithId = standardizedStudent.copy(id = newStudentRef.id)
+        val studentWithId = student.copy(id = newStudentRef.id)
 
         newStudentRef.set(studentWithId)
             .addOnSuccessListener {
@@ -1299,31 +1314,45 @@ object FirestoreDatabase {
             .addOnFailureListener { onFailure(it) }
     }
 
-    suspend fun getStudentsByClass(className: String): List<Student> {
-        return try {
-            val snapshot = db.collection("users")
-                .whereEqualTo("role", "student")
-                .whereEqualTo("className", className)
+    // Get students by class with improved error handling
+    suspend fun getStudentsByClass(classId: String): List<Student> = withContext(Dispatchers.IO) {
+        if (classId.isBlank()) {
+            Log.e("Firestore", "Empty classId provided")
+            return@withContext emptyList()
+        }
+
+        try {
+            studentsCollection
+                .whereEqualTo("className", classId)
+                .whereEqualTo("isActive", true)
                 .get()
                 .await()
-
-            snapshot.documents.mapNotNull { doc ->
-                doc.toObject(Student::class.java)?.copy(userId = doc.id)
-            }
+                .documents
+                .mapNotNull { doc ->
+                    try {
+                        doc.toObject(Student::class.java)?.copy(id = doc.id)
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error converting document to Student: ${e.message}")
+                        null
+                    }
+                }
         } catch (e: Exception) {
+            Log.e("Firestore", "Error getting students by class: ${e.message}")
             emptyList()
         }
     }
 
-    suspend fun getUserFCMToken(userId: String): String? {
-        return try {
-            val doc = db.collection("users")
+    // Get user's FCM token
+    suspend fun getUserFCMToken(userId: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val doc = db.collection("user_tokens")
                 .document(userId)
                 .get()
                 .await()
-
-            doc.getString("fcmToken")
+            
+            doc.getString("token")
         } catch (e: Exception) {
+            Log.e("Firestore", "Error getting user FCM token: ${e.message}")
             null
         }
     }
@@ -1384,6 +1413,154 @@ object FirestoreDatabase {
             Log.e("Firestore", "Error fetching class events: ${e.message}", e)
             e.printStackTrace()
             onFailure(e)
+        }
+    }
+
+    // Notification and Event Functions with improved validation
+    suspend fun notifyClassAboutEvent(
+        classId: String,
+        eventTitle: String,
+        eventDescription: String,
+        priority: String = "normal"
+    ) = withContext(Dispatchers.IO) {
+        try {
+            // Validate input parameters
+            when {
+                classId.isBlank() -> {
+                    Log.e("EventNotification", "Invalid parameter: classId is empty")
+                    return@withContext
+                }
+                eventTitle.isBlank() -> {
+                    Log.e("EventNotification", "Invalid parameter: eventTitle is empty")
+                    return@withContext
+                }
+                eventDescription.isBlank() -> {
+                    Log.e("EventNotification", "Invalid parameter: eventDescription is empty")
+                    return@withContext
+                }
+                !setOf("normal", "high", "low").contains(priority.lowercase()) -> {
+                    Log.e("EventNotification", "Invalid parameter: priority must be normal, high, or low")
+                    return@withContext
+                }
+            }
+
+            val students = getStudentsByClass(classId)
+            if (students.isEmpty()) {
+                Log.w("EventNotification", "No students found in class: $classId")
+                return@withContext
+            }
+
+            val studentTokens = mutableListOf<String>()
+            students.forEach { student ->
+                getUserFCMToken(student.userId)?.let { token ->
+                    studentTokens.add(token)
+                }
+            }
+
+            if (studentTokens.isEmpty()) {
+                Log.w("EventNotification", "No FCM tokens found for students in class: $classId")
+                return@withContext
+            }
+
+            val notificationData = hashMapOf(
+                "tokens" to studentTokens,
+                "notification" to hashMapOf(
+                    "title" to eventTitle,
+                    "body" to eventDescription,
+                    "priority" to priority
+                ),
+                "data" to hashMapOf(
+                    "type" to "class_event",
+                    "classId" to classId
+                )
+            )
+
+            functions
+                .getHttpsCallable("sendMulticastNotification")
+                .call(notificationData)
+                .await()
+
+            Log.d("EventNotification", "Successfully sent notification to ${studentTokens.size} students")
+        } catch (e: Exception) {
+            Log.e("EventNotification", "Error sending notifications: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    // Schedule event reminder with improved validation
+    suspend fun scheduleEventReminder(
+        eventId: String,
+        classId: String,
+        eventTitle: String,
+        eventTime: Long,
+        reminderMinutes: Int = 30
+    ) = withContext(Dispatchers.IO) {
+        try {
+            // Validate input parameters
+            when {
+                eventId.isBlank() -> {
+                    Log.e("EventReminder", "Invalid parameter: eventId is empty")
+                    return@withContext
+                }
+                classId.isBlank() -> {
+                    Log.e("EventReminder", "Invalid parameter: classId is empty")
+                    return@withContext
+                }
+                eventTitle.isBlank() -> {
+                    Log.e("EventReminder", "Invalid parameter: eventTitle is empty")
+                    return@withContext
+                }
+                eventTime <= System.currentTimeMillis() -> {
+                    Log.e("EventReminder", "Invalid parameter: eventTime must be in the future")
+                    return@withContext
+                }
+                reminderMinutes <= 0 -> {
+                    Log.e("EventReminder", "Invalid parameter: reminderMinutes must be positive")
+                    return@withContext
+                }
+            }
+
+            val reminderData = hashMapOf(
+                "eventId" to eventId,
+                "classId" to classId,
+                "title" to eventTitle,
+                "eventTime" to eventTime,
+                "reminderMinutes" to reminderMinutes
+            )
+
+            functions
+                .getHttpsCallable("scheduleEventReminder")
+                .call(reminderData)
+                .await()
+
+            Log.d("EventReminder", "Successfully scheduled reminder for event: $eventId")
+        } catch (e: Exception) {
+            Log.e("EventReminder", "Error scheduling reminder: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    // Cancel event notifications with improved validation
+    suspend fun cancelEventNotifications(eventId: String) = withContext(Dispatchers.IO) {
+        try {
+            if (eventId.isBlank()) {
+                Log.e("EventNotification", "Invalid parameter: eventId is empty")
+                return@withContext
+            }
+
+            val cancelData = hashMapOf(
+                "eventId" to eventId
+            )
+
+            functions
+                .getHttpsCallable("cancelEventNotifications")
+                .call(cancelData)
+                .await()
+
+            Log.d("EventNotification", "Successfully cancelled notifications for event: $eventId")
+        } catch (e: Exception) {
+            Log.e("EventNotification", "Error canceling notifications: ${e.message}")
+            e.printStackTrace()
         }
     }
 }

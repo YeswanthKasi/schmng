@@ -2,6 +2,7 @@ package com.ecorvi.schmng.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ecorvi.schmng.models.Student
 import com.ecorvi.schmng.models.StudentInfo
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -57,13 +58,9 @@ class TeacherStudentsViewModel : ViewModel() {
                         .await()
 
                     allStudents = studentsQuery.documents.mapNotNull { doc ->
-                        val data = doc.data ?: return@mapNotNull null
-                        StudentInfo(
-                            id = doc.id,
-                            firstName = data["firstName"] as? String ?: "",
-                            lastName = data["lastName"] as? String ?: "",
-                            className = data["className"] as? String ?: ""
-                        )
+                        doc.toObject(Student::class.java)?.let { student ->
+                            student.copy(id = doc.id).toStudentInfo()
+                        }
                     }
                 } else {
                     allStudents = emptyList()
