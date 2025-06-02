@@ -17,48 +17,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Docker with BuildKit
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
         with:
-          buildkitd-flags: --allow-insecure-entitlement security.insecure
+          java-version: '21'
+          distribution: 'zulu'
 
-      - name: Cache Docker layers
-        uses: actions/cache@v3
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v2
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      # Build and run with Docker
-      - name: Build and Run with Docker
-        run: |
-          # Build the Docker image with BuildKit cache
-          DOCKER_BUILDKIT=1 docker build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
-            -t android-builder .
-
-          # Create necessary directories with correct permissions
-          mkdir -p app/build/outputs/bundle/release
-          chmod -R 777 app/build
-
-          # Run the container with proper volume mounts and environment
-          docker run --rm \
-            -e KEY_ALIAS=${{ secrets.KEY_ALIAS }} \
-            -e KEY_PASSWORD=${{ secrets.KEY_PASSWORD }} \
-            -e STORE_PASSWORD=${{ secrets.STORE_PASSWORD }} \
-            -e JAVA_HOME=/usr/local/openjdk-21 \
-            -e ANDROID_SDK_ROOT=/usr/local/android-sdk \
-            -v ${PWD}:/app \
-            -v gradle-cache:/root/.gradle \
-            android-builder \
-            ./gradlew bundleRelease --no-daemon --stacktrace
-
-          # Move cache
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          components: |
+            cmdline-tools;latest
+            platform-tools
+            platforms;android-35
+            build-tools;33.0.0
+      - name: Grant gradlew permissions
+        run: chmod +x ./gradlew
 
       - name: Decode Keystore
         env:
@@ -66,6 +40,15 @@ jobs:
         run: |
           mkdir -p ./app/KEY_STORE
           echo "${KEYSTORE_BASE64}" | base64 --decode > ./app/KEY_STORE/schmng.jks
+      - name: Run Unit Tests
+        run: ./gradlew test
+
+      - name: Build AAB
+        run: ./gradlew bundleRelease
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
 
       - name: Create Tag
         id: create_tag
@@ -89,13 +72,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload to Play Store
+      - name: Upload New Version to Production
         uses: r0adkll/upload-google-play@v1
         with:
+          # Service account credentials from GitHub Secrets
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON }}
+          # Package name of the app
           packageName: com.ecorvi.schmng
+          # Path of the App Bundle file
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          # Production track of google play
           track: production
+          # Release status set to completed to send for review
           status: completed
+          # App update priority
           inAppUpdatePriority: 0
-  
