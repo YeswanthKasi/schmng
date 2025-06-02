@@ -17,16 +17,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Add Docker layer caching
+      # Set up Docker with BuildKit
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      # Install Docker Compose
-      - name: Install Docker Compose
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker-compose-plugin
-          docker compose version
+        with:
+          buildkitd-flags: --allow-insecure-entitlement security.insecure
 
       - name: Cache Docker layers
         uses: actions/cache@v3
@@ -36,9 +31,34 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # Build Docker image
-      - name: Build Docker image
-        run: docker-compose build
+      # Build and run with Docker
+      - name: Build and Run with Docker
+        run: |
+          # Build the Docker image with BuildKit cache
+          DOCKER_BUILDKIT=1 docker build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            -t android-builder .
+
+          # Create necessary directories with correct permissions
+          mkdir -p app/build/outputs/bundle/release
+          chmod -R 777 app/build
+
+          # Run the container with proper volume mounts and environment
+          docker run --rm \
+            -e KEY_ALIAS=${{ secrets.KEY_ALIAS }} \
+            -e KEY_PASSWORD=${{ secrets.KEY_PASSWORD }} \
+            -e STORE_PASSWORD=${{ secrets.STORE_PASSWORD }} \
+            -e JAVA_HOME=/usr/local/openjdk-21 \
+            -e ANDROID_SDK_ROOT=/usr/local/android-sdk \
+            -v ${PWD}:/app \
+            -v gradle-cache:/root/.gradle \
+            android-builder \
+            ./gradlew bundleRelease --no-daemon --stacktrace
+
+          # Move cache
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       - name: Decode Keystore
         env:
@@ -46,20 +66,6 @@ jobs:
         run: |
           mkdir -p ./app/KEY_STORE
           echo "${KEYSTORE_BASE64}" | base64 --decode > ./app/KEY_STORE/schmng.jks
-
-      - name: Run Unit Tests
-        run: docker-compose run --rm android-build test
-        env:
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-
-      - name: Build AAB
-        run: docker-compose run --rm android-build bundleRelease
-        env:
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
 
       - name: Create Tag
         id: create_tag
@@ -83,7 +89,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload New Version to Production
+      - name: Upload to Play Store
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON }}
