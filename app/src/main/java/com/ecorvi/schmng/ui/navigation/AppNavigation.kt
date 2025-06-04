@@ -40,6 +40,7 @@ import com.ecorvi.schmng.ui.screens.admin.AdminLeaveListScreen
 import com.ecorvi.schmng.ui.screens.admin.AdminLeaveDetailsScreen
 import com.ecorvi.schmng.ui.screens.student.ClassEventsScreen
 import com.ecorvi.schmng.ui.screens.teacher.ClassEventManagementScreen
+import com.ecorvi.schmng.ui.screens.teacher.TeacherAttendanceAnalyticsScreen
 
 @Composable
 fun AppNavigation(
@@ -412,6 +413,14 @@ fun AppNavigation(
             TeacherAttendanceScreen(
                 navController = navController,
                 viewModel = androidx.lifecycle.viewmodel.compose.viewModel<AttendanceViewModel>()
+            )
+        }
+
+        composable("teacher_attendance_analytics") {
+            TeacherAttendanceAnalyticsScreen(
+                navController = navController,
+                attendanceViewModel = androidx.lifecycle.viewmodel.compose.viewModel<AttendanceViewModel>(),
+                teacherViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
             )
         }
 

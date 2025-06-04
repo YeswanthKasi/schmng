@@ -150,7 +150,7 @@ class AttendanceViewModel : ViewModel() {
             }
     }
 
-    fun loadAttendance(date: Long, userType: UserType) {
+    fun loadAttendance(date: Long, userType: UserType, className: String = "") {
         _loading.value = true
         _error.value = null
         _currentDate.value = date
@@ -158,49 +158,109 @@ class AttendanceViewModel : ViewModel() {
         _hasUnsavedChanges.value = false
 
         val formattedDate = getFormattedDate(date)
-        println("Loading attendance for date: $formattedDate, userType: ${userType.name}")
+        println("Loading attendance for date: $formattedDate, userType: ${userType.name}, class: $className")
 
         attendanceListener?.remove()
-        attendanceListener = db.collection("attendance")
-            .document(formattedDate)
-            .collection(userType.name.lowercase())
-            .addSnapshotListener { snapshot, exception ->
-                if (exception != null) {
-                    println("Error loading attendance: ${exception.message}")
-                    exception.printStackTrace()
-                    _error.value = "Error loading attendance: ${exception.message}"
-                    _loading.value = false
-                    return@addSnapshotListener
+        
+        // If a specific class is provided, try to load class-specific attendance
+        if (className.isNotEmpty()) {
+            attendanceListener = db.collection("attendance")
+                .document(formattedDate)
+                .collection("class")
+                .document(className)
+                .collection("students")
+                .addSnapshotListener { snapshot, exception ->
+                    handleAttendanceSnapshot(snapshot, exception, formattedDate, userType, className)
                 }
-
-                try {
-                    val records = snapshot?.documents?.mapNotNull { doc ->
-                        println("Processing document: ${doc.id}")
-                        doc.toObject(AttendanceRecord::class.java)
-                    } ?: emptyList()
-                    
-                    println("Loaded ${records.size} attendance records")
-                    
-                    _attendanceRecords.value = records.associateBy { it.userId }
-                    updateCounts(records.associateBy { it.userId })
-                    
-                    // Print the current state
-                    println("Current attendance state:")
-                    println("Total records: ${_attendanceRecords.value.size}")
-                    println("Present: ${_presentCount.value}")
-                    println("Absent: ${_absentCount.value}")
-                    println("Permission: ${_permissionCount.value}")
-                } catch (e: Exception) {
-                    println("Error parsing attendance data: ${e.message}")
-                    e.printStackTrace()
-                    _error.value = "Error parsing attendance data: ${e.message}"
-                } finally {
-                    _loading.value = false
+        } else {
+            // Try both singular and plural collection names
+            val collectionName = userType.name.lowercase()
+            attendanceListener = db.collection("attendance")
+                .document(formattedDate)
+                .collection(collectionName)
+                .addSnapshotListener { snapshot, exception ->
+                    if (exception != null || snapshot?.documents.isNullOrEmpty()) {
+                        // If first attempt fails or returns empty, try alternative collection name
+                        val alternativeCollection = if (collectionName.endsWith("s")) {
+                            collectionName.dropLast(1)
+                        } else {
+                            "${collectionName}s"
+                        }
+                        
+                        println("First attempt failed or empty, trying alternative collection: $alternativeCollection")
+                        
+                        db.collection("attendance")
+                            .document(formattedDate)
+                            .collection(alternativeCollection)
+                            .get()
+                            .addOnSuccessListener { alternativeSnapshot ->
+                                handleAttendanceSnapshot(alternativeSnapshot, null, formattedDate, userType, className)
+                            }
+                            .addOnFailureListener { e ->
+                                println("Alternative collection also failed: ${e.message}")
+                                handleAttendanceSnapshot(snapshot, exception, formattedDate, userType, className)
+                            }
+                    } else {
+                        handleAttendanceSnapshot(snapshot, exception, formattedDate, userType, className)
+                    }
                 }
-            }
+        }
     }
 
-    fun submitAttendance(userType: UserType) {
+    private fun handleAttendanceSnapshot(
+        snapshot: com.google.firebase.firestore.QuerySnapshot?,
+        exception: Exception?,
+        formattedDate: String,
+        userType: UserType,
+        className: String
+    ) {
+        if (exception != null) {
+            println("Error loading attendance: ${exception.message}")
+            exception.printStackTrace()
+            _error.value = "Error loading attendance: ${exception.message}"
+            _loading.value = false
+            return
+        }
+
+        try {
+            val records = snapshot?.documents?.mapNotNull { doc ->
+                println("Processing document: ${doc.id}")
+                val record = doc.toObject(AttendanceRecord::class.java)
+                
+                // Set class information if not already set
+                record?.apply {
+                    if (this.className.isEmpty() && className.isNotEmpty()) {
+                        this.className = className
+                    }
+                    if (this.classId.isEmpty() && className.isNotEmpty()) {
+                        this.classId = className
+                    }
+                }
+                
+                record
+            } ?: emptyList()
+            
+            println("Loaded ${records.size} attendance records")
+            
+            _attendanceRecords.value = records.associateBy { it.userId }
+            updateCounts(records.associateBy { it.userId })
+            
+            // Print the current state
+            println("Current attendance state:")
+            println("Total records: ${_attendanceRecords.value.size}")
+            println("Present: ${_presentCount.value}")
+            println("Absent: ${_absentCount.value}")
+            println("Permission: ${_permissionCount.value}")
+        } catch (e: Exception) {
+            println("Error parsing attendance data: ${e.message}")
+            e.printStackTrace()
+            _error.value = "Error parsing attendance data: ${e.message}"
+        } finally {
+            _loading.value = false
+        }
+    }
+
+    fun submitAttendance(userType: UserType, className: String = "") {
         println("submitAttendance called with userType: $userType")
         viewModelScope.launch {
             try {
@@ -211,6 +271,7 @@ class AttendanceViewModel : ViewModel() {
                 println("Starting attendance submission")
                 println("Current date: ${getFormattedDate(_currentDate.value)}")
                 println("User type: ${userType.name}")
+                println("Class name: $className")
                 println("Pending changes: ${_pendingChanges.value}")
                 println("Current user: ${FirebaseAuth.getInstance().currentUser?.uid}")
 
@@ -248,70 +309,54 @@ class AttendanceViewModel : ViewModel() {
                         .document(userId)
 
                     println("Preparing to save attendance for user: $userId with status: $status")
-                    println("Document path: ${docRef.path}")
 
-                    val record = AttendanceRecord(
+                    // Check if we already have a record for this user
+                    val existingRecord = _attendanceRecords.value[userId]
+                    val currentTime = System.currentTimeMillis()
+                    val currentUser = FirebaseAuth.getInstance().currentUser?.uid ?: "unknown"
+                    
+                    val record = existingRecord?.copy(
+                        status = status,
+                        lastModified = currentTime,
+                        markedBy = currentUser
+                    ) ?: AttendanceRecord(
                         id = userId,
                         userId = userId,
                         userType = userType,
                         date = _currentDate.value,
                         status = status,
-                        markedBy = FirebaseAuth.getInstance().currentUser?.uid ?: "",
-                        remarks = "",
-                        lastModified = System.currentTimeMillis()
+                        markedBy = currentUser,
+                        lastModified = currentTime,
+                        classId = className,
+                        className = className
                     )
 
-                    println("Created attendance record: $record")
-
-                    // Set with merge to update existing or create new
                     batch.set(docRef, record)
                     operationsCount++
-
-                    println("Added operation for user $userId to batch")
-                }
-
-                println("Attempting to commit batch with $operationsCount operations")
-                
-                try {
-                    batch.commit().await()
-                    println("Batch commit successful")
                     
-                    // Verify the save by reading back
-                    val savedRecords = db.collection("attendance")
-                        .document(formattedDate)
-                        .collection(userType.name.lowercase())
-                        .get()
-                        .await()
-                    
-                    println("Verification - Found ${savedRecords.documents.size} records after save")
-                    println("Saved records: ${savedRecords.documents.map { it.id }}")
-                    
-                    if (savedRecords.documents.isEmpty()) {
-                        throw Exception("No records found after save")
+                    // Firestore has a limit of 500 operations per batch
+                    if (operationsCount >= 450) {
+                        batch.commit().await()
+                        println("Committed batch with $operationsCount operations")
+                        operationsCount = 0
                     }
-                    
-                    // Clear pending changes only if save was successful
-                    _pendingChanges.value = emptyMap()
-                    _hasUnsavedChanges.value = false
-                    println("Cleared pending changes and reset hasUnsavedChanges")
-
-                    // Reload attendance to refresh the UI
-                    loadAttendance(_currentDate.value, userType)
-                    println("Reloaded attendance data")
-                    
-                    println("Save operation completed successfully")
-                } catch (e: Exception) {
-                    println("Batch commit failed: ${e.message}")
-                    e.printStackTrace()
-                    _error.value = "Failed to save attendance: ${e.message}"
                 }
+
+                // Commit any remaining operations
+                if (operationsCount > 0) {
+                    batch.commit().await()
+                    println("Committed final batch with $operationsCount operations")
+                }
+
+                _pendingChanges.value = emptyMap()
+                _hasUnsavedChanges.value = false
+                println("Attendance saved successfully")
             } catch (e: Exception) {
-                println("Error in submitAttendance: ${e.message}")
+                println("Error saving attendance: ${e.message}")
                 e.printStackTrace()
                 _error.value = "Error saving attendance: ${e.message}"
             } finally {
                 _loading.value = false
-                println("Save operation finished, loading set to false")
             }
         }
     }

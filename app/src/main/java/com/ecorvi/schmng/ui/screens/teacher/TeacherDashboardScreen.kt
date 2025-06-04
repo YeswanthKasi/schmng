@@ -9,15 +9,18 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +34,8 @@ import com.ecorvi.schmng.models.ScheduleItem
 import com.ecorvi.schmng.models.TeacherSchedule
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 
@@ -83,12 +88,12 @@ fun TeacherDashboardScreen(
     navController: NavController,
     viewModel: TeacherDashboardViewModel
 ) {
+    val context = LocalContext.current
     val teacherData by viewModel.teacherData.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
     val timeSlots by viewModel.timeSlots.collectAsState()
     val timetables by viewModel.timetables.collectAsState()
-    val context = LocalContext.current
     val currentDay = getCurrentDay()
     
     Scaffold(
@@ -361,6 +366,205 @@ fun TeacherDashboardScreen(
                     }
                 }
 
+                // Attendance Analytics Overview Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
+                        .clickable { navController.navigate("teacher_attendance_analytics") },
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Attendance Insights",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = PrimaryBlue
+                            )
+                            IconButton(onClick = { navController.navigate("teacher_attendance_analytics") }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.TrendingUp,
+                                    contentDescription = "View Analytics",
+                                    tint = PrimaryBlue
+                                )
+                            }
+                        }
+
+                        // Month selection controls
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = { viewModel.selectPreviousMonth() }
+                            ) {
+                                Icon(
+                                    Icons.Default.ChevronLeft,
+                                    contentDescription = "Previous Month",
+                                    tint = PrimaryBlue
+                                )
+                            }
+                            
+                            val selectedMonth by viewModel.selectedMonth.collectAsState()
+                            val selectedYear by viewModel.selectedYear.collectAsState()
+                            val calendar = remember { Calendar.getInstance() }
+                            calendar.set(Calendar.YEAR, selectedYear)
+                            calendar.set(Calendar.MONTH, selectedMonth)
+                            
+                            Text(
+                                text = "${calendar.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale.getDefault())} $selectedYear",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            
+                            // Only show next month button if not current month
+                            val currentCalendar = Calendar.getInstance()
+                            if (calendar.get(Calendar.YEAR) < currentCalendar.get(Calendar.YEAR) ||
+                                (calendar.get(Calendar.YEAR) == currentCalendar.get(Calendar.YEAR) &&
+                                calendar.get(Calendar.MONTH) < currentCalendar.get(Calendar.MONTH))) {
+                                IconButton(
+                                    onClick = { viewModel.selectNextMonth() }
+                                ) {
+                                    Icon(
+                                        Icons.Default.ChevronRight,
+                                        contentDescription = "Next Month",
+                                        tint = PrimaryBlue
+                                    )
+                                }
+                            } else {
+                                // Placeholder to maintain layout
+                                Spacer(modifier = Modifier.width(48.dp))
+                            }
+                        }
+
+                        // Classes information - using actual teacher's classes from timetables
+                        val teacherClasses = timetables.map { it.classGrade }.distinct()
+                        
+                        if (teacherClasses.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.School,
+                                    contentDescription = null,
+                                    tint = PrimaryBlue,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = teacherClasses.joinToString(", "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Attendance Rate from ViewModel
+                        val attendanceStats by viewModel.attendanceStats.collectAsState()
+                        val attendanceRate = attendanceStats.attendanceRate
+                        val presentCount = attendanceStats.presentCount
+                        val absentCount = attendanceStats.absentCount
+                        val leaveCount = attendanceStats.leaveCount
+                        
+                        Text(
+                            text = "Monthly Attendance Rate",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "${attendanceRate.toInt()}%",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = when {
+                                    attendanceRate >= 90f -> Color(0xFF4CAF50) // Green
+                                    attendanceRate >= 75f -> Color(0xFFFFA000) // Amber
+                                    else -> Color(0xFFF44336) // Red
+                                },
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                            
+                            Box(modifier = Modifier.weight(1f)) {
+                                // Background track
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(12.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                )
+                                
+                                // Progress indicator
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(attendanceRate / 100f)
+                                        .height(12.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            when {
+                                                attendanceRate >= 90f -> Color(0xFF4CAF50) // Green
+                                                attendanceRate >= 75f -> Color(0xFFFFA000) // Amber
+                                                else -> Color(0xFFF44336) // Red
+                                            }
+                                        )
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Attendance Stats Row with real data
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            AttendanceStatItem(
+                                count = presentCount,
+                                label = "Present",
+                                color = Color(0xFF4CAF50)
+                            )
+                            
+                            AttendanceStatItem(
+                                count = absentCount,
+                                label = "Absent",
+                                color = Color(0xFFF44336)
+                            )
+                            
+                            AttendanceStatItem(
+                                count = leaveCount,
+                                label = "Leave",
+                                color = Color(0xFFFFA000)
+                            )
+                        }
+                    }
+                }
+
                 // Quick Actions Grid
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -497,5 +701,39 @@ private fun getCurrentDay(): String {
         Calendar.FRIDAY -> "Friday"
         Calendar.SATURDAY -> "Saturday"
         else -> "Sunday"
+    }
+}
+
+@Composable
+private fun AttendanceStatItem(
+    count: Int,
+    label: String,
+    color: Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 } 

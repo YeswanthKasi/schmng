@@ -28,7 +28,13 @@ data class AttendanceRecord(
     var remarks: String = "",
 
     @get:PropertyName("lastModified") @set:PropertyName("lastModified")
-    var lastModified: Long = System.currentTimeMillis()
+    var lastModified: Long = System.currentTimeMillis(),
+    
+    @get:PropertyName("classId") @set:PropertyName("classId")
+    var classId: String = "",
+    
+    @get:PropertyName("className") @set:PropertyName("className")
+    var className: String = ""
 ) {
     // Required for Firestore
     constructor() : this(
@@ -39,7 +45,9 @@ data class AttendanceRecord(
         status = AttendanceStatus.ABSENT,
         markedBy = "",
         remarks = "",
-        lastModified = System.currentTimeMillis()
+        lastModified = System.currentTimeMillis(),
+        classId = "",
+        className = ""
     )
 }
 
