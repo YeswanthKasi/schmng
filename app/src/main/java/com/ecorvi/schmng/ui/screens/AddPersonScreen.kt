@@ -31,12 +31,15 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
+import com.ecorvi.schmng.ui.data.model.ChildInfo
+import com.ecorvi.schmng.ui.data.model.ParentInfo
 import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.utils.Constants
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 private val StudentGreen = Color(0xFF4CAF50) // Green color for student theme
 private val TeacherBlue = Color(0xFF1F41BB) // Blue color for teacher theme
@@ -49,6 +52,60 @@ fun formatClassForStorage(className: String): String {
         "Class $className"
     } else {
         className
+    }
+}
+
+fun savePersonDirectly(
+    person: Person,
+    auth: FirebaseAuth,
+    db: FirebaseFirestore,
+    email: String,
+    password: String,
+    personType: String,
+    onSuccess: (String) -> Unit,
+    onError: (Exception) -> Unit
+) {
+    auth.createUserWithEmailAndPassword(email, password)
+        .addOnSuccessListener { authResult ->
+            val userId = authResult.user?.uid ?: return@addOnSuccessListener
+
+            // Create user document
+            val userDocRef = db.collection("users").document(userId)
+            val userData = mapOf(
+                "role" to personType,
+                "email" to email,
+                "name" to "${person.firstName} ${person.lastName}",
+                "createdAt" to com.google.firebase.Timestamp.now(),
+                "userId" to userId,
+                "type" to person.type,
+                "className" to person.className
+            )
+
+            // Create person document
+            val personDocRef = when (personType) {
+                "student" -> db.collection("students").document(userId)
+                "teacher" -> db.collection("teachers").document(userId)
+                else -> db.collection("non_teaching_staff").document(userId)
+            }
+
+            // Start a batch write
+            val batch = db.batch()
+            batch.set(userDocRef, userData)
+            batch.set(personDocRef, person.copy(id = userId))
+
+            // Commit the batch
+            batch.commit()
+                .addOnSuccessListener {
+                    onSuccess(userId)
+                }
+                .addOnFailureListener { e ->
+                    // If Firestore fails, delete the auth user
+                    authResult.user?.delete()
+                    onError(e)
+                }
+        }
+        .addOnFailureListener { e ->
+            onError(e)
     }
 }
 
@@ -73,6 +130,17 @@ fun AddPersonScreen(
     var age by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var personTypeValue by remember { mutableStateOf("Regular") }
+
+    // Parent-related state variables
+    var parentFirstName by remember { mutableStateOf("") }
+    var parentLastName by remember { mutableStateOf("") }
+    var parentEmail by remember { mutableStateOf("") }
+    var parentPassword by remember { mutableStateOf("") }
+    var showParentPassword by remember { mutableStateOf(false) }
+    var parentPhone by remember { mutableStateOf("") }
+    var parentAddress by remember { mutableStateOf("") }
+    var parentId by remember { mutableStateOf("") }
+
     var showClassDialog by remember { mutableStateOf(false) }
     var showTypeDialog by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(personId != null) }
@@ -93,28 +161,94 @@ fun AddPersonScreen(
         listOf("Regular", "Temporary", "Visiting")
     }
 
-    fun showMessage(message: String) {
+    LaunchedEffect(personId) {
+        if (personId != null) {
+            isLoading = true
+            try {
+                val person = if (personType == "student") {
+                    FirestoreDatabase.getStudent(personId)
+                } else {
+                    FirestoreDatabase.getTeacher(personId)
+                }
+                if (person != null) {
+                    firstName = person.firstName
+                    lastName = person.lastName
+                    email = person.email
+                    phone = person.phone
+                    personTypeValue = person.type
+                    selectedClass = person.className
+                    rollNumber = person.rollNumber
+                    gender = person.gender
+                    dateOfBirth = person.dateOfBirth
+                    mobileNo = person.mobileNo
+                    address = person.address
+                    age = if (person.age > 0) person.age.toString() else ""
+
+                    // If this is a student, fetch parent information
+                    if (personType == "student") {
+                        try {
+                            FirestoreDatabase.getParentByChildId(
+                                childId = personId,
+                                onSuccess = { parent ->
+                                    if (parent != null) {
+                                        parentId = parent.id
+                                        parentFirstName = parent.firstName
+                                        parentLastName = parent.lastName
+                                        parentEmail = parent.email
+                                        parentPhone = parent.phone
+                                        parentAddress = parent.address
+                                    }
+                                },
+                                onFailure = { e ->
+                                    errorMessage = "Failed to load parent data: ${e.message}"
+                                    showErrorDialog = true
+                                }
+                            )
+                        } catch (e: Exception) {
+                            errorMessage = "Failed to load parent data: ${e.message}"
+                            showErrorDialog = true
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                errorMessage = "Failed to load data: ${e.message}"
+                showErrorDialog = true
+            }
+            isLoading = false
+        }
+    }
+
+    @Composable
+    fun ShowMessage(message: String) {
+        val context = LocalContext.current
+        LaunchedEffect(message) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun validateInputs(): Boolean {
+        var isValid = true
+        var validationMessage = ""
+
         if (firstName.isBlank() || lastName.isBlank() || email.isBlank() || (!isEditMode && password.isBlank())) {
-            showMessage("Please fill in all required fields")
-            return false
+            validationMessage = "Please fill in all required fields"
+            isValid = false
+        } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            validationMessage = "Please enter a valid email address"
+            isValid = false
+        } else if (phone.isNotBlank() && !android.util.Patterns.PHONE.matcher(phone).matches()) {
+            validationMessage = "Please enter a valid phone number"
+            isValid = false
+        } else if (age.isNotBlank() && age.toIntOrNull() == null) {
+            validationMessage = "Please enter a valid age"
+            isValid = false
         }
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            showMessage("Please enter a valid email address")
-            return false
+
+        if (!isValid) {
+            errorMessage = validationMessage
+            showErrorDialog = true
         }
-        if (phone.isNotBlank() && !android.util.Patterns.PHONE.matcher(phone).matches()) {
-            showMessage("Please enter a valid phone number")
-            return false
-        }
-        if (age.isNotBlank() && age.toIntOrNull() == null) {
-            showMessage("Please enter a valid age")
-            return false
-        }
-        return true
+        return isValid
     }
 
     fun savePerson() {
@@ -124,41 +258,18 @@ fun AddPersonScreen(
         
         isLoading = true
         val auth = FirebaseAuth.getInstance()
-        val db = FirebaseFirestore.getInstance()
 
-        // Start a Firestore batch to ensure atomicity
-        val batch = db.batch()
-
+        // First create student account and data
         auth.createUserWithEmailAndPassword(email, password)
-            .addOnSuccessListener { authResult ->
-                val userId = authResult.user?.uid ?: return@addOnSuccessListener
+            .addOnSuccessListener { studentAuthResult ->
+                val studentId = studentAuthResult.user?.uid ?: return@addOnSuccessListener
 
-                // 1. Create user document first
-                val userDocRef = db.collection("users").document(userId)
-                val userData = mapOf(
-                    "role" to personType,
-                    "email" to email,
-                    "name" to "$firstName $lastName",
-                    "createdAt" to com.google.firebase.Timestamp.now(),
-                    "userId" to userId,
-                    "type" to personTypeValue,
-                    "className" to formatClassForStorage(selectedClass)
-                )
-                batch.set(userDocRef, userData)
-
-                // 2. Create person document
-                val personDocRef = when (personType) {
-                    "student" -> db.collection("students").document(userId)
-                    "teacher" -> db.collection("teachers").document(userId)
-                    else -> db.collection("non_teaching_staff").document(userId)
-                }
-
-                val person = Person(
-                    id = userId,
+                // Create student document
+                val student = Person(
+                    id = studentId,
                     firstName = firstName.trim(),
                     lastName = lastName.trim(),
                     email = email.trim(),
-                    password = password,
                     phone = phone.trim(),
                     type = personTypeValue,
                     className = formatClassForStorage(selectedClass),
@@ -169,97 +280,124 @@ fun AddPersonScreen(
                     address = address.trim(),
                     age = age.toIntOrNull() ?: 0
                 )
-                batch.set(personDocRef, person)
 
-                // 3. Commit the batch
-                batch.commit()
-                    .addOnSuccessListener {
+                // If parent information exists, create parent account and data
+                if (parentEmail.isNotBlank() && parentPassword.isNotBlank()) {
+                    // Create parent authentication account
+                    auth.createUserWithEmailAndPassword(parentEmail, parentPassword)
+                        .addOnSuccessListener { parentAuthResult ->
+                            val parentId = parentAuthResult.user?.uid ?: return@addOnSuccessListener
+
+                            // Create parent document
+                            val parent = Person(
+                                id = parentId,
+                                firstName = parentFirstName.trim(),
+                                lastName = parentLastName.trim(),
+                                email = parentEmail.trim(),
+                                phone = parentPhone.trim(),
+                                address = parentAddress.trim(),
+                                type = "parent",
+                                childInfo = ChildInfo(
+                                    id = studentId,
+                                    name = "${student.firstName} ${student.lastName}".trim(),
+                                    className = student.className,
+                                    rollNumber = student.rollNumber
+                                )
+                            )
+
+                            // Update student with parent info
+                            val studentWithParent = student.copy(
+                                parentInfo = ParentInfo(
+                                    id = parentId,
+                                    name = "$parentFirstName $parentLastName".trim(),
+                                    email = parentEmail.trim(),
+                                    phone = parentPhone.trim()
+                                )
+                            )
+
+                            // Save both student and parent
+                            FirestoreDatabase.createParent(
+                                parent = parent,
+                                studentId = studentId,
+                                onSuccess = {
+                                    FirestoreDatabase.updateStudent(
+                                        studentWithParent,
+                                        onSuccess = {
                         isLoading = false
-                        showMessage("${personType.capitalize()} added successfully")
+                                            errorMessage = "Student and parent accounts created successfully"
+                                            showErrorDialog = true
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("${personType.capitalize()} added successfully")
+                                                snackbarHostState.showSnackbar("Student and parent accounts created successfully")
                             navController.popBackStack()
                         }
-                    }
-                    .addOnFailureListener { e ->
-                        // If Firestore fails, delete the auth user to maintain consistency
-                        authResult.user?.delete()?.addOnCompleteListener {
+                                        },
+                                        onFailure = { e ->
+                                            // If student update fails, delete parent
+                                            parentAuthResult.user?.delete()
+                                            FirestoreDatabase.deleteParent(
+                                                parentId,
+                                                onSuccess = {},
+                                                onFailure = {}
+                                            )
+                                            isLoading = false
+                                            errorMessage = "Error creating student account: ${e.message}"
+                                            showErrorDialog = true
+                                        }
+                                    )
+                                },
+                                onFailure = { e ->
+                                    // If parent creation fails, delete both auth accounts
+                                    studentAuthResult.user?.delete()
+                                    parentAuthResult.user?.delete()
+                                    FirebaseFirestore.getInstance().collection("parents")
+                                        .document(parentId)
+                                        .delete()
+                                        .addOnSuccessListener {
                             isLoading = false
-                            errorMessage = "Error saving ${personType}: ${e.message}"
+                                            errorMessage = "Error creating parent account: ${e.message}"
                             showErrorDialog = true
                         }
-                    }
-            }
-            .addOnFailureListener { e ->
+                                        .addOnFailureListener { deleteError ->
                 isLoading = false
-                errorMessage = "Error creating user: ${e.message}"
+                                            errorMessage = "Error creating parent account and cleaning up: ${deleteError.message}"
                 showErrorDialog = true
             }
     }
-
-    fun validateAndSavePerson() {
-        if (!validateInputs()) {
-            return
-        }
-
-        val ageInt = age.toIntOrNull() ?: 0
-        
-        val person = Person(
-            id = personId ?: "",
-            firstName = firstName.trim(),
-            lastName = lastName.trim(),
-            email = email.trim(),
-            phone = phone.trim(),
-            type = personTypeValue,
-            className = formatClassForStorage(selectedClass),
-            rollNumber = rollNumber.trim(),
-            gender = gender,
-            dateOfBirth = dateOfBirth.trim(),
-            mobileNo = mobileNo.trim(),
-            address = address.trim(),
-            age = ageInt
-        )
-
-        isLoading = true
-
-        if (isEditMode) {
-            if (personType == "student") {
-                FirestoreDatabase.updateStudent(
-                    person,
-                    onSuccess = {
-                        isLoading = false
-                        showMessage("Student updated successfully")
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Student updated successfully")
-                            navController.popBackStack()
+                            )
                         }
-                    },
-                    onFailure = { e ->
+                        .addOnFailureListener { e ->
+                            // If parent auth fails, delete student auth
+                            studentAuthResult.user?.delete()
                         isLoading = false
-                        errorMessage = "Error updating student: ${e.message}"
+                            errorMessage = "Error creating parent authentication: ${e.message}"
                         showErrorDialog = true
                     }
-                )
             } else {
-                FirestoreDatabase.updateTeacher(
-                    person,
+                    // No parent info, just save student
+                    FirestoreDatabase.updateStudent(
+                        student,
                     onSuccess = {
                         isLoading = false
-                        showMessage("Teacher updated successfully")
+                            errorMessage = "Student account created successfully"
+                            showErrorDialog = true
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Teacher updated successfully")
+                                snackbarHostState.showSnackbar("Student account created successfully")
                             navController.popBackStack()
                         }
                     },
                     onFailure = { e ->
+                            studentAuthResult.user?.delete()
                         isLoading = false
-                        errorMessage = "Error updating teacher: ${e.message}"
+                            errorMessage = "Error creating student account: ${e.message}"
                         showErrorDialog = true
                     }
                 )
             }
-        } else {
-            savePerson()
+            }
+            .addOnFailureListener { e ->
+                isLoading = false
+                errorMessage = "Error creating student authentication: ${e.message}"
+                showErrorDialog = true
         }
     }
 
@@ -338,7 +476,8 @@ fun AddPersonScreen(
                         batch.commit()
                             .addOnSuccessListener {
                                 isLoading = false
-                                showMessage("${personType.capitalize()} added successfully")
+                                errorMessage = "${personType.capitalize()} added successfully"
+                                showErrorDialog = true
                                 coroutineScope.launch {
                                     snackbarHostState.showSnackbar("${personType.capitalize()} added successfully")
                                     navController.popBackStack()
@@ -367,87 +506,134 @@ fun AddPersonScreen(
             }
     }
 
-    fun savePersonDirectly() {
-        if (!validateInputs()) return
-
-        isLoading = true
+    fun validateAndSavePerson(
+        person: Person,
+        personType: String,
+        onSuccess: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        if (personType == "student") {
+            // First update the student
+            FirestoreDatabase.updateStudent(
+                person,
+                onSuccess = {
+                    // Handle parent information update
+                    if (parentEmail.isNotBlank()) {
         val auth = FirebaseAuth.getInstance()
         val db = FirebaseFirestore.getInstance()
 
-        // Create authentication account first
-        auth.createUserWithEmailAndPassword(email, password)
-            .addOnSuccessListener { authResult ->
-                val userId = authResult.user?.uid ?: return@addOnSuccessListener
+                        // Function to create/update parent documents and establish relationships
+                        fun setupParentDocuments(parentUserId: String, isNewParent: Boolean) {
+                            val batch = db.batch()
+                            
+                            // 1. Update/Create parent user document
+                            val parentUserDoc = db.collection("users").document(parentUserId)
+                            val parentUserData = mapOf(
+                                "role" to "parent",
+                                "email" to parentEmail,
+                                "name" to "$parentFirstName $parentLastName",
+                                "updatedAt" to com.google.firebase.Timestamp.now(),
+                                "userId" to parentUserId,
+                                "child_uid" to person.id  // Link to student
+                            )
+                            
+                            if (isNewParent) {
+                                batch.set(parentUserDoc, parentUserData)
+                            } else {
+                                batch.set(parentUserDoc, parentUserData, com.google.firebase.firestore.SetOptions.merge())
+                            }
 
-                // Create user document
-                val userDocRef = db.collection("users").document(userId)
-                val userData = mapOf(
-                    "role" to personType,
-                    "email" to email,
-                    "name" to "$firstName $lastName",
-                    "createdAt" to com.google.firebase.Timestamp.now(),
-                    "userId" to userId,
-                    "type" to personTypeValue,
-                    "className" to formatClassForStorage(selectedClass)
-                )
+                            // 2. Update/Create parent document in parents collection
+                            val parentDoc = db.collection("parents").document(parentUserId)
+                            val parentData = Person(
+                                id = parentUserId,
+                                firstName = parentFirstName.trim(),
+                                lastName = parentLastName.trim(),
+                                email = parentEmail.trim(),
+                                phone = parentPhone.trim(),
+                                address = parentAddress.trim(),
+                                type = "parent"
+                            )
+                            if (isNewParent) {
+                                batch.set(parentDoc, parentData)
+                            } else {
+                                batch.set(parentDoc, parentData, com.google.firebase.firestore.SetOptions.merge())
+                            }
 
-                // Create person document
-                val personDocRef = when (personType) {
-                    "student" -> db.collection("students").document(userId)
-                    "teacher" -> db.collection("teachers").document(userId)
-                    else -> db.collection("non_teaching_staff").document(userId)
-                }
-                val person = Person(
-                    id = userId,
-                    firstName = firstName.trim(),
-                    lastName = lastName.trim(),
-                    email = email.trim(),
-                    password = password,
-                    phone = phone.trim(),
-                    type = personTypeValue,
-                    className = formatClassForStorage(selectedClass),
-                    rollNumber = rollNumber.trim(),
-                    gender = gender,
-                    dateOfBirth = dateOfBirth.trim(),
-                    mobileNo = mobileNo.trim(),
-                    address = address.trim(),
-                    age = age.toIntOrNull() ?: 0
-                )
+                            // 3. Update student document to include parent reference
+                            val studentDoc = db.collection("students").document(person.id)
+                            val studentUpdate = mapOf(
+                                "parentId" to parentUserId,
+                                "parentName" to "$parentFirstName $parentLastName",
+                                "parentEmail" to parentEmail,
+                                "parentPhone" to parentPhone
+                            )
+                            batch.update(studentDoc, studentUpdate)
 
-                // Use batch write for atomicity
-                val batch = db.batch()
-                batch.set(userDocRef, userData)
-                batch.set(personDocRef, person)
+                            // 4. Create/Update parent-student relationship document
+                            val relationshipDoc = db.collection("parent_student_relationships").document(parentUserId)
+                            val relationshipData = mapOf(
+                                "parentId" to parentUserId,
+                                "studentId" to person.id,
+                                "studentName" to "${person.firstName} ${person.lastName}",
+                                "studentClass" to person.className,
+                                "updatedAt" to com.google.firebase.Timestamp.now()
+                            )
+                            batch.set(relationshipDoc, relationshipData)
 
-                // Update auth user profile
-                authResult.user?.updateProfile(
-                    com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                        .setDisplayName("$firstName $lastName")
-                        .build()
-                )
-
-                // Commit the batch
+                            // Commit all changes
                 batch.commit()
                     .addOnSuccessListener {
-                        isLoading = false
-                        showMessage("${personType.capitalize()} added successfully")
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("${personType.capitalize()} added successfully")
-                            navController.popBackStack()
-                        }
+                                    onSuccess()
                     }
                     .addOnFailureListener { e ->
-                        // If Firestore fails, delete the auth user
-                        authResult.user?.delete()
-                        isLoading = false
-                        errorMessage = "Error saving user data: ${e.message}"
-                        showErrorDialog = true
+                                    onError(Exception("Failed to setup parent-student relationship: ${e.message}"))
+                                }
+                        }
+
+                        if (parentId.isNotBlank()) {
+                            // Update existing parent
+                            setupParentDocuments(parentId, false)
+                        } else if (parentPassword.isNotBlank()) {
+                            // Create new parent account and setup documents
+                            auth.createUserWithEmailAndPassword(parentEmail, parentPassword)
+                                .addOnSuccessListener { authResult ->
+                                    val newParentId = authResult.user?.uid
+                                    if (newParentId != null) {
+                                        // Set initial display name for the parent
+                                        val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                            .setDisplayName("$parentFirstName $parentLastName")
+                                            .build()
+                                        
+                                        authResult.user?.updateProfile(profileUpdates)
+                                            ?.addOnSuccessListener {
+                                                setupParentDocuments(newParentId, true)
+                                            }
+                                            ?.addOnFailureListener { e ->
+                                                onError(Exception("Failed to update parent profile: ${e.message}"))
+                                            }
+                                    } else {
+                                        onError(Exception("Failed to create parent account: Invalid user ID"))
                     }
             }
             .addOnFailureListener { e ->
-                isLoading = false
-                errorMessage = "Error creating user authentication: ${e.message}"
-                showErrorDialog = true
+                                    onError(Exception("Failed to create parent authentication: ${e.message}"))
+                                }
+                        } else {
+                            onError(Exception("Parent password is required for new parent account"))
+                        }
+                    } else {
+                        onSuccess()
+                    }
+                },
+                onFailure = onError
+            )
+        } else {
+            FirestoreDatabase.updateTeacher(
+                person,
+                onSuccess = onSuccess,
+                onFailure = onError
+            )
             }
     }
 
@@ -473,12 +659,150 @@ fun AddPersonScreen(
                     mobileNo = person.mobileNo
                     address = person.address
                     age = if (person.age > 0) person.age.toString() else ""
+
+                    // If this is a student, fetch parent information
+                    if (personType == "student") {
+                        try {
+                            FirestoreDatabase.getParentByChildId(
+                                childId = personId,
+                                onSuccess = { parent ->
+                                    if (parent != null) {
+                                        parentId = parent.id
+                                        parentFirstName = parent.firstName
+                                        parentLastName = parent.lastName
+                                        parentEmail = parent.email
+                                        parentPhone = parent.phone
+                                        parentAddress = parent.address
+                                    }
+                                },
+                                onFailure = { e ->
+                                    errorMessage = "Failed to load parent data: ${e.message}"
+                                    showErrorDialog = true
+                                }
+                            )
+                        } catch (e: Exception) {
+                            errorMessage = "Failed to load parent data: ${e.message}"
+                            showErrorDialog = true
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 errorMessage = "Failed to load data: ${e.message}"
                 showErrorDialog = true
             }
             isLoading = false
+        }
+    }
+
+    @Composable
+    fun ParentInformationSection(
+        parentFirstName: String,
+        onParentFirstNameChange: (String) -> Unit,
+        parentLastName: String,
+        onParentLastNameChange: (String) -> Unit,
+        parentEmail: String,
+        onParentEmailChange: (String) -> Unit,
+        parentPassword: String,
+        onParentPasswordChange: (String) -> Unit,
+        parentPhone: String,
+        onParentPhoneChange: (String) -> Unit,
+        parentAddress: String,
+        onParentAddressChange: (String) -> Unit,
+        showParentPassword: Boolean,
+        onShowParentPasswordChange: (Boolean) -> Unit
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Parent Information",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = StudentGreen
+                )
+
+                OutlinedTextField(
+                    value = parentFirstName,
+                    onValueChange = onParentFirstNameChange,
+                    label = { Text("Parent First Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = parentLastName,
+                    onValueChange = onParentLastNameChange,
+                    label = { Text("Parent Last Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = parentEmail,
+                    onValueChange = onParentEmailChange,
+                    label = { Text("Parent Email") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = parentPassword,
+                    onValueChange = onParentPasswordChange,
+                    label = { Text("Parent Password") },
+                    singleLine = true,
+                    visualTransformation = if (showParentPassword) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Next
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { onShowParentPasswordChange(!showParentPassword) }) {
+                            Icon(
+                                if (showParentPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = if (showParentPassword) "Hide password" else "Show password"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = parentPhone,
+                    onValueChange = onParentPhoneChange,
+                    label = { Text("Parent Phone") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = parentAddress,
+                    onValueChange = onParentAddressChange,
+                    label = { Text("Parent Address") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 
@@ -818,14 +1142,67 @@ fun AddPersonScreen(
                         )
                     }
 
+                    // Add parent information section when creating a student OR editing a student
+                    if (personType == "student") {
+                        item {
+                            ParentInformationSection(
+                                parentFirstName = parentFirstName,
+                                onParentFirstNameChange = { parentFirstName = it },
+                                parentLastName = parentLastName,
+                                onParentLastNameChange = { parentLastName = it },
+                                parentEmail = parentEmail,
+                                onParentEmailChange = { parentEmail = it },
+                                parentPassword = parentPassword,
+                                onParentPasswordChange = { parentPassword = it },
+                                parentPhone = parentPhone,
+                                onParentPhoneChange = { parentPhone = it },
+                                parentAddress = parentAddress,
+                                onParentAddressChange = { parentAddress = it },
+                                showParentPassword = showParentPassword,
+                                onShowParentPasswordChange = { showParentPassword = it }
+                            )
+                        }
+                    }
+
                     // Save Button
                     item {
                         Button(
                             onClick = {
                                 if (isEditMode) {
-                                    validateAndSavePerson()
+                                    validateAndSavePerson(
+                                        Person(
+                                            id = personId ?: "",
+                                            firstName = firstName.trim(),
+                                            lastName = lastName.trim(),
+                                            email = email.trim(),
+                                            phone = phone.trim(),
+                                            type = personTypeValue,
+                                            className = formatClassForStorage(selectedClass),
+                                            rollNumber = rollNumber.trim(),
+                                            gender = gender,
+                                            dateOfBirth = dateOfBirth.trim(),
+                                            mobileNo = mobileNo.trim(),
+                                            address = address.trim(),
+                                            age = age.toIntOrNull() ?: 0
+                                        ),
+                                        personType,
+                                        {
+                                            isLoading = false
+                                            errorMessage = "${personType.capitalize()} updated successfully"
+                                            showErrorDialog = true
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("${personType.capitalize()} updated successfully")
+                                                navController.popBackStack()
+                                            }
+                                        },
+                                        { e ->
+                                            isLoading = false
+                                            errorMessage = "Error updating ${personType.capitalize()}: ${e.message}"
+                                            showErrorDialog = true
+                                        }
+                                    )
                                 } else {
-                                    savePersonDirectly()  // Use savePersonDirectly instead of showing admin dialog
+                                    savePerson()
                                 }
                             },
                             modifier = Modifier
@@ -996,6 +1373,8 @@ fun AddPersonScreen(
 @Preview
 @Composable
 fun PreviewAddPersonScreen() {
+    MaterialTheme {
     val navController = rememberNavController()
     AddPersonScreen(navController, "student")
+    }
 }

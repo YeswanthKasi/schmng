@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.IntentSender
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,9 +26,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +64,7 @@ private const val REQUEST_SAVE_CREDENTIALS = 123
 @Composable
 fun LoginScreen(navController: NavController) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val activity = context as ComponentActivity
     val credentialsClient = remember { Credentials.getClient(activity) }
     val scope = rememberCoroutineScope()
@@ -95,7 +100,7 @@ fun LoginScreen(navController: NavController) {
         }
         // Navigate after credential save result (whether successful or not)
         if (loginSuccessful && userRole.isNotEmpty()) {
-            navigateToRoleDashboard(navController, userRole)
+            navigateToRoleDashboard(navController, userRole, context)
         }
     }
 
@@ -151,7 +156,7 @@ fun LoginScreen(navController: NavController) {
     // If login was successful and showSaveCredentialsDialog changed to false, navigate to dashboard
     LaunchedEffect(showSaveCredentialsDialog) {
         if (!showSaveCredentialsDialog && loginSuccessful && userRole.isNotEmpty() && !isFirstLogin) {
-            navigateToRoleDashboard(navController, userRole)
+            navigateToRoleDashboard(navController, userRole, context)
         }
     }
 
@@ -161,7 +166,7 @@ fun LoginScreen(navController: NavController) {
             onDismissRequest = { 
                 showSaveCredentialsDialog = false
                 if (loginSuccessful && userRole.isNotEmpty()) {
-                    navigateToRoleDashboard(navController, userRole)
+                    navigateToRoleDashboard(navController, userRole, context)
                 }
             },
             title = { Text("Save Credentials") },
@@ -183,7 +188,7 @@ fun LoginScreen(navController: NavController) {
                                     .apply()
                                 
                                 if (loginSuccessful && userRole.isNotEmpty()) {
-                                    navigateToRoleDashboard(navController, userRole)
+                                    navigateToRoleDashboard(navController, userRole, context)
                                 }
                             } else if (task.exception is ResolvableApiException) {
                                 try {
@@ -195,12 +200,12 @@ fun LoginScreen(navController: NavController) {
                                     Log.e("LoginScreen", "Failed to send resolution", e)
                                 } finally {
                                     if (loginSuccessful && userRole.isNotEmpty()) {
-                                        navigateToRoleDashboard(navController, userRole)
+                                        navigateToRoleDashboard(navController, userRole, context)
                                     }
                                 }
                             } else {
                                 if (loginSuccessful && userRole.isNotEmpty()) {
-                                    navigateToRoleDashboard(navController, userRole)
+                                    navigateToRoleDashboard(navController, userRole, context)
                                 }
                             }
                         }
@@ -214,7 +219,7 @@ fun LoginScreen(navController: NavController) {
                     onClick = {
                         showSaveCredentialsDialog = false
                         if (loginSuccessful && userRole.isNotEmpty()) {
-                            navigateToRoleDashboard(navController, userRole)
+                            navigateToRoleDashboard(navController, userRole, context)
                         }
                     }
                 ) {
@@ -431,6 +436,8 @@ fun LoginScreen(navController: NavController) {
                     // Login Button
                     Button(
                         onClick = {
+                            focusManager.clearFocus()
+                            clearFocusAndHideKeyboard(context)
                             isLoading = true
                             if (email.isBlank() || password.isBlank()) {
                                 errorMessage = "Please enter email and password"
@@ -462,7 +469,7 @@ fun LoginScreen(navController: NavController) {
                                             showSaveCredentialsDialog = true
                                         } else {
                                             // If credentials are already saved, navigate immediately
-                                            navigateToRoleDashboard(navController, userRole)
+                                            navigateToRoleDashboard(navController, userRole, context)
                                         }
                                     } else {
                                         errorMessage = message ?: "Authentication failed"
@@ -676,8 +683,17 @@ private fun fetchUserRoleAndNotify(
         }
 }
 
+// Helper function to clear focus and hide keyboard
+fun clearFocusAndHideKeyboard(context: Context) {
+    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+    val window = (context as? Activity)?.window
+    imm?.hideSoftInputFromWindow(window?.decorView?.windowToken, 0)
+}
+
 // Helper function to navigate to appropriate dashboard
-private fun navigateToRoleDashboard(navController: NavController, role: String) {
+private fun navigateToRoleDashboard(navController: NavController, role: String, context: Context) {
+    clearFocusAndHideKeyboard(context)
+    
     when (role.lowercase()) {
         "admin" -> {
             navController.navigate(BottomNavItem.Home.route) {
@@ -696,6 +712,11 @@ private fun navigateToRoleDashboard(navController: NavController, role: String) 
         }
         "parent" -> {
             navController.navigate("parent_dashboard") {
+                popUpTo("login") { inclusive = true }
+            }
+        }
+        "staff" -> {
+            navController.navigate("staff_dashboard") {
                 popUpTo("login") { inclusive = true }
             }
         }

@@ -17,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 34
-        versionCode = 42
-        versionName = "1.39"
+        versionCode = 43
+        versionName = "1.40"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         

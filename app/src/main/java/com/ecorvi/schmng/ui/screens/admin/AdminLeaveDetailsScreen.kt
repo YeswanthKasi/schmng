@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.viewmodels.AdminLeaveViewModel
@@ -68,7 +69,15 @@ fun AdminLeaveDetailsScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Teacher: ${leave!!.teacherName}")
+                Text(
+                    text = "${leave!!.userName} (${leave!!.userType.capitalize()})",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color(0xFF1F41BB)
+                )
+                Text(
+                    text = "Department: ${leave!!.department}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
                 Text("From: ${dateFormat.format(Date(leave!!.fromDate))}")
                 Text("To: ${dateFormat.format(Date(leave!!.toDate))}")
                 Text("Reason: ${leave!!.reason}")

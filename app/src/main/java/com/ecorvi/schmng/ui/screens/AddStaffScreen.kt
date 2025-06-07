@@ -14,10 +14,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,6 +30,8 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
     var phone by remember { mutableStateOf("") }
     var mobileNo by remember { mutableStateOf("") }
     var designation by remember { mutableStateOf("") }
@@ -40,6 +46,8 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
     
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    val auth = FirebaseAuth.getInstance()
+    val db = FirebaseFirestore.getInstance()
 
     // Effect to load existing staff data if editing
     LaunchedEffect(personId) {
@@ -161,6 +169,27 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
                                 keyboardType = KeyboardType.Email,
                                 imeAction = ImeAction.Next
                             ),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("Password") },
+                            modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Next
+                            ),
+                            trailingIcon = {
+                                IconButton(onClick = { showPassword = !showPassword }) {
+                                    Icon(
+                                        if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (showPassword) "Hide password" else "Show password"
+                                    )
+                                }
+                            },
                             singleLine = true
                         )
 
@@ -297,34 +326,70 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
                                 address = address,
                                 age = age.toIntOrNull() ?: 0,
                                 designation = designation,
-                                department = department
+                                department = department,
+                                password = password
                             )
 
                             if (personId == null) {
-                                // Adding new staff member
-                                FirestoreDatabase.addStaffMember(
-                                    staff = staffData,
-                                    onSuccess = {
+                                // Create Firebase Auth user first
+                                auth.createUserWithEmailAndPassword(email, password)
+                                    .addOnSuccessListener { authResult ->
+                                        val userId = authResult.user?.uid ?: return@addOnSuccessListener
+                                        
+                                        // Start a batch write
+                                        val batch = db.batch()
+                                        
+                                        // Add to staff collection
+                                        val staffRef = db.collection("non_teaching_staff").document(userId)
+                                        val staffDataWithId = staffData.copy(id = userId)
+                                        batch.set(staffRef, staffDataWithId)
+                                        
+                                        // Add to users collection
+                                        val userRef = db.collection("users").document(userId)
+                                        val userData = mapOf(
+                                            "role" to "staff",
+                                            "email" to email,
+                                            "name" to "$firstName $lastName",
+                                            "createdAt" to com.google.firebase.Timestamp.now(),
+                                            "userId" to userId,
+                                            "type" to "staff",
+                                            "department" to department
+                                        )
+                                        batch.set(userRef, userData)
+                                        
+                                        // Commit the batch
+                                        batch.commit()
+                                            .addOnSuccessListener {
+                                                isLoading = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "Staff member added successfully",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                navController.navigateUp()
+                                            }
+                                            .addOnFailureListener { e ->
+                                                // If Firestore fails, delete the auth user
+                                                authResult.user?.delete()
+                                                isLoading = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "Error adding staff member: ${e.message}",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                    }
+                                    .addOnFailureListener { e ->
                                         isLoading = false
                                         Toast.makeText(
                                             context,
-                                            "Staff member added successfully",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        navController.navigateUp()
-                                    },
-                                    onFailure = { e ->
-                                        isLoading = false
-                                        Toast.makeText(
-                                            context,
-                                            "Error adding staff member: ${e.message}",
+                                            "Error creating user: ${e.message}",
                                             Toast.LENGTH_LONG
                                         ).show()
                                     }
-                                )
                             } else {
                                 // Updating existing staff member
-                                FirestoreDatabase.staffCollection.document(personId).set(staffData)
+                                db.collection("non_teaching_staff").document(personId).set(staffData)
                                     .addOnSuccessListener {
                                         isLoading = false
                                         Toast.makeText(

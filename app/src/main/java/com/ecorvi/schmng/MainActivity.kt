@@ -372,6 +372,7 @@ class MainActivity : ComponentActivity() {
             "student" -> "student_dashboard"
             "parent" -> "parent_dashboard"
             "teacher" -> "teacher_dashboard"
+            "staff" -> "staff_dashboard"
             else -> "login"
         }
     }

@@ -9,10 +9,9 @@ enum class MessageStatus {
 data class ChatMessage(
     val id: String = "",
     val senderId: String = "",
-    val receiverId: String = "",
-    val message: String = "This is a dummy message",
+    val senderName: String = "",
+    val recipientId: String = "",
+    val message: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val senderName: String = "Dummy Sender",
-    val receiverName: String = "Dummy Receiver",
-    val status: MessageStatus = MessageStatus.SENT
+    val status: String = "SENT" // SENT, DELIVERED, READ
 ) 

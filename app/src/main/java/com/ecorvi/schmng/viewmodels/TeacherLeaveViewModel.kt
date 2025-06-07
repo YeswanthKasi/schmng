@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
+import java.util.*
 
 class TeacherLeaveViewModel : ViewModel() {
     private val db = FirebaseFirestore.getInstance()
@@ -41,31 +42,72 @@ class TeacherLeaveViewModel : ViewModel() {
         )
     }
 
-    fun submitLeave(fromDate: Long, toDate: Long, reason: String, teacherName: String) {
+    fun submitLeaveApplication(
+        userId: String,
+        userName: String,
+        userType: String,
+        fromDate: Long,
+        toDate: Long,
+        reason: String,
+        leaveType: String,
+        department: String
+    ) {
+        viewModelScope.launch {
+            val leaveApplication = LeaveApplication(
+                id = UUID.randomUUID().toString(),
+                userId = userId,
+                userName = userName,
+                userType = userType,
+                fromDate = fromDate,
+                toDate = toDate,
+                reason = reason,
+                leaveType = leaveType,
+                department = department,
+                appliedAt = System.currentTimeMillis()
+            )
+            // ... rest of the code ...
+        }
+    }
+
+    fun submitLeave(fromDate: Long, toDate: Long, reason: String, userName: String) {
         val userId = auth.currentUser?.uid ?: return
         _loading.value = true
         _submitSuccess.value = false
-        val leave = LeaveApplication(
-            teacherId = userId,
-            teacherName = teacherName,
-            fromDate = fromDate,
-            toDate = toDate,
-            reason = reason,
-            status = LeaveApplication.STATUS_PENDING,
-            appliedAt = System.currentTimeMillis()
-        )
-        FirestoreDatabase.submitLeave(
-            leave = leave,
-            onSuccess = {
-                _loading.value = false
-                _submitSuccess.value = true
-                loadMyLeaves()
-            },
-            onFailure = {
-                _loading.value = false
-                _error.value = it.message
+
+        // Get teacher details from Firestore
+        db.collection("teachers").document(userId).get()
+            .addOnSuccessListener { doc ->
+                val department = doc.getString("department") ?: "Teaching"
+                val leave = LeaveApplication(
+                    userId = userId,
+                    userName = userName,
+                    userType = LeaveApplication.TYPE_TEACHER,
+                    fromDate = fromDate,
+                    toDate = toDate,
+                    reason = reason,
+                    status = LeaveApplication.STATUS_PENDING,
+                    appliedAt = System.currentTimeMillis(),
+                    leaveType = "Regular Leave",
+                    department = department
+                )
+
+                FirestoreDatabase.submitLeave(
+                    leave = leave,
+                    onSuccess = {
+                        _loading.value = false
+                        _submitSuccess.value = true
+                        loadMyLeaves()
+                    },
+                    onFailure = { e ->
+                        _loading.value = false
+                        _error.value = e.message
+                    }
+                )
             }
-        )
+            .addOnFailureListener { e ->
+                _loading.value = false
+                _error.value = e.message
+            }
     }
 
     fun loadLeaveDetails(leaveId: String) {

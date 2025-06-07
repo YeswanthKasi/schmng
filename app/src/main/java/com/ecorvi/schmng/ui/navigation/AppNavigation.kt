@@ -1,13 +1,20 @@
 package com.ecorvi.schmng.ui.navigation
 
+import android.content.Context
 import android.util.Log
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -41,6 +48,21 @@ import com.ecorvi.schmng.ui.screens.admin.AdminLeaveDetailsScreen
 import com.ecorvi.schmng.ui.screens.student.ClassEventsScreen
 import com.ecorvi.schmng.ui.screens.teacher.ClassEventManagementScreen
 import com.ecorvi.schmng.ui.screens.teacher.TeacherAttendanceAnalyticsScreen
+import com.ecorvi.schmng.ui.screens.parent.ParentDashboardScreen
+import com.ecorvi.schmng.ui.screens.parent.ParentStudentInfoScreen
+import com.ecorvi.schmng.ui.screens.parent.ParentAttendanceScreen
+import com.ecorvi.schmng.ui.screens.parent.ParentNoticesScreen
+import com.ecorvi.schmng.ui.screens.parent.ParentEventsScreen
+import com.ecorvi.schmng.ui.screens.parent.ParentMessagesScreen
+import com.ecorvi.schmng.ui.screens.parent.ParentProfileScreen
+import com.ecorvi.schmng.ui.screens.parent.ParentTimetableScreen
+import com.ecorvi.schmng.ui.screens.staff.StaffProfileScreen
+import com.ecorvi.schmng.ui.screens.staff.StaffAttendanceScreen
+import com.ecorvi.schmng.ui.screens.staff.StaffDashboardScreen
+import com.ecorvi.schmng.ui.screens.staff.StaffLeaveApplicationScreen
+import com.ecorvi.schmng.ui.screens.staff.StaffLeaveHistoryScreen
+import com.ecorvi.schmng.ui.screens.staff.StaffMessagesScreen
+import com.ecorvi.schmng.ui.screens.staff.StaffChatScreen
 
 @Composable
 fun AppNavigation(
@@ -168,8 +190,8 @@ fun AppNavigation(
             StudentMessagesScreen(navController) 
         }
 
-        composable("student_new_message") { 
-            StudentNewMessageScreen(navController) 
+        composable("student_new_message") {
+            StudentNewMessageScreen(navController)
         }
 
         // Admin Message Routes
@@ -180,6 +202,17 @@ fun AppNavigation(
         ) { backStackEntry ->
             val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
             ChatScreen(
+                navController = navController,
+                chatId = chatId
+            )
+        }
+        
+        // Staff Chat Route
+        composable("staff_chat/{chatId}",
+            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            StaffChatScreen(
                 navController = navController,
                 chatId = chatId
             )
@@ -343,62 +376,83 @@ fun AppNavigation(
         composable("add_fee") { AddFeeScreen(navController) }
         
         // Staff routes
-        composable("staff") { StaffScreen(navController) }
         composable(
-            route = "staff_profile/{staffId}",
+            route = StaffBottomNavItem.Profile.route,
             arguments = listOf(navArgument("staffId") { type = NavType.StringType })
         ) { backStackEntry ->
             val staffId = backStackEntry.arguments?.getString("staffId") ?: ""
-            val currentUser = FirebaseAuth.getInstance().currentUser
-            var isAdmin by remember { mutableStateOf(false) }
-
-            LaunchedEffect(currentUser?.uid) {
-                if (currentUser?.uid != null) {
-                    FirestoreDatabase.getUserRole(
-                        userId = currentUser.uid,
-                        onComplete = { role ->
-                            isAdmin = role?.lowercase() == "admin"
-                        },
-                        onFailure = { e ->
-                            // Handle error silently, defaulting to non-admin
-                            isAdmin = false
-                        }
-                    )
-                }
-            }
-
             StaffProfileScreen(
                 navController = navController,
-                staffId = staffId,
-                isAdmin = isAdmin
+                currentRoute = backStackEntry.destination.route,
+                staffId = staffId
             )
         }
 
-        // Add/Edit Person routes
-        composable(
-            route = "add_person/{personType}?personId={personId}",
-            arguments = listOf(
-                navArgument("personType") { 
-                    type = NavType.StringType 
-                },
-                navArgument("personId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                }
-            )
-        ) { backStackEntry ->
-            val personType = backStackEntry.arguments?.getString("personType") ?: ""
-            val personId = backStackEntry.arguments?.getString("personId")
+        // Staff Dashboard Routes
+        composable("staff_dashboard") {
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            val context = LocalContext.current
             
-            when (personType) {
-                "staff" -> AddStaffScreen(navController, personId)
-                else -> AddPersonScreen(
+            if (currentUser != null) {
+                StaffDashboardScreen(
                     navController = navController,
-                    personType = personType,
-                    personId = personId
+                    currentRoute = "staff_dashboard",
+                    onSignOut = {
+                        // Clear all listeners and subscriptions
+                        FirestoreDatabase.cleanup()
+                        // Sign out from Firebase
+                        FirebaseAuth.getInstance().signOut()
+                        // Clear user preferences
+                        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                            .edit()
+                            .remove("user_role")
+                            .remove("stay_signed_in")
+                            .remove("fcm_token")
+                            .apply()
+                        // Navigate to login with proper cleanup
+                        navController.navigate("login") {
+                            popUpTo(navController.graph.id) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
+                    }
                 )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.navigate("login") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
+                }
             }
+        }
+
+        composable("staff_attendance") {
+            StaffAttendanceScreen(
+                navController = navController
+            )
+        }
+
+        composable("staff_leave_application") {
+            StaffLeaveApplicationScreen(
+                navController = navController
+            )
+        }
+
+        composable("staff_leave_history") { entry ->
+            StaffLeaveHistoryScreen(
+                navController = navController,
+                currentRoute = entry.destination.route
+            )
+        }
+
+        composable("staff_messages") { entry ->
+            StaffMessagesScreen(
+                navController = navController,
+                currentRoute = entry.destination.route
+            )
         }
 
         // Teacher Routes
@@ -514,6 +568,165 @@ fun AppNavigation(
                 currentRoute = currentRoute,
                 onRouteSelected = onRouteSelected
             )
+        }
+
+        // --- Parent Dashboard and sub-screens ---
+        composable(ParentBottomNavItem.Home.route) { 
+            ParentDashboardScreen(
+                navController = navController,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        composable(
+            route = "${ParentBottomNavItem.Attendance.route}/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentAttendanceScreen(
+                navController = navController,
+                childUid = childId,
+                showBackButton = false,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        composable(
+            route = "${ParentBottomNavItem.Notices.route}/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentNoticesScreen(
+                navController = navController,
+                childUid = childId,
+                showBackButton = false,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        composable(
+            route = "${ParentBottomNavItem.Events.route}/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentEventsScreen(
+                navController = navController,
+                childUid = childId,
+                showBackButton = false,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        composable(
+            route = "${ParentBottomNavItem.Messages.route}/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentMessagesScreen(
+                navController = navController,
+                childUid = childId,
+                showBackButton = false,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+
+        // Parent Menu/Drawer Screens (with back button)
+        composable("parent_profile") {
+            ParentProfileScreen(
+                navController = navController
+            )
+        }
+
+        composable(
+            route = "parent_student_info/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentStudentInfoScreen(
+                navController = navController,
+                childUid = childId,
+                showBackButton = true
+            )
+        }
+
+        composable(
+            route = "parent_attendance/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentAttendanceScreen(
+                navController = navController,
+                childUid = childId,
+                showBackButton = true
+            )
+        }
+
+        composable(
+            route = "parent_notices/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentNoticesScreen(
+                navController = navController,
+                childUid = childId,
+                showBackButton = true
+            )
+        }
+
+        composable(
+            route = "parent_events/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentEventsScreen(
+                navController = navController,
+                childUid = childId,
+                showBackButton = true
+            )
+        }
+
+        // Parent Timetable Screen
+        composable(
+            route = "parent_timetable/{childId}",
+            arguments = listOf(navArgument("childId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val childId = backStackEntry.arguments?.getString("childId") ?: ""
+            ParentTimetableScreen(
+                navController = navController,
+                childUid = childId
+            )
+        }
+
+        // Add/Edit Person routes
+        composable(
+            route = "add_person/{personType}?personId={personId}",
+            arguments = listOf(
+                navArgument("personType") { 
+                    type = NavType.StringType 
+                },
+                navArgument("personId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val personType = backStackEntry.arguments?.getString("personType") ?: ""
+            val personId = backStackEntry.arguments?.getString("personId")
+            
+            when (personType) {
+                "staff" -> AddStaffScreen(navController, personId)
+                else -> AddPersonScreen(
+                    navController = navController,
+                    personType = personType,
+                    personId = personId
+                )
+            }
         }
     }
 }

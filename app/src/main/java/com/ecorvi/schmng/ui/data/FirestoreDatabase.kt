@@ -4,13 +4,21 @@ import android.net.Uri
 import android.util.Log
 import com.ecorvi.schmng.models.AttendanceRecord
 import com.ecorvi.schmng.models.AttendanceStatus
-import com.ecorvi.schmng.models.ClassEvent
+import com.ecorvi.schmng.models.ClassEvent as ModelClassEvent
 import com.ecorvi.schmng.models.UserType
-import com.ecorvi.schmng.ui.data.FirestoreDatabase.db
+import com.ecorvi.schmng.models.LeaveApplication
+import com.ecorvi.schmng.models.Student
+import com.ecorvi.schmng.models.User
 import com.ecorvi.schmng.ui.data.model.AdminProfile
+import com.ecorvi.schmng.ui.data.model.AttendanceSummary
+import com.ecorvi.schmng.ui.data.model.ChatMessage
+import com.ecorvi.schmng.ui.data.model.ChildInfo
+import com.ecorvi.schmng.ui.data.model.Event
+import com.ecorvi.schmng.ui.data.model.Fee
+import com.ecorvi.schmng.ui.data.model.Notice
+import com.ecorvi.schmng.ui.data.model.ParentInfo
 import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.data.model.Schedule
-import com.ecorvi.schmng.ui.data.model.Fee
 import com.ecorvi.schmng.ui.data.model.SchoolProfile
 import com.ecorvi.schmng.ui.data.model.Timetable
 import com.google.firebase.auth.FirebaseAuth
@@ -19,16 +27,14 @@ import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
-import kotlinx.coroutines.tasks.await
 import com.google.firebase.functions.ktx.functions
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-
-import java.util.*
-import com.ecorvi.schmng.models.LeaveApplication
-import com.ecorvi.schmng.models.Student
 import java.text.SimpleDateFormat
+import java.util.*
+import kotlinx.coroutines.runBlocking
 
 object FirestoreDatabase {
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
@@ -44,6 +50,7 @@ object FirestoreDatabase {
     val teachersCollection: CollectionReference = db.collection("teachers")
     val staffCollection: CollectionReference = db.collection("non_teaching_staff")
     val pendingFeesCollection: CollectionReference = db.collection("pending_fees")
+    val parentsCollection: CollectionReference = db.collection("parents")
 
     private var teacherListener: ListenerRegistration? = null
     private var studentListener: ListenerRegistration? = null
@@ -430,8 +437,11 @@ object FirestoreDatabase {
     fun fetchScheduleWithId(onComplete: (Map<String, String>) -> Unit, onFailure: (Exception) -> Unit) {
         schedulesCollection.get()
             .addOnSuccessListener { snapshot ->
-                val schedulesMap = snapshot.documents.associate { 
-                    it.id to (it.getString("schedule") ?: "")
+                val schedulesMap = mutableMapOf<String, String>()
+                snapshot.documents.forEach { doc ->
+                    doc.getString("schedule")?.let { schedule ->
+                        schedulesMap[doc.id] = schedule
+                    }
                 }
                 onComplete(schedulesMap)
             }
@@ -445,8 +455,11 @@ object FirestoreDatabase {
     fun fetchPendingFeesWithId(onComplete: (Map<String, String>) -> Unit, onFailure: (Exception) -> Unit) {
         pendingFeesCollection.get()
             .addOnSuccessListener { snapshot ->
-                val feesMap = snapshot.documents.associate { 
-                    it.id to (it.getString("fee") ?: "")
+                val feesMap = mutableMapOf<String, String>()
+                snapshot.documents.forEach { doc ->
+                    doc.getString("fee")?.let { fee ->
+                        feesMap[doc.id] = fee
+                    }
                 }
                 onComplete(feesMap)
             }
@@ -550,13 +563,95 @@ object FirestoreDatabase {
             }
     }
 
-    // Get a student by ID
+    // Get a student by ID with parent information
     suspend fun getStudent(studentId: String): Person? {
         return try {
-            val doc = studentsCollection.document(studentId).get().await()
-            doc.toObject(Person::class.java)?.copy(id = doc.id)
+            Log.d("Firestore", "Fetching student with ID: $studentId")
+            
+            // 1. Get student document
+            val studentDoc = studentsCollection.document(studentId).get().await()
+            if (!studentDoc.exists()) {
+                Log.d("Firestore", "Student document does not exist")
+                return null
+            }
+
+            // 2. Get basic student data
+            val student = studentDoc.toObject(Person::class.java)?.copy(id = studentId)
+            if (student == null) {
+                Log.d("Firestore", "Failed to convert student document to Person object")
+                return null
+            }
+
+            // 3. Get parent info from student document
+            val parentId = studentDoc.getString("parentId")
+            Log.d("Firestore", "Found parentId in student document: $parentId")
+
+            if (!parentId.isNullOrBlank()) {
+                // 4. Get parent document
+                val parentDoc = parentsCollection.document(parentId).get().await()
+                if (parentDoc.exists()) {
+                    val parent = parentDoc.toObject(Person::class.java)
+                    if (parent != null) {
+                        Log.d("Firestore", "Found parent: ${parent.firstName} ${parent.lastName}")
+                        return student.copy(
+                            parentInfo = ParentInfo(
+                                id = parentId,
+                                name = "${parent.firstName} ${parent.lastName}".trim(),
+                                email = parent.email,
+                                phone = parent.phone
+                            )
+                        )
+                    }
+                } else {
+                    // 5. If parent document doesn't exist, try getting info from student document
+                    Log.d("Firestore", "Parent document not found, using info from student document")
+                    return student.copy(
+                        parentInfo = ParentInfo(
+                            id = parentId,
+                            name = studentDoc.getString("parentName") ?: "",
+                            email = studentDoc.getString("parentEmail") ?: "",
+                            phone = studentDoc.getString("parentPhone") ?: ""
+                        )
+                    )
+                }
+            } else {
+                // 6. Try to find parent through relationship collection
+                Log.d("Firestore", "No parentId in student document, checking relationships")
+                val relationshipQuery = db.collection("parent_student_relationships")
+                    .whereEqualTo("studentId", studentId)
+                    .get()
+                    .await()
+
+                if (!relationshipQuery.isEmpty) {
+                    val relationshipDoc = relationshipQuery.documents[0]
+                    val relParentId = relationshipDoc.getString("parentId")
+                    
+                    if (relParentId != null) {
+                        val parentDoc = parentsCollection.document(relParentId).get().await()
+                        if (parentDoc.exists()) {
+                            val parent = parentDoc.toObject(Person::class.java)
+                            if (parent != null) {
+                                Log.d("Firestore", "Found parent through relationship: ${parent.firstName} ${parent.lastName}")
+                                return student.copy(
+                                    parentInfo = ParentInfo(
+                                        id = relParentId,
+                                        name = "${parent.firstName} ${parent.lastName}".trim(),
+                                        email = parent.email,
+                                        phone = parent.phone
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 7. If no parent info found anywhere, return student as is
+            Log.d("Firestore", "No parent information found for student")
+            student
+
         } catch (e: Exception) {
-            Log.e("Firestore", "Error getting student: ${e.message}")
+            Log.e("Firestore", "Error getting student with parent info: ${e.message}")
             null
         }
     }
@@ -1257,7 +1352,23 @@ object FirestoreDatabase {
         onUpdate: (List<LeaveApplication>) -> Unit,
         onError: (Exception) -> Unit
     ) = db.collection("leave_applications")
-        .whereEqualTo("teacherId", teacherId)
+        .whereEqualTo("userId", teacherId)
+        .whereEqualTo("userType", LeaveApplication.TYPE_TEACHER)
+        .addSnapshotListener { snapshot, e ->
+            if (e != null) {
+                onError(e)
+                return@addSnapshotListener
+            }
+            onUpdate(snapshot?.documents?.mapNotNull { it.toObject(LeaveApplication::class.java)?.copy(id = it.id) } ?: emptyList())
+        }
+
+    fun listenToStaffLeaves(
+        staffId: String,
+        onUpdate: (List<LeaveApplication>) -> Unit,
+        onError: (Exception) -> Unit
+    ) = db.collection("leave_applications")
+        .whereEqualTo("userId", staffId)
+        .whereEqualTo("userType", LeaveApplication.TYPE_STAFF)
         .addSnapshotListener { snapshot, e ->
             if (e != null) {
                 onError(e)
@@ -1382,7 +1493,7 @@ object FirestoreDatabase {
 
     suspend fun getClassEvents(
         className: String,
-        onComplete: (List<ClassEvent>) -> Unit,
+        onComplete: (List<ModelClassEvent>) -> Unit,
         onFailure: (Exception) -> Unit
     ) {
         try {
@@ -1398,7 +1509,7 @@ object FirestoreDatabase {
             Log.d("Firestore", "Found ${snapshot.documents.size} events")
             val events = snapshot.documents.mapNotNull { doc ->
                 try {
-                    doc.toObject(ClassEvent::class.java)?.also { event ->
+                    doc.toObject(ModelClassEvent::class.java)?.also { event ->
                         event.id = doc.id
                         Log.d("Firestore", "Event details - Title: ${event.title}, Class: ${event.targetClass}, Status: ${event.status}, Date: ${event.eventDate}")
                     }
@@ -1562,5 +1673,511 @@ object FirestoreDatabase {
             Log.e("EventNotification", "Error canceling notifications: ${e.message}")
             e.printStackTrace()
         }
+    }
+
+    fun getMonthlyAttendance(studentId: String, month: String): AttendanceSummary? {
+        return try {
+            val db = FirebaseFirestore.getInstance()
+            runBlocking {
+                // Get all attendance records for the month
+                val records = db.collection("attendance")
+                    .whereEqualTo("userId", studentId)
+                    .whereGreaterThanOrEqualTo("date", getMonthStartTimestamp(month))
+                    .whereLessThan("date", getMonthEndTimestamp(month))
+                    .get()
+                    .await()
+
+                if (!records.isEmpty) {
+                    var present = 0
+                    var absent = 0
+                    var leave = 0
+
+                    records.forEach { doc ->
+                        when (doc.getString("status")?.uppercase()) {
+                            "PRESENT" -> present++
+                            "ABSENT" -> absent++
+                            "LEAVE" -> leave++
+                        }
+                    }
+
+                    AttendanceSummary(
+                        present = present,
+                        absent = absent,
+                        leave = leave
+                    )
+                } else null
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error fetching monthly attendance: ${e.message}")
+            null
+        }
+    }
+
+    private fun getMonthStartTimestamp(monthStr: String): Long {
+        val (year, month) = monthStr.split("-").map { it.toInt() }
+        val calendar = Calendar.getInstance()
+        calendar.set(year, month - 1, 1, 0, 0, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        return calendar.timeInMillis
+    }
+
+    private fun getMonthEndTimestamp(monthStr: String): Long {
+        val (year, month) = monthStr.split("-").map { it.toInt() }
+        val calendar = Calendar.getInstance()
+        calendar.set(year, month - 1, 1, 0, 0, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        calendar.add(Calendar.MONTH, 1)
+        return calendar.timeInMillis
+    }
+
+    suspend fun getParentMessages(parentId: String): List<ChatMessage>? = withContext(Dispatchers.IO) {
+        try {
+            val messages = db.collection("messages")
+                .whereEqualTo("recipientId", parentId)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { doc ->
+                    doc.toObject(ChatMessage::class.java)
+                }
+            messages
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun getApprovedNotices(): List<Notice>? = withContext(Dispatchers.IO) {
+        try {
+            val notices = db.collection("notices")
+                .whereEqualTo("status", "approved")
+                .get()
+                .await()
+                .documents
+                .mapNotNull { doc ->
+                    doc.toObject(Notice::class.java)
+                }
+            notices
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun getClassEvents(className: String): List<Event>? = withContext(Dispatchers.IO) {
+        try {
+            val events = db.collection("events")
+                .whereEqualTo("className", className)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { doc ->
+                    doc.toObject(Event::class.java)
+                }
+            events
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun updateParentProfile(
+        parentId: String,
+        phone: String,
+        address: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        try {
+            val db = FirebaseFirestore.getInstance()
+            db.collection("parents")
+                .document(parentId)
+                .update(
+                    mapOf(
+                        "phone" to phone,
+                        "address" to address
+                    )
+                )
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { onFailure(it) }
+        } catch (e: Exception) {
+            onFailure(e)
+        }
+    }
+
+    // Get parent by child ID using the relationship collection
+    fun getParentByChildId(childId: String, onSuccess: (Person?) -> Unit, onFailure: (Exception) -> Unit) {
+        Log.d("Firestore", "Fetching parent for child: $childId")
+        
+        db.collection("student_parent_relationships")
+            .whereEqualTo("studentId", childId)
+            .get()
+            .addOnSuccessListener { relationshipQuery ->
+                if (!relationshipQuery.isEmpty) {
+                    val relationshipDoc = relationshipQuery.documents[0]
+                    val parentId = relationshipDoc.getString("parentId")
+                    
+                    if (parentId != null) {
+                        // First get the student details
+                        studentsCollection.document(childId).get()
+                            .addOnSuccessListener { studentDoc ->
+                                val student = studentDoc.toObject(Person::class.java)
+                                
+                                // Then get the parent details
+                                parentsCollection.document(parentId).get()
+                                    .addOnSuccessListener { parentDoc ->
+                                        if (parentDoc.exists() && student != null) {
+                                            val parent = parentDoc.toObject(Person::class.java)?.copy(
+                                                id = parentDoc.id,
+                                                childInfo = ChildInfo(
+                                                    id = childId,
+                                                    name = "${student.firstName} ${student.lastName}".trim(),
+                                                    className = student.className,
+                                                    rollNumber = student.rollNumber
+                                                )
+                                            )
+                                            Log.d("Firestore", "Found parent with child info: ${parent?.firstName} ${parent?.lastName}")
+                                            onSuccess(parent)
+                                        } else {
+                                            Log.d("Firestore", "Parent document not found or student is null")
+                                            onSuccess(null)
+                                        }
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Log.e("Firestore", "Error getting parent document: ${e.message}")
+                                        onFailure(e)
+                                    }
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e("Firestore", "Error getting student document: ${e.message}")
+                                onFailure(e)
+                            }
+                    } else {
+                        Log.d("Firestore", "No parentId in relationship document")
+                        onSuccess(null)
+                    }
+                } else {
+                    Log.d("Firestore", "No relationship found for child: $childId")
+                    onSuccess(null)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Firestore", "Error querying relationships: ${e.message}")
+                onFailure(e)
+            }
+    }
+
+    // Get student details for parent
+    suspend fun getStudentForParent(parentId: String): Person? {
+        return try {
+            // First get parent details
+            val parentDoc = parentsCollection.document(parentId).get().await()
+            val parent = parentDoc.toObject(Person::class.java)
+
+            // Then get relationship
+            val relationshipQuery = db.collection("parent_student_relationships")
+                .whereEqualTo("parentId", parentId)
+                .get()
+                .await()
+
+            if (!relationshipQuery.isEmpty) {
+                val relationshipDoc = relationshipQuery.documents[0]
+                val studentId = relationshipDoc.getString("studentId")
+                
+                if (studentId != null) {
+                    val studentDoc = studentsCollection.document(studentId).get().await()
+                    if (studentDoc.exists() && parent != null) {
+                        studentDoc.toObject(Person::class.java)?.copy(
+                            id = studentId,
+                            parentInfo = ParentInfo(
+                                id = parentId,
+                                name = "${parent.firstName} ${parent.lastName}".trim(),
+                                email = parent.email,
+                                phone = parent.phone
+                            )
+                        )
+                    } else null
+                } else null
+            } else null
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting student for parent: ${e.message}")
+            null
+        }
+    }
+
+    // Update parent with relationships
+    fun updateParent(parent: Person, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        val batch = db.batch()
+
+        try {
+            // 1. Update parent document
+            val parentDoc = parentsCollection.document(parent.id)
+            batch.set(parentDoc, parent)
+
+            // 2. Update relationship if child info exists
+            if (parent.childInfo != null) {
+                // Find existing relationship
+                db.collection("parent_student_relationships")
+                    .whereEqualTo("parentId", parent.id)
+                    .get()
+                    .addOnSuccessListener { querySnapshot ->
+                        if (!querySnapshot.isEmpty) {
+                            val relationshipDoc = querySnapshot.documents[0].reference
+                            val relationshipUpdate = hashMapOf<String, Any>(
+                                "studentName" to (parent.childInfo.name),
+                                "studentClass" to (parent.childInfo.className),
+                                "updatedAt" to com.google.firebase.Timestamp.now()
+                            )
+                            batch.update(relationshipDoc, relationshipUpdate)
+                        }
+
+                        // 3. Update student document
+                        val studentDoc = studentsCollection.document(parent.childInfo.id)
+                        val studentUpdate = hashMapOf<String, Any>(
+                            "parentId" to parent.id,
+                            "parentName" to "${parent.firstName} ${parent.lastName}".trim(),
+                            "parentEmail" to parent.email,
+                            "parentPhone" to parent.phone
+                        )
+                        batch.update(studentDoc, studentUpdate)
+
+                        // Commit all changes
+                        batch.commit()
+                            .addOnSuccessListener {
+                                Log.d("Firestore", "Successfully updated parent and relationships")
+                                onSuccess()
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e("Firestore", "Error updating parent: ${e.message}")
+                                onFailure(e)
+                            }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Firestore", "Error finding relationship: ${e.message}")
+                        onFailure(e)
+                    }
+            } else {
+                // Just update parent document if no child info
+                batch.commit()
+                    .addOnSuccessListener {
+                        Log.d("Firestore", "Successfully updated parent")
+                        onSuccess()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Firestore", "Error updating parent: ${e.message}")
+                        onFailure(e)
+                    }
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error in updateParent: ${e.message}")
+            onFailure(e)
+        }
+    }
+
+    // Create parent with proper relationships
+    fun createParent(parent: Person, studentId: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        val batch = db.batch()
+
+        try {
+            // 1. Create parent document
+            val parentDoc = parentsCollection.document(parent.id)
+            batch.set(parentDoc, parent)
+
+            // 2. Create parent-student relationship
+            val relationshipDoc = db.collection("parent_student_relationships").document()
+            val relationshipData = hashMapOf<String, Any>(
+                "parentId" to parent.id,
+                "studentId" to studentId,
+                "studentName" to (parent.childInfo?.name ?: ""),
+                "studentClass" to (parent.childInfo?.className ?: ""),
+                "createdAt" to com.google.firebase.Timestamp.now()
+            )
+            batch.set(relationshipDoc, relationshipData)
+
+            // 3. Update student document with parent reference
+            val studentDoc = studentsCollection.document(studentId)
+            val studentUpdate = hashMapOf<String, Any>(
+                "parentId" to parent.id,
+                "parentName" to "${parent.firstName} ${parent.lastName}".trim(),
+                "parentEmail" to parent.email,
+                "parentPhone" to parent.phone
+            )
+            batch.update(studentDoc, studentUpdate)
+
+            // Commit all changes
+            batch.commit()
+                .addOnSuccessListener {
+                    Log.d("Firestore", "Successfully created parent and relationships")
+                    onSuccess()
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Firestore", "Error creating parent: ${e.message}")
+                    onFailure(e)
+                }
+
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error in createParent: ${e.message}")
+            onFailure(e)
+        }
+    }
+
+    // Delete parent
+    fun deleteParent(parentId: String, onSuccess: () -> Unit, onFailure: (Exception) -> Unit) {
+        val batch = db.batch()
+
+        try {
+            // Delete parent document
+            val parentDoc = parentsCollection.document(parentId)
+            batch.delete(parentDoc)
+
+            // Delete user document
+            val userDoc = db.collection("users").document(parentId)
+            batch.delete(userDoc)
+
+            // Delete student-parent relationship
+            val relationshipDoc = db.collection("student_parent_relationships").document(parentId)
+            batch.delete(relationshipDoc)
+
+            batch.commit()
+                .addOnSuccessListener {
+                    Log.d("Firestore", "Parent and related documents deleted successfully")
+                    onSuccess()
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Firestore", "Error deleting parent: ${e.message}")
+                    onFailure(e)
+                }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error in delete operation: ${e.message}")
+            onFailure(e)
+        }
+    }
+
+    // Get parent by ID
+    suspend fun getParent(parentId: String): Person? {
+        return try {
+            Log.d("Firestore", "Fetching parent with ID: $parentId")
+            val doc = parentsCollection.document(parentId).get().await()
+            if (doc.exists()) {
+                doc.toObject(Person::class.java)?.copy(id = doc.id)
+            } else {
+                Log.d("Firestore", "Parent document does not exist")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting parent: ${e.message}")
+            null
+        }
+    }
+
+    // Create auth accounts for existing staff members
+    fun createAuthAccountForStaff(
+        staffId: String,
+        password: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        staffCollection.document(staffId).get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.exists()) {
+                    val staff = document.toObject(Person::class.java)
+                    if (staff != null) {
+                        // Create Firebase Auth account
+                        FirebaseAuth.getInstance().createUserWithEmailAndPassword(staff.email, password)
+                            .addOnSuccessListener { authResult ->
+                                val userId = authResult.user?.uid ?: return@addOnSuccessListener
+                                
+                                // Start a batch write
+                                val batch = db.batch()
+                                
+                                // Update staff document with new ID
+                                val staffRef = staffCollection.document(userId)
+                                val staffDataWithId = staff.copy(id = userId, password = password)
+                                batch.set(staffRef, staffDataWithId)
+                                
+                                // Delete old staff document
+                                batch.delete(staffCollection.document(staffId))
+                                
+                                // Add to users collection
+                                val userRef = db.collection("users").document(userId)
+                                val userData = mapOf(
+                                    "role" to "staff",
+                                    "email" to staff.email,
+                                    "name" to "${staff.firstName} ${staff.lastName}",
+                                    "createdAt" to com.google.firebase.Timestamp.now(),
+                                    "userId" to userId,
+                                    "type" to "staff",
+                                    "department" to staff.department
+                                )
+                                batch.set(userRef, userData)
+                                
+                                // Commit the batch
+                                batch.commit()
+                                    .addOnSuccessListener {
+                                        onSuccess()
+                                    }
+                                    .addOnFailureListener { e ->
+                                        // If Firestore fails, delete the auth user
+                                        authResult.user?.delete()
+                                        onFailure(e)
+                                    }
+                            }
+                            .addOnFailureListener { e ->
+                                onFailure(e)
+                            }
+                    } else {
+                        onFailure(Exception("Staff data not found"))
+                    }
+                } else {
+                    onFailure(Exception("Staff document not found"))
+                }
+            }
+            .addOnFailureListener { e ->
+                onFailure(e)
+            }
+    }
+
+    // Get staff by ID
+    fun getStaffById(
+        staffId: String,
+        onComplete: (User?) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        staffCollection.document(staffId)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.exists()) {
+                    try {
+                        val staff = document.toObject(Person::class.java)
+                        if (staff != null) {
+                            val user = User(
+                                id = document.id,
+                                firstName = staff.firstName,
+                                lastName = staff.lastName,
+                                email = staff.email,
+                                phone = staff.phone,
+                                mobileNo = staff.mobileNo,
+                                address = staff.address,
+                                age = staff.age,
+                                gender = staff.gender,
+                                dateOfBirth = staff.dateOfBirth,
+                                className = "",  // Staff doesn't have a class
+                                rollNumber = "", // Staff doesn't have a roll number
+                                department = staff.department ?: "",
+                                designation = staff.designation ?: "",
+                                type = "staff",
+                                password = staff.password ?: ""
+                            )
+                            onComplete(user)
+                        } else {
+                            onComplete(null)
+                        }
+                    } catch (e: Exception) {
+                        onError(e)
+                    }
+                } else {
+                    onComplete(null)
+                }
+            }
+            .addOnFailureListener { e ->
+                onError(e)
+            }
     }
 }
