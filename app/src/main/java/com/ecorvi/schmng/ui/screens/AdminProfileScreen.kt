@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.ecorvi.schmng.ui.components.ProfilePhotoComponent
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.AdminProfile
 import com.ecorvi.schmng.ui.data.model.SchoolProfile
@@ -33,6 +34,7 @@ fun AdminProfileScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var isEditing by remember { mutableStateOf(false) }
+    var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
     
     // Editable states for admin profile
     var adminName by remember { mutableStateOf("") }
@@ -48,10 +50,13 @@ fun AdminProfileScreen(navController: NavController) {
     var schoolWebsite by remember { mutableStateOf("") }
     var schoolDescription by remember { mutableStateOf("") }
 
-    // Load profiles
+    // Load profiles and photo URL
     LaunchedEffect(currentUser?.uid) {
         try {
             currentUser?.uid?.let { uid ->
+                // Load profile photo
+                profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(uid)
+                
                 // Load admin profile
                 val admin = FirestoreDatabase.getAdminProfile(uid)
                 adminProfile = admin
@@ -73,8 +78,8 @@ fun AdminProfileScreen(navController: NavController) {
                     schoolWebsite = it.website
                     schoolDescription = it.description
                 }
+                isLoading = false
             }
-            isLoading = false
         } catch (e: Exception) {
             error = e.message
             isLoading = false
@@ -84,70 +89,64 @@ fun AdminProfileScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        "Admin Profile",
-                        color = Color(0xFF1F41BB),
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color(0xFF1F41BB)
-                        )
-                    }
-                },
+                title = { Text("Admin Profile") },
                 actions = {
                     if (!isEditing) {
                         IconButton(onClick = { isEditing = true }) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "Edit",
-                                tint = Color(0xFF1F41BB)
-                            )
+                            Icon(Icons.Default.Edit, "Edit Profile")
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White.copy(alpha = 0.95f)
+                    containerColor = Color.White
                 )
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(scrollState)
-        ) {
-            if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Color(0xFF1F41BB))
-                }
-            } else if (error != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        error ?: "Unknown error occurred",
-                        color = Color.Red,
-                        modifier = Modifier.padding(16.dp)
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (error != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(error ?: "Unknown error occurred")
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(scrollState)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Profile Photo
+                currentUser?.uid?.let { uid ->
+                    ProfilePhotoComponent(
+                        userId = uid,
+                        photoUrl = profilePhotoUrl,
+                        isEditable = isEditing,
+                        onPhotoUpdated = { url ->
+                            profilePhotoUrl = url
+                        }
                     )
                 }
-            } else {
+                
+                Spacer(modifier = Modifier.height(24.dp))
+
                 // Admin Profile Section
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = Color.White
                     )
@@ -158,8 +157,8 @@ fun AdminProfileScreen(navController: NavController) {
                             .padding(16.dp)
                     ) {
                         Text(
-                            "Admin Details",
-                            fontSize = 20.sp,
+                            text = "Admin Profile",
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF1F41BB)
                         )
@@ -170,47 +169,28 @@ fun AdminProfileScreen(navController: NavController) {
                                 value = adminName,
                                 onValueChange = { adminName = it },
                                 label = { Text("Name") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
                             OutlinedTextField(
                                 value = adminEmail,
                                 onValueChange = { adminEmail = it },
                                 label = { Text("Email") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
                             OutlinedTextField(
                                 value = adminPhone,
                                 onValueChange = { adminPhone = it },
                                 label = { Text("Phone") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
                             OutlinedTextField(
                                 value = adminDesignation,
                                 onValueChange = { adminDesignation = it },
                                 label = { Text("Designation") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                         } else {
                             ProfileField("Name", adminName)
@@ -221,11 +201,11 @@ fun AdminProfileScreen(navController: NavController) {
                     }
                 }
 
+                Spacer(modifier = Modifier.height(24.dp))
+
                 // School Profile Section
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = Color.White
                     )
@@ -236,8 +216,8 @@ fun AdminProfileScreen(navController: NavController) {
                             .padding(16.dp)
                     ) {
                         Text(
-                            "School Details",
-                            fontSize = 20.sp,
+                            text = "School Profile",
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF1F41BB)
                         )
@@ -248,72 +228,43 @@ fun AdminProfileScreen(navController: NavController) {
                                 value = schoolName,
                                 onValueChange = { schoolName = it },
                                 label = { Text("School Name") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
                             OutlinedTextField(
                                 value = schoolAddress,
                                 onValueChange = { schoolAddress = it },
                                 label = { Text("Address") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
                             OutlinedTextField(
                                 value = schoolPhone,
                                 onValueChange = { schoolPhone = it },
                                 label = { Text("Phone") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
                             OutlinedTextField(
                                 value = schoolEmail,
                                 onValueChange = { schoolEmail = it },
                                 label = { Text("Email") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
                             OutlinedTextField(
                                 value = schoolWebsite,
                                 onValueChange = { schoolWebsite = it },
                                 label = { Text("Website") },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
                             OutlinedTextField(
                                 value = schoolDescription,
                                 onValueChange = { schoolDescription = it },
                                 label = { Text("Description") },
                                 modifier = Modifier.fillMaxWidth(),
-                                minLines = 3,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF1F41BB),
-                                    focusedLabelColor = Color(0xFF1F41BB)
-                                )
+                                minLines = 3
                             )
                         } else {
                             ProfileField("School Name", schoolName)
@@ -326,24 +277,12 @@ fun AdminProfileScreen(navController: NavController) {
                     }
                 }
 
-                // Save/Cancel Buttons when editing
                 if (isEditing) {
+                    Spacer(modifier = Modifier.height(24.dp))
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Button(
-                            onClick = { isEditing = false },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Gray
-                            ),
-                            modifier = Modifier.weight(1f).padding(end = 8.dp)
-                        ) {
-                            Text("Cancel")
-                        }
-                        
                         Button(
                             onClick = {
                                 scope.launch {
@@ -378,10 +317,31 @@ fun AdminProfileScreen(navController: NavController) {
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF1F41BB)
-                            ),
-                            modifier = Modifier.weight(1f).padding(start = 8.dp)
+                            )
                         ) {
-                            Text("Save")
+                            Text("Save Changes")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                isEditing = false
+                                // Reset to original values
+                                adminProfile?.let {
+                                    adminName = it.name
+                                    adminEmail = it.email
+                                    adminPhone = it.phone
+                                    adminDesignation = it.designation
+                                }
+                                schoolProfile?.let {
+                                    schoolName = it.name
+                                    schoolAddress = it.address
+                                    schoolPhone = it.phone
+                                    schoolEmail = it.email
+                                    schoolWebsite = it.website
+                                    schoolDescription = it.description
+                                }
+                            }
+                        ) {
+                            Text("Cancel")
                         }
                     }
                 }
@@ -395,14 +355,12 @@ private fun ProfileField(label: String, value: String) {
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Text(
             text = label,
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = Color.Gray
         )
         Text(
-            text = value.ifEmpty { "Not set" },
-            fontSize = 16.sp,
-            color = if (value.isEmpty()) Color.Gray else Color.Black
+            text = value,
+            style = MaterialTheme.typography.bodyLarge
         )
     }
-    Spacer(modifier = Modifier.height(8.dp))
 } 

@@ -19,10 +19,22 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 // Sealed class for bottom navigation items
 sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
-    object Home : BottomNavItem("admin_dashboard", Icons.Default.Home, "Home")
+    object Home : BottomNavItem("home", Icons.Default.Home, "Home")
     object Profile : BottomNavItem("profile", Icons.Default.Person, "Profile")
     object Notifications : BottomNavItem("notifications", Icons.Default.Notifications, "Notifications")
     object Messages : BottomNavItem("messages", Icons.Default.Message, "Messages")
+
+    companion object {
+        fun fromRoute(route: String): BottomNavItem {
+            return when (route) {
+                "home", "admin_dashboard" -> Home
+                "profile" -> Profile
+                "notifications" -> Notifications
+                "messages" -> Messages
+                else -> Home
+            }
+        }
+    }
 }
 
 @Composable
@@ -38,6 +50,9 @@ fun BottomNav(
     // Calculate responsive sizes
     val iconSize = (screenWidth * 0.06f).coerceIn(24f, 32f).dp
     val labelSize = (screenWidth * 0.028f).coerceIn(10f, 14f).sp
+
+    // Map the current route to a BottomNavItem
+    val currentItem = BottomNavItem.fromRoute(currentRoute)
 
     Surface(
         modifier = Modifier
@@ -60,7 +75,7 @@ fun BottomNav(
                 BottomNavItem.Messages
             ).forEach { item ->
                 NavigationBarItem(
-                    selected = currentRoute == item.route,
+                    selected = currentItem == item,
                     onClick = { onItemSelected(item) },
                     icon = {
                         Column(
@@ -77,7 +92,7 @@ fun BottomNav(
                                 text = item.label,
                                 style = TextStyle(
                                     fontSize = labelSize,
-                                    fontWeight = if (currentRoute == item.route) 
+                                    fontWeight = if (currentItem == item) 
                                         FontWeight.Medium else FontWeight.Normal
                                 ),
                                 maxLines = 1,

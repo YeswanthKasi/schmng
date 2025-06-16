@@ -110,6 +110,14 @@ fun AppNavigation(
             )
         }
         
+        composable("admin_dashboard") { 
+            AdminDashboardScreen(
+                navController = navController,
+                currentRoute = currentRoute,
+                onRouteSelected = onRouteSelected
+            )
+        }
+        
         composable(BottomNavItem.Profile.route) { 
             ProfileScreen(
                 navController = navController,
@@ -727,6 +735,36 @@ fun AppNavigation(
                     personId = personId
                 )
             }
+        }
+
+        composable(
+            route = "staff_profile/{staffId}",
+            arguments = listOf(navArgument("staffId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val staffId = backStackEntry.arguments?.getString("staffId") ?: ""
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            var isAdmin by remember { mutableStateOf(false) }
+
+            LaunchedEffect(currentUser?.uid) {
+                if (currentUser?.uid != null) {
+                    FirestoreDatabase.getUserRole(
+                        userId = currentUser.uid,
+                        onComplete = { role ->
+                            isAdmin = role?.lowercase() == "admin"
+                        },
+                        onFailure = { e ->
+                            isAdmin = false
+                        }
+                    )
+                }
+            }
+
+            StaffProfileScreen(
+                navController = navController,
+                currentRoute = backStackEntry.destination.route,
+                staffId = staffId,
+                isAdmin = isAdmin
+            )
         }
     }
 }

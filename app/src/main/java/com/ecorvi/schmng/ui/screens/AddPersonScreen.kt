@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.ecorvi.schmng.ui.components.ProfilePhotoComponent
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.ChildInfo
 import com.ecorvi.schmng.ui.data.model.ParentInfo
@@ -153,6 +154,7 @@ fun AddPersonScreen(
     val isEditMode = personId != null
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
 
     // Define person type options
     val typeOptions = if (personType == "student") {
@@ -208,6 +210,13 @@ fun AddPersonScreen(
                             errorMessage = "Failed to load parent data: ${e.message}"
                             showErrorDialog = true
                         }
+                    }
+
+                    // Load profile photo if in edit mode
+                    try {
+                        profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(personId)
+                    } catch (e: Exception) {
+                        errorMessage = "Failed to load profile photo: ${e.message}"
                     }
                 }
             } catch (e: Exception) {
@@ -323,13 +332,13 @@ fun AddPersonScreen(
                                     FirestoreDatabase.updateStudent(
                                         studentWithParent,
                                         onSuccess = {
-                        isLoading = false
+                                            isLoading = false
                                             errorMessage = "Student and parent accounts created successfully"
                                             showErrorDialog = true
-                        coroutineScope.launch {
+                                            coroutineScope.launch {
                                                 snackbarHostState.showSnackbar("Student and parent accounts created successfully")
-                            navController.popBackStack()
-                        }
+                                                navController.popBackStack()
+                                            }
                                         },
                                         onFailure = { e ->
                                             // If student update fails, delete parent
@@ -353,52 +362,47 @@ fun AddPersonScreen(
                                         .document(parentId)
                                         .delete()
                                         .addOnSuccessListener {
-                            isLoading = false
-                                            errorMessage = "Error creating parent account: ${e.message}"
-                            showErrorDialog = true
-                        }
-                                        .addOnFailureListener { deleteError ->
-                isLoading = false
-                                            errorMessage = "Error creating parent account and cleaning up: ${deleteError.message}"
-                showErrorDialog = true
-            }
-    }
+                                            isLoading = false
+                                            errorMessage = "Error creating parent account and cleaning up: ${e.message}"
+                                            showErrorDialog = true
+                                        }
+                                }
                             )
                         }
                         .addOnFailureListener { e ->
                             // If parent auth fails, delete student auth
                             studentAuthResult.user?.delete()
-                        isLoading = false
+                            isLoading = false
                             errorMessage = "Error creating parent authentication: ${e.message}"
-                        showErrorDialog = true
-                    }
-            } else {
+                            showErrorDialog = true
+                        }
+                } else {
                     // No parent info, just save student
                     FirestoreDatabase.updateStudent(
                         student,
-                    onSuccess = {
-                        isLoading = false
+                        onSuccess = {
+                            isLoading = false
                             errorMessage = "Student account created successfully"
                             showErrorDialog = true
-                        coroutineScope.launch {
+                            coroutineScope.launch {
                                 snackbarHostState.showSnackbar("Student account created successfully")
-                            navController.popBackStack()
-                        }
-                    },
-                    onFailure = { e ->
+                                navController.popBackStack()
+                            }
+                        },
+                        onFailure = { e ->
                             studentAuthResult.user?.delete()
-                        isLoading = false
+                            isLoading = false
                             errorMessage = "Error creating student account: ${e.message}"
-                        showErrorDialog = true
-                    }
-                )
-            }
+                            showErrorDialog = true
+                        }
+                    )
+                }
             }
             .addOnFailureListener { e ->
                 isLoading = false
                 errorMessage = "Error creating student authentication: ${e.message}"
                 showErrorDialog = true
-        }
+            }
     }
 
     fun savePersonWithAdmin() {
@@ -519,8 +523,8 @@ fun AddPersonScreen(
                 onSuccess = {
                     // Handle parent information update
                     if (parentEmail.isNotBlank()) {
-        val auth = FirebaseAuth.getInstance()
-        val db = FirebaseFirestore.getInstance()
+                        val auth = FirebaseAuth.getInstance()
+                        val db = FirebaseFirestore.getInstance()
 
                         // Function to create/update parent documents and establish relationships
                         fun setupParentDocuments(parentUserId: String, isNewParent: Boolean) {
@@ -582,11 +586,11 @@ fun AddPersonScreen(
                             batch.set(relationshipDoc, relationshipData)
 
                             // Commit all changes
-                batch.commit()
-                    .addOnSuccessListener {
+                            batch.commit()
+                                .addOnSuccessListener {
                                     onSuccess()
-                    }
-                    .addOnFailureListener { e ->
+                                }
+                                .addOnFailureListener { e ->
                                     onError(Exception("Failed to setup parent-student relationship: ${e.message}"))
                                 }
                         }
@@ -614,9 +618,9 @@ fun AddPersonScreen(
                                             }
                                     } else {
                                         onError(Exception("Failed to create parent account: Invalid user ID"))
-                    }
-            }
-            .addOnFailureListener { e ->
+                                    }
+                                }
+                                .addOnFailureListener { e ->
                                     onError(Exception("Failed to create parent authentication: ${e.message}"))
                                 }
                         } else {
@@ -634,7 +638,7 @@ fun AddPersonScreen(
                 onSuccess = onSuccess,
                 onFailure = onError
             )
-            }
+        }
     }
 
     LaunchedEffect(personId) {
@@ -860,28 +864,48 @@ fun AddPersonScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Profile Picture Placeholder
+                    // Profile Photo Component
                     item {
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .background(
-                                    when (personType) {
-                                        "student" -> StudentGreen
-                                        "teacher" -> TeacherBlue
-                                        else -> MaterialTheme.colorScheme.primary
-                                    },
-                                    shape = CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = "Profile Picture",
-                                tint = Color.White,
-                                modifier = Modifier.size(60.dp)
-                            )
-                        }
+                        ProfilePhotoComponent(
+                            userId = personId ?: "",
+                            photoUrl = profilePhotoUrl,
+                            isEditable = true,
+                            themeColor = when (personType) {
+                                "student" -> StudentGreen
+                                "teacher" -> TeacherBlue
+                                else -> MaterialTheme.colorScheme.primary
+                            },
+                            onPhotoUpdated = { url ->
+                                profilePhotoUrl = url
+                                // Update the user document with the new photo URL
+                                if (personId != null) {
+                                    val collection = when (personType) {
+                                        "student" -> "students"
+                                        "teacher" -> "teachers"
+                                        else -> "non_teaching_staff"
+                                    }
+                                    FirebaseFirestore.getInstance()
+                                        .collection(collection)
+                                        .document(personId)
+                                        .update("profilePhoto", url)
+                                        .addOnSuccessListener {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("Profile photo updated successfully")
+                                            }
+                                        }
+                                        .addOnFailureListener { e ->
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("Failed to update profile photo: ${e.message}")
+                                            }
+                                        }
+                                }
+                            },
+                            onError = { error ->
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(error)
+                                }
+                            }
+                        )
                     }
 
                     // First Name and Last Name

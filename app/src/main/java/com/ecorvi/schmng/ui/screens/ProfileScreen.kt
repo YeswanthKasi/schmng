@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.ecorvi.schmng.ui.components.ProfilePhotoComponent
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.AdminProfile
 import com.ecorvi.schmng.ui.data.model.Person
@@ -49,21 +50,24 @@ fun ProfileScreen(
     var editedAdminProfile by remember { mutableStateOf<AdminProfile?>(null) }
     var editedSchoolProfile by remember { mutableStateOf<SchoolProfile?>(null) }
     var personProfile by remember { mutableStateOf<Person?>(null) }
+    var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
     
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Load profiles
+    // Load profiles and photo URL
     LaunchedEffect(Unit) {
         try {
             if (id.isNotEmpty() && type.isNotEmpty()) {
-                // Load student or teacher profile
+                // Load student or teacher profile and photo
                 personProfile = FirestoreDatabase.getPersonById(id, type)
+                profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(id)
             } else {
-                // Load admin and school profiles
+                // Load admin and school profiles and photo
                 FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
                     adminProfile = FirestoreDatabase.getAdminProfile(uid)
                     schoolProfile = FirestoreDatabase.getSchoolProfile()
+                    profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(uid)
                 }
             }
         } catch (e: Exception) {
@@ -113,8 +117,36 @@ fun ProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Profile Photo Component
+            if (id.isNotEmpty() && type.isNotEmpty()) {
+                ProfilePhotoComponent(
+                    userId = id,
+                    photoUrl = profilePhotoUrl,
+                    isEditable = false,
+                    themeColor = Color(0xFF1F41BB),
+                    onPhotoUpdated = { url ->
+                        profilePhotoUrl = url
+                    }
+                )
+            } else {
+                FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+                    ProfilePhotoComponent(
+                        userId = uid,
+                        photoUrl = profilePhotoUrl,
+                        isEditable = isEditing,
+                        themeColor = Color(0xFF1F41BB),
+                        onPhotoUpdated = { url ->
+                            profilePhotoUrl = url
+                        }
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+
             if (id.isNotEmpty() && type.isNotEmpty()) {
                 // Display student or teacher profile
                 personProfile?.let { person ->

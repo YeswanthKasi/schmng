@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.data
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.ecorvi.schmng.models.AttendanceRecord
@@ -29,17 +30,26 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.ktx.functions
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageReference
+import id.zelory.compressor.Compressor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlinx.coroutines.runBlocking
+import android.graphics.Bitmap
+import id.zelory.compressor.constraint.default
+import id.zelory.compressor.constraint.size
 
 object FirestoreDatabase {
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val functions = Firebase.functions
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val storage: FirebaseStorage = FirebaseStorage.getInstance()
+    private val storageRef: StorageReference = storage.reference
     
     private val schedulesCollection = db.collection("schedules")
     private val feesCollection = db.collection("fees")
@@ -59,6 +69,204 @@ object FirestoreDatabase {
     // Time slots collection
     private val timeSlotsCollection = db.collection("timeSlots")
     private val subjectsCollection = db.collection("subjects")
+
+    // Constants
+    private const val PROFILE_PHOTOS_PATH = "profile_photos"
+    private const val DOCUMENTS_PATH = "documents"
+    private const val MAX_PHOTO_SIZE = 1024 * 1024 // 1MB
+
+    private suspend fun cleanupOldProfilePhotos(userId: String) = withContext(Dispatchers.IO) {
+        try {
+            val photoRef = storageRef.child("$PROFILE_PHOTOS_PATH/$userId")
+            val files = photoRef.listAll().await()
+            
+            // Keep only the most recent photo
+            if (files.items.size > 1) {
+                files.items.dropLast(1).forEach { oldPhoto ->
+                    try {
+                        oldPhoto.delete().await()
+                    } catch (e: Exception) {
+                        Log.w("FirestoreDatabase", "Failed to delete old photo: ${e.message}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirestoreDatabase", "Error cleaning up old profile photos", e)
+        }
+    }
+
+    // Storage Functions
+    suspend fun uploadProfilePhoto(
+        userId: String,
+        photoUri: Uri,
+        context: Context,
+        onProgress: (Float) -> Unit = {}
+    ): String = withContext(Dispatchers.IO) {
+        try {
+            // Create a reference to the photo location
+            val photoRef = storageRef.child("$PROFILE_PHOTOS_PATH/$userId/${UUID.randomUUID()}")
+            
+            // Convert Uri to File and compress
+            val originalFile = File(context.cacheDir, "profile_photo")
+            context.contentResolver.openInputStream(photoUri)?.use { input ->
+                originalFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            // Compress the image using Compressor
+            val compressedFile = Compressor.compress(context, originalFile, Dispatchers.IO) {
+                default(width = 1024, format = Bitmap.CompressFormat.JPEG)
+                size(MAX_PHOTO_SIZE.toLong())
+            }
+
+            // Upload the file
+            val uploadTask = photoRef.putFile(Uri.fromFile(compressedFile))
+
+            uploadTask.addOnProgressListener { taskSnapshot ->
+                val progress = taskSnapshot.bytesTransferred.toFloat() / taskSnapshot.totalByteCount
+                onProgress(progress)
+            }
+
+            // Wait for upload to complete
+            uploadTask.await()
+
+            // Get download URL
+            val downloadUrl = photoRef.downloadUrl.await().toString()
+            
+            // Clean up temporary files
+            originalFile.delete()
+            compressedFile.delete()
+
+            // Clean up old profile photos
+            cleanupOldProfilePhotos(userId)
+
+            // Update the appropriate collection with the photo URL
+            // First try users collection for admin
+            var userDoc = db.collection("users").document(userId).get().await()
+            if (userDoc.exists()) {
+                db.collection("users").document(userId).update("profilePhoto", downloadUrl).await()
+                return@withContext downloadUrl
+            }
+
+            // Try teachers collection
+            userDoc = teachersCollection.document(userId).get().await()
+            if (userDoc.exists()) {
+                teachersCollection.document(userId).update("profilePhoto", downloadUrl).await()
+                return@withContext downloadUrl
+            }
+
+            // Try students collection
+            userDoc = studentsCollection.document(userId).get().await()
+            if (userDoc.exists()) {
+                studentsCollection.document(userId).update("profilePhoto", downloadUrl).await()
+                return@withContext downloadUrl
+            }
+
+            // Try staff collection
+            userDoc = staffCollection.document(userId).get().await()
+            if (userDoc.exists()) {
+                staffCollection.document(userId).update("profilePhoto", downloadUrl).await()
+                return@withContext downloadUrl
+            }
+
+            throw Exception("User document not found in any collection")
+        } catch (e: Exception) {
+            Log.e("FirestoreDatabase", "Error uploading profile photo", e)
+            throw e
+        }
+    }
+
+    suspend fun uploadDocument(
+        userId: String,
+        documentUri: Uri,
+        documentType: String,
+        onProgress: (Float) -> Unit = {}
+    ): String = withContext(Dispatchers.IO) {
+        try {
+            val documentRef = storageRef.child("$DOCUMENTS_PATH/$userId/$documentType/${UUID.randomUUID()}")
+            
+            val uploadTask = documentRef.putFile(documentUri)
+
+            uploadTask.addOnProgressListener { taskSnapshot ->
+                val progress = taskSnapshot.bytesTransferred.toFloat() / taskSnapshot.totalByteCount
+                onProgress(progress)
+            }
+
+            uploadTask.await()
+            return@withContext documentRef.downloadUrl.await().toString()
+        } catch (e: Exception) {
+            Log.e("FirestoreDatabase", "Error uploading document", e)
+            throw e
+        }
+    }
+
+    suspend fun deleteFile(fileUrl: String) = withContext(Dispatchers.IO) {
+        try {
+            val fileRef = storage.getReferenceFromUrl(fileUrl)
+            fileRef.delete().await()
+        } catch (e: Exception) {
+            Log.e("FirestoreDatabase", "Error deleting file", e)
+            throw e
+        }
+    }
+
+    suspend fun getProfilePhotoUrl(userId: String): String? = withContext(Dispatchers.IO) {
+        try {
+            // Try each collection in sequence
+            val collections = listOf(
+                "students",
+                "teachers",
+                "non_teaching_staff",
+                "users" // Fallback for admin
+            )
+
+            for (collection in collections) {
+                val doc = db.collection(collection).document(userId).get().await()
+                if (doc.exists() && doc.contains("profilePhoto")) {
+                    return@withContext doc.getString("profilePhoto")
+                }
+            }
+            return@withContext null
+        } catch (e: Exception) {
+            Log.e("FirestoreDatabase", "Error getting profile photo URL", e)
+            return@withContext null
+        }
+    }
+
+    suspend fun updateProfilePhoto(userId: String, photoUrl: String, userType: String? = null): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // Determine the collection based on user type
+            val collection = when (userType?.lowercase()) {
+                "student" -> "students"
+                "teacher" -> "teachers"
+                "non_teaching_staff" -> "non_teaching_staff"
+                else -> {
+                    // If user type not specified, try to find the correct collection
+                    val collections = listOf("students", "teachers", "non_teaching_staff", "users")
+                    var foundCollection: String? = null
+                    
+                    for (coll in collections) {
+                        if (db.collection(coll).document(userId).get().await().exists()) {
+                            foundCollection = coll
+                            break
+                        }
+                    }
+                    foundCollection ?: "users" // Default to users if not found
+                }
+            }
+
+            // Update the profile photo in the correct collection
+            db.collection(collection).document(userId)
+                .update("profilePhoto", photoUrl)
+                .await()
+
+            return@withContext true
+        } catch (e: Exception) {
+            Log.e("FirestoreDatabase", "Error updating profile photo", e)
+            return@withContext false
+        }
+    }
 
     // Add a timetable entry (Reverted signature)
     fun addTimetable(
@@ -754,10 +962,14 @@ object FirestoreDatabase {
         onSuccess: () -> Unit,
         onFailure: (Exception) -> Unit
     ) {
-        // First create the user document
+        // First create the user document with profile photo field
+        val userDataWithPhoto = userData.toMutableMap().apply {
+            put("profilePhoto", "") // Initialize empty profile photo
+        }
+        
         db.collection("users")
             .document(userId)
-            .set(userData)
+            .set(userDataWithPhoto)
             .addOnSuccessListener {
                 // Then add the person data to appropriate collection
                 when (userData["role"]) {
@@ -2179,5 +2391,58 @@ object FirestoreDatabase {
             .addOnFailureListener { e ->
                 onError(e)
             }
+    }
+
+    // Add these functions after the existing functions
+    fun fetchGenderStatistics(
+        userType: String,
+        onSuccess: (Map<String, Int>) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val collection = when (userType.lowercase()) {
+            "students" -> db.collection("students")
+            "teachers" -> db.collection("teachers")
+            "staff" -> db.collection("non_teaching_staff")
+            else -> throw IllegalArgumentException("Invalid user type")
+        }
+
+        collection.get()
+            .addOnSuccessListener { snapshot ->
+                val genderStats = mutableMapOf(
+                    "male" to 0,
+                    "female" to 0
+                )
+                
+                snapshot.documents.forEach { doc ->
+                    when (doc.getString("gender")?.lowercase()) {
+                        "male" -> genderStats["male"] = genderStats["male"]!! + 1
+                        "female" -> genderStats["female"] = genderStats["female"]!! + 1
+                    }
+                }
+                
+                onSuccess(genderStats)
+            }
+            .addOnFailureListener { e ->
+                onError(e)
+            }
+    }
+
+    suspend fun updateStaffField(
+        staffId: String,
+        field: String,
+        value: Any,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        try {
+            db.collection("non_teaching_staff")
+                .document(staffId)
+                .update(field, value)
+                .await()
+            onSuccess()
+        } catch (e: Exception) {
+            Log.e("FirestoreDatabase", "Error updating staff field: ${e.message}")
+            onError(e.message ?: "Failed to update staff field")
+        }
     }
 }

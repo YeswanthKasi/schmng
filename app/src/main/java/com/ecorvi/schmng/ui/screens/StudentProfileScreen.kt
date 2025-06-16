@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.ecorvi.schmng.ui.components.ProfilePhotoComponent
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
 import kotlinx.coroutines.launch
@@ -32,28 +33,15 @@ fun StudentProfileScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isDeleting by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(studentId) {
-        try {
-            isLoading = true
-            FirestoreDatabase.getStudent(studentId)?.let { studentData ->
-                student = studentData
-            } ?: run {
-                scope.launch {
-                    snackbarHostState.showSnackbar("Error: Student not found")
-                    navController.popBackStack()
-                }
-            }
-        } catch (e: Exception) {
-            scope.launch {
-                snackbarHostState.showSnackbar("Error: ${e.message}")
-                navController.popBackStack()
-            }
-        } finally {
-            isLoading = false
-        }
+        isLoading = true
+        student = FirestoreDatabase.getStudent(studentId)
+        profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(studentId)
+        isLoading = false
     }
 
     Scaffold(
@@ -123,8 +111,22 @@ fun StudentProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp)
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Profile Photo
+                    ProfilePhotoComponent(
+                        userId = studentId,
+                        photoUrl = profilePhotoUrl,
+                        isEditable = isAdmin,
+                        themeColor = StudentGreen,
+                        onPhotoUpdated = { url ->
+                            profilePhotoUrl = url
+                        }
+                    )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp)

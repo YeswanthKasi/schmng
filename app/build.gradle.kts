@@ -17,13 +17,14 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 34
-        versionCode = 43
-        versionName = "1.40"
+        versionCode = 44
+        versionName = "1.41"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
         // Add manifest placeholders properly
         manifestPlaceholders["android.max.aspect"] = "2.4"
+        manifestPlaceholders["MAPS_API_KEY"] = ""
 
         // Declare required features
         ndk {
@@ -74,10 +75,12 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+        compose = true
     }
 }
 
 dependencies {
+    implementation(libs.play.services.maps)
     // Add core library desugaring for compatibility with older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
@@ -155,5 +158,20 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("com.google.android.gms:play-services-auth:20.7.0")
     implementation("com.google.android.gms:play-services-auth-api-phone:18.0.2")
+
+    // Firebase Storage
+    implementation("com.google.firebase:firebase-storage-ktx:20.3.0")
+    
+    // Image Cropping
+    implementation("com.github.yalantis:ucrop:2.2.8-native")
+    
+    // Image Loading and Caching
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    
+    // Permissions handling
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+    
+    // Image Compression
+    implementation("id.zelory:compressor:3.0.1")
 }
 

@@ -32,6 +32,7 @@ androidx-material3 = "1.2.1"
 firebaseFirestore = "25.1.3"
 firebaseInappmessagingDisplay = "21.0.2"
 firebaseDatabaseKtx = "21.0.0"
+playServicesMaps = "19.2.0"
 
 [libraries]
 
@@ -72,6 +73,7 @@ google-play-app-update-ktx = { group = "com.google.android.play", name = "app-up
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore", version.ref = "firebaseFirestore" }
 firebase-inappmessaging-display = { group = "com.google.firebase", name = "firebase-inappmessaging-display", version.ref = "firebaseInappmessagingDisplay" }
 firebase-database-ktx = { group = "com.google.firebase", name = "firebase-database-ktx", version.ref = "firebaseDatabaseKtx" }
+play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -100,6 +100,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.ecorvi.schmng.ui.navigation.AppNavigation
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.layout.height
@@ -137,6 +138,14 @@ private val GraphGreen = Color(0xFF4CAF50)
 private val GraphOrange = Color(0xFFFF9800)
 private val GraphPurple = Color(0xFF9C27B0)
 private val GraphRed = Color(0xFFE91E63)
+
+// Add these color definitions with the other colors at the top
+private val MaleColor = Color(0xFF2196F3)  // Blue for male
+private val FemaleColor = Color(0xFFE91E63)  // Pink for female
+private val OtherColor = Color(0xFF9C27B0)   // Purple for other
+private val PresentColor = Color(0xFF4CAF50)  // Green for present
+private val AbsentColor = Color(0xFFE57373)   // Red for absent
+private val LeaveColor = Color(0xFFFFB74D)    // Orange for leave
 
 // Main composable function for the Admin Dashboard Screen
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
@@ -868,7 +877,7 @@ fun AdminDashboardScreen(
                         title = {
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 Text(
-                                    "Dashboard",
+                                    "AdminHub",
                                     color = PrimaryBlue,
                                     fontSize = 22.sp,
                                     fontWeight = FontWeight.Bold
@@ -1100,147 +1109,14 @@ fun AdminDashboardScreen(
                                             Spacer(modifier = Modifier.height(15.dp))
                                             
                                             // Attendance Overview with Pie Chart
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                // Get unique users and their latest status for today
-                                                val latestStudentStatus = studentAttendance
-                                                    .groupBy { it.userId }
-                                                    .mapValues { (_, records) -> 
-                                                        records.maxByOrNull { it.date }?.status ?: AttendanceStatus.ABSENT 
-                                                    }
-                                                
-                                                val latestTeacherStatus = teacherAttendance
-                                                    .groupBy { it.userId }
-                                                    .mapValues { (_, records) -> 
-                                                        records.maxByOrNull { it.date }?.status ?: AttendanceStatus.ABSENT 
-                                                    }
-                                                    
-                                                val latestStaffStatus = staffAttendance
-                                                    .groupBy { it.userId }
-                                                    .mapValues { (_, records) -> 
-                                                        records.maxByOrNull { it.date }?.status ?: AttendanceStatus.ABSENT 
-                                                    }
-                                                
-                                                // Count present users for each type
-                                                val studentsPresent = latestStudentStatus.values.count { it == AttendanceStatus.PRESENT }
-                                                val teachersPresent = latestTeacherStatus.values.count { it == AttendanceStatus.PRESENT }
-                                                val staffPresent = latestStaffStatus.values.count { it == AttendanceStatus.PRESENT }
-                                                
-                                                // Calculate total present and total users
-                                                val totalPresent = studentsPresent + teachersPresent + staffPresent
-                                                val totalUsers = studentCount + teacherCount + staffCount
-
-                                                // Left side: Pie Chart
-                                                Box(modifier = Modifier.weight(1f)) {
-                                                    AttendancePieChart(
-                                                        present = totalPresent,
-                                                        absent = totalUsers - totalPresent,
-                                                        leave = 0, // We're only showing present vs absent for simplicity
-                                                        total = totalUsers
-                                                    )
-                                                }
-                                                
-                                                // Right side: Legend with counts
-                                                Column(
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .padding(start = 16.dp)
-                                                ) {
-
-                                                    // Students
-                                                    Row(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(vertical = 4.dp),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                        ) {
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .size(8.dp) // Slightly larger dot
-                                                                    .background(StudentGreen, CircleShape)
-                                                            )
-                                                            Text(
-                                                                "Students",
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = Color.DarkGray
-                                                            )
-                                                        }
-                                                        Text(
-                                                            "$studentsPresent out of $studentCount",
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = StudentGreen
-                                                        )
-                                                    }
-                                                    
-                                                    // Teachers
-                                                    Row(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(vertical = 4.dp),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                        ) {
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .size(8.dp) // Slightly larger dot
-                                                                    .background(TeacherBlue, CircleShape)
-                                                            )
-                                                            Text(
-                                                                "Teachers",
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = Color.DarkGray
-                                                            )
-                                                        }
-                                                        Text(
-                                                            "$teachersPresent out of $teacherCount",
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = TeacherBlue
-                                                        )
-                                                    }
-                                                    
-                                                    // Staff
-                                                    Row(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(vertical = 4.dp),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                        ) {
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .size(8.dp) // Slightly larger dot
-                                                                    .background(StaffPurple, CircleShape)
-                                                            )
-                                                            Text(
-                                                                "Staff",
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = Color.DarkGray
-                                                            )
-                                                        }
-                                                        Text(
-                                                            "$staffPresent out of $staffCount",
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = StaffPurple
-                                                        )
-                                                    }
-                                                }
-
-                                            }
+                                            AttendanceOverviewCard(
+                                                studentCount = studentCount,
+                                                teacherCount = teacherCount,
+                                                staffCount = staffCount,
+                                                studentAttendance = studentAttendance,
+                                                teacherAttendance = teacherAttendance,
+                                                staffAttendance = staffAttendance
+                                            )
                                         }
                                     }
                                 }
@@ -2000,101 +1876,321 @@ private fun AttendanceOverviewCard(
     teacherAttendance: List<AttendanceRecord>,
     staffAttendance: List<AttendanceRecord>
 ) {
-    Card(
+    var selectedCategory by remember { mutableStateOf("Students") }
+    val categories = listOf("Students", "Teachers", "Staff")
+    
+    // State for gender statistics
+    var genderStats by remember { mutableStateOf<Map<String, Int>>(mapOf("male" to 0, "female" to 0)) }
+    var isLoadingGenderStats by remember { mutableStateOf(true) }
+    var genderError by remember { mutableStateOf<String?>(null) }
+
+    // Load gender statistics when category changes
+    LaunchedEffect(selectedCategory) {
+        isLoadingGenderStats = true
+        try {
+            FirestoreDatabase.fetchGenderStatistics(
+                userType = selectedCategory,
+                onSuccess = { stats ->
+                    genderStats = stats
+                    isLoadingGenderStats = false
+                },
+                onError = { e ->
+                    genderError = e.message
+                    isLoadingGenderStats = false
+                }
+            )
+        } catch (e: Exception) {
+            genderError = e.message
+            isLoadingGenderStats = false
+        }
+    }
+
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+        color = BackgroundColor,
+        shadowElevation = 2.dp
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
             Text(
-                "Today's Attendance Overview",
-                style = MaterialTheme.typography.titleMedium,
-                color = colorAccent
+                "Attendance & Gender Analysis",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    textAlign = TextAlign.Center
+                ),
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1F41BB),
+                modifier = Modifier.fillMaxWidth()
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Student Attendance
+            // Category Selection Tabs
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
+                categories.forEach { category ->
+                    Surface(
                         modifier = Modifier
-                            .size(12.dp)
-                            .background(StudentGreen, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Students")
-                }
-                Row {
-                    val presentCount = studentAttendance.count { it.status == AttendanceStatus.PRESENT }
+                            .weight(1f)
+                            .clickable { selectedCategory = category },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (selectedCategory == category) 
+                            PrimaryBlue.copy(alpha = 0.1f) 
+                        else 
+                            Color.Transparent,
+                        border = BorderStroke(
+                            1.dp,
+                            if (selectedCategory == category) PrimaryBlue else Color.Gray.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                     Text(
-                        "$presentCount out of $studentCount present",
-                        color = if (presentCount > 0) StudentGreen else Color.Gray
+                                text = category,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (selectedCategory == category) 
+                                    PrimaryBlue 
+                                else 
+                                    Color.Gray
                     )
+                        }
+                    }
                 }
             }
 
-            // Teacher Attendance
+            // Analysis Content
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .height(200.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Left side: Attendance Pie Chart
                     Box(
                         modifier = Modifier
-                            .size(12.dp)
-                            .background(TeacherBlue, CircleShape)
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val (attendance, total) = when (selectedCategory) {
+                        "Students" -> studentAttendance to studentCount
+                        "Teachers" -> teacherAttendance to teacherCount
+                        else -> staffAttendance to staffCount
+                    }
+                    
+                    val present = attendance.count { it.status == AttendanceStatus.PRESENT }
+                    val absent = attendance.count { it.status == AttendanceStatus.ABSENT }
+                    val leave = attendance.count { it.status == AttendanceStatus.PERMISSION }
+                    
+                    AttendancePieChart(
+                        present = present,
+                        absent = absent,
+                        leave = leave,
+                        total = total
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Teachers")
                 }
-                Row {
-                    val presentCount = teacherAttendance.count { it.status == AttendanceStatus.PRESENT }
+
+                // Right side: Gender Distribution
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isLoadingGenderStats) {
+                        CircularProgressIndicator(
+                            color = PrimaryBlue,
+                            modifier = Modifier.size(48.dp)
+                        )
+                    } else if (genderError != null) {
                     Text(
-                        "$presentCount out of $teacherCount present",
-                        color = if (presentCount > 0) TeacherBlue else Color.Gray
-                    )
+                            text = "Error loading gender data",
+                            color = Color.Red,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        val total = (genderStats["male"] ?: 0) + (genderStats["female"] ?: 0)
+                        val malePercentage = if (total > 0) (genderStats["male"] ?: 0).toFloat() / total else 0f
+                        val femalePercentage = if (total > 0) (genderStats["female"] ?: 0).toFloat() / total else 0f
+                        
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            GenderDistributionChart(
+                                malePercentage = malePercentage,
+                                femalePercentage = femalePercentage,
+                                otherPercentage = 0f
+                            )
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            // Show actual counts
+                            Text(
+                                text = "Male: ${genderStats["male"] ?: 0}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaleColor
+                            )
+                            Text(
+                                text = "Female: ${genderStats["female"] ?: 0}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = FemaleColor
+                            )
+                        }
+                    }
                 }
             }
 
-            // Staff Attendance
-            Row(
+            // Legend
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(top = 16.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .background(StaffPurple, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Non-Teaching Staff")
+                // Attendance Legend
+                Text(
+                    "Attendance Status",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    LegendItem("Present", PresentColor)
+                    LegendItem("Absent", AbsentColor)
+                    LegendItem("Leave", LeaveColor)
                 }
-                Row {
-                    val presentCount = staffAttendance.count { it.status == AttendanceStatus.PRESENT }
-                    Text(
-                        "$presentCount out of $staffCount present",
-                        color = if (presentCount > 0) StaffPurple else Color.Gray
-                    )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Gender Legend - modified to only show male and female
+                Text(
+                    "Gender Distribution",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    LegendItem("Male", MaleColor)
+                    LegendItem("Female", FemaleColor)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LegendItem(label: String, color: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+                    Box(
+                        modifier = Modifier
+                .size(8.dp)
+                .background(color, CircleShape)
+                    )
+                    Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.DarkGray
+        )
+    }
+}
+
+@Composable
+private fun GenderDistributionChart(
+    malePercentage: Float,
+    femalePercentage: Float,
+    otherPercentage: Float // We'll keep this parameter to avoid breaking changes but won't use it
+) {
+    Canvas(
+        modifier = Modifier
+            .size(160.dp)
+            .padding(8.dp)
+    ) {
+        val width = size.width
+        val height = size.height
+        val radius = minOf(width, height) / 2
+        val centerX = width / 2
+        val centerY = height / 2
+        val strokeWidth = radius * 0.2f
+        
+        // Draw background circle
+        drawCircle(
+            color = Color.Gray.copy(alpha = 0.1f),
+            radius = radius,
+            center = Offset(centerX, centerY),
+            style = Stroke(strokeWidth)
+        )
+        
+        // Calculate angles - normalize to only male and female
+        val totalPercentage = malePercentage + femalePercentage
+        val normalizedMalePercentage = malePercentage / totalPercentage
+        val normalizedFemalePercentage = femalePercentage / totalPercentage
+        
+        val maleAngle = normalizedMalePercentage * 360f
+        val femaleAngle = normalizedFemalePercentage * 360f
+        
+        // Draw arcs for male and female
+        val path = Path()
+        path.addArc(
+            Rect(
+                left = centerX - radius,
+                top = centerY - radius,
+                right = centerX + radius,
+                bottom = centerY + radius
+            ),
+            0f,
+            maleAngle
+        )
+        drawPath(
+            path = path,
+            color = MaleColor,
+            style = Stroke(strokeWidth, cap = StrokeCap.Round)
+        )
+        
+        path.reset()
+        path.addArc(
+            Rect(
+                left = centerX - radius,
+                top = centerY - radius,
+                right = centerX + radius,
+                bottom = centerY + radius
+            ),
+            maleAngle,
+            femaleAngle
+        )
+        drawPath(
+            path = path,
+            color = FemaleColor,
+            style = Stroke(strokeWidth, cap = StrokeCap.Round)
+        )
+        
+        // Draw percentage text in center
+        drawContext.canvas.nativeCanvas.apply {
+            val paint = android.graphics.Paint().apply {
+                textSize = radius * 0.3f
+                textAlign = android.graphics.Paint.Align.CENTER
+                color = android.graphics.Color.BLACK
+            }
+            drawText(
+                "${(normalizedMalePercentage * 100).toInt()}%",
+                centerX,
+                centerY,
+                paint
+            )
         }
     }
 }

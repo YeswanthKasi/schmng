@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.ecorvi.schmng.ui.components.ProfilePhotoComponent
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
 import kotlinx.coroutines.launch
@@ -30,12 +31,14 @@ fun TeacherProfileScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isDeleting by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(teacherId) {
         isLoading = true
         teacher = FirestoreDatabase.getTeacher(teacherId)
+        profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(teacherId)
         isLoading = false
     }
 
@@ -89,8 +92,27 @@ fun TeacherProfileScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(16.dp)
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        // Profile Photo
+                        ProfilePhotoComponent(
+                            userId = teacherId,
+                            photoUrl = profilePhotoUrl,
+                            isEditable = isAdmin,
+                            themeColor = Color(0xFF1F41BB),
+                            onPhotoUpdated = { url ->
+                                profilePhotoUrl = url
+                            },
+                            onError = { error ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(error)
+                                }
+                            }
+                        )
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
                         // Personal Information Card
                         Card(
                             modifier = Modifier

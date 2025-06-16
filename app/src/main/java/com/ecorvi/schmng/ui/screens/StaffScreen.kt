@@ -74,111 +74,27 @@ fun StaffScreen(navController: NavController) {
 
     Scaffold(
         topBar = {
-            Column {
-                TopAppBar(
-                    title = { 
-                        Text(
-                            "Non-Teaching Staff",
-                            color = StaffPurple,
-                            fontWeight = FontWeight.Bold
-                        ) 
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navController.navigateUp() }) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                "Back",
-                                tint = StaffPurple
-                            )
-                        }
-                    },
-                    actions = {
-                        // Department filter dropdown
-                        var expanded by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(onClick = { expanded = true }) {
-                                Icon(
-                                    Icons.Default.FilterList,
-                                    "Filter by department",
-                                    tint = StaffPurple
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false }
-                            ) {
-                                departments.forEach { department ->
-                                    DropdownMenuItem(
-                                        text = { Text(department) },
-                                        onClick = {
-                                            selectedDepartment = department
-                                            expanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                )
-                
-                // Search bar
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    placeholder = { Text("Search staff...") },
-                    leadingIcon = { 
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = StaffPurple
-                        ) 
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedBorderColor = StaffPurple.copy(alpha = 0.12f),
-                        focusedBorderColor = StaffPurple,
-                        focusedLeadingIconColor = StaffPurple,
-                        focusedPlaceholderColor = StaffPurple.copy(alpha = 0.5f),
-                        cursorColor = StaffPurple
+            TopAppBar(
+                title = {
+                    Text(
+                        "Non-Teaching Staff",
+                        color = StaffPurple,
+                        fontWeight = FontWeight.Bold
                     )
-                )
-
-                // Selected department chip
-                if (selectedDepartment != "All Departments") {
-                    Surface(
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 8.dp),
-                        color = StaffPurple.copy(alpha = 0.1f),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = selectedDepartment,
-                                color = StaffPurple,
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            )
-                            IconButton(
-                                onClick = { selectedDepartment = "All Departments" },
-                                modifier = Modifier.size(16.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Clear filter",
-                                    tint = StaffPurple
-                                )
-                            }
-                        }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = StaffPurple
+                        )
                     }
-                }
-            }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White
+                )
+            )
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -304,16 +220,23 @@ fun StaffListItem(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = staff.designation,
+                    text = staff.designation ?: "Staff Member",
                     style = MaterialTheme.typography.bodyMedium,
                     color = StaffPurple
                 )
                 Text(
-                    text = staff.department,
+                    text = staff.department ?: "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            // Add navigation arrow
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "View Profile",
+                tint = StaffPurple.copy(alpha = 0.5f)
+            )
         }
     }
 } 
