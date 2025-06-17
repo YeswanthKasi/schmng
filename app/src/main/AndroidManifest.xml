@@ -13,16 +13,28 @@
         android:required="false"
         tools:targetApi="33" />
 
-    <!-- Storage Permissions -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+    <!-- Storage Permissions - For profile photos and document management -->
+    <uses-permission 
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    <uses-permission 
+        android:name="android.permission.READ_MEDIA_IMAGES"
+        tools:targetApi="33" />
+    <uses-permission 
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     
-    <!-- Camera Permission -->
+    <!-- Camera Permission - For profile photos and document capture -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature 
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- Add permission group information -->
+    <permission-group
+        android:name="${applicationId}.permission-group.PROFILE_MANAGEMENT"
+        android:description="@string/permission_group_profile_description"
+        android:label="@string/permission_group_profile_label" />
 
     <application
         android:allowBackup="true"

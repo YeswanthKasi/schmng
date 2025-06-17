@@ -4,8 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,6 +33,7 @@ import id.zelory.compressor.constraint.default
 import id.zelory.compressor.constraint.size
 import java.io.File
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
+import com.ecorvi.schmng.ui.utils.ImagePickerWithPermissions
 
 @Composable
 fun ProfilePhotoComponent(
@@ -47,6 +46,7 @@ fun ProfilePhotoComponent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     var isUploading by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf(0f) }
     var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -64,10 +64,9 @@ fun ProfilePhotoComponent(
             }
         }
     }
-    
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+
+    // Function to process the selected image
+    fun processImage(uri: Uri?) {
         if (uri != null) {
             isUploading = true
             uploadProgress = 0f
@@ -111,62 +110,77 @@ fun ProfilePhotoComponent(
 
                 } catch (e: Exception) {
                     onError(e.message ?: "Failed to process photo")
+                    isUploading = false
                 }
             }
         }
     }
 
-    Box(
-        modifier = Modifier
-            .size(120.dp)
-            .clip(CircleShape)
-            .border(2.dp, themeColor, CircleShape)
-            .clickable(enabled = isEditable && !isUploading) {
-                if (isEditable && !isUploading) {
-                    photoPickerLauncher.launch("image/*")
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        if (isUploading) {
-            CircularProgressIndicator(
-                progress = uploadProgress,
-                color = themeColor,
-                modifier = Modifier.size(40.dp)
-            )
-        } else if (imageBitmap != null) {
-            Image(
-                painter = BitmapPainter(imageBitmap!!),
-                contentDescription = "Profile Photo",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.AccountCircle,
-                contentDescription = "Default Profile Photo",
-                modifier = Modifier.size(80.dp),
-                tint = themeColor
-            )
-        }
-
-        if (isEditable && !isUploading) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp)
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(themeColor),
-                contentAlignment = Alignment.Center
-            ) {
+    ImagePickerWithPermissions(
+        snackbarHostState = snackbarHostState,
+        coroutineScope = scope,
+        onImagePicked = { uri -> processImage(uri) }
+    ) { imagePicker, showPicker ->
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .clip(CircleShape)
+                .border(2.dp, themeColor, CircleShape)
+                .clickable(enabled = isEditable && !isUploading) {
+                    if (isEditable && !isUploading) {
+                        showPicker()
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            if (isUploading) {
+                CircularProgressIndicator(
+                    progress = uploadProgress,
+                    color = themeColor,
+                    modifier = Modifier.size(40.dp)
+                )
+            } else if (imageBitmap != null) {
+                Image(
+                    painter = BitmapPainter(imageBitmap!!),
+                    contentDescription = "Profile Photo",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
                 Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit Photo",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = "Default Profile Photo",
+                    modifier = Modifier.size(80.dp),
+                    tint = themeColor
                 )
             }
+
+            if (isEditable && !isUploading) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(themeColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Photo",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        // Snackbar host for permission messages
+        Box(modifier = Modifier.fillMaxSize()) {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
     }
 } 

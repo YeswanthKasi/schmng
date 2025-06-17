@@ -1,3 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Ecorvi School Management</string>
+    
+    <!-- Permission descriptions -->
+    <string name="permission_group_profile_label">Profile Management</string>
+    <string name="permission_group_profile_description">Permissions required for managing profile photos and documents in the school management system</string>
+    
+    <!-- Permission rationales -->
+    <string name="camera_permission_rationale">Camera access is needed to take profile pictures and capture documents for school-related purposes.</string>
+    <string name="storage_permission_rationale">Storage access is needed to select profile pictures and upload school-related documents from your device.</string>
 </resources>
