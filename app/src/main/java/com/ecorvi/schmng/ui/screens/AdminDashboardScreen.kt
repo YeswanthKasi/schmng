@@ -736,7 +736,7 @@ fun AdminDashboardScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home", fontSize = 16.sp) },
+                    label = { Text("home", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -744,7 +744,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Person, contentDescription = "Students") },
-                    label = { Text("Students", fontSize = 16.sp) },
+                    label = { Text("students", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -753,7 +753,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.School, contentDescription = "Teachers") },
-                    label = { Text("Teachers", fontSize = 16.sp) },
+                    label = { Text("teachers", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -762,7 +762,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Group, contentDescription = "Staff") },
-                    label = { Text("Non-Teaching Staff", fontSize = 16.sp) },
+                    label = { Text("nonTeachingStaff", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -771,7 +771,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Announcement, contentDescription = "Notices") },
-                    label = { Text("Notices", fontSize = 16.sp) },
+                    label = { Text("notices", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -780,7 +780,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.EventNote, contentDescription = "Leave Requests") },
-                    label = { Text("Leave Requests", fontSize = 16.sp) },
+                    label = { Text("leaveRequests", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -789,7 +789,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Schedule, contentDescription = "Timetable") },
-                    label = { Text("Timetable", fontSize = 16.sp) },
+                    label = { Text("timetable", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -798,7 +798,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Schedule, contentDescription = "Schedule") },
-                    label = { Text("Schedule", fontSize = 16.sp) },
+                    label = { Text("schedule", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -807,7 +807,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.CheckCircle, contentDescription = "Attendance") },
-                    label = { Text("Attendance", fontSize = 16.sp) },
+                    label = { Text("attendance", fontSize = 16.sp) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -816,7 +816,7 @@ fun AdminDashboardScreen(
                 )
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.DirectionsBus, contentDescription = "Bus Tracking") },
-                    label = {Text("Bus Tracking", fontSize = 16.sp)},
+                    label = {Text("busTracking", fontSize = 16.sp)},
                     selected = false,
                     onClick = {
                         Toast.makeText(context, "Bus Tracking is coming soon!", Toast.LENGTH_SHORT).show()
@@ -832,7 +832,7 @@ fun AdminDashboardScreen(
                 ) {
                     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
                     Text(
-                        text = "Version ${packageInfo.versionName}",
+                        text = "version ${packageInfo.versionName}",
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                         color = Color.Gray,
                         maxLines = 1
@@ -854,7 +854,7 @@ fun AdminDashboardScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Check for Updates",
+                            text = "checkForUpdates",
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                             color = PrimaryBlue,
                             maxLines = 1,
@@ -877,7 +877,7 @@ fun AdminDashboardScreen(
                         title = {
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 Text(
-                                    "AdminHub",
+                                    "adminHub",
                                     color = PrimaryBlue,
                                     fontSize = 22.sp,
                                     fontWeight = FontWeight.Bold
@@ -993,7 +993,7 @@ fun AdminDashboardScreen(
                                 verticalArrangement = Arrangement.Center
                             ) {
                                 Text(
-                                    text = "Error loading dashboard",
+                                    text = "errorLoadingDashboard",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = Color.Red
                                 )
@@ -1017,7 +1017,7 @@ fun AdminDashboardScreen(
                                     },
                                     modifier = Modifier.padding(top = 8.dp)
                                 ) {
-                                    Text("Retry")
+                                    Text("retry")
                                 }
                             }
                         } else {
@@ -1049,7 +1049,7 @@ fun AdminDashboardScreen(
                                         ) {
                                             // Text on top
                                             Text(
-                                                "Total Count",
+                                                "totalCount",
                                                 style = MaterialTheme.typography.titleMedium.copy(
                                                     textAlign = TextAlign.Center
                                                 ),
@@ -1096,7 +1096,7 @@ fun AdminDashboardScreen(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Text(
-                                                    "Attendance Overview",
+                                                    "attendanceOverview",
                                                     style = MaterialTheme.typography.titleMedium.copy(
                                                         textAlign = TextAlign.Center
                                                     ),
@@ -1124,8 +1124,8 @@ fun AdminDashboardScreen(
                                 item {
                                     Spacer(modifier = Modifier.height(8.dp))
                                     AnimatedSummaryRow(
-                                        leftTitle = "Manage Teacher Absences",
-                                        rightTitle = "Pending Fees",
+                                        leftTitle = "manageTeacherAbsences",
+                                        rightTitle = "pendingFees",
                                         leftIcon = Icons.Default.PersonOff,
                                         rightIcon = Icons.Default.CurrencyRupee,
                                         leftClick = { 
@@ -1281,7 +1281,7 @@ private fun SearchBar() {
                 },
             placeholder = {
                 Text(
-                    text = "Search...",
+                    text = "search...",
                     fontSize = 14.sp,
                     color = if (isFocused) PrimaryBlue.copy(alpha = 0.6f) else Color.Gray
                 )
@@ -1681,7 +1681,7 @@ fun FeeAnalyticsCard(navController: NavController) {
                 .fillMaxWidth()
         ) {
             Text(
-                "Monthly Fee",
+                "monthlyFee",
                 style = MaterialTheme.typography.titleMedium.copy(
                     textAlign = TextAlign.Center
                 ),
@@ -1916,15 +1916,6 @@ private fun AttendanceOverviewCard(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            Text(
-                "Attendance & Gender Analysis",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    textAlign = TextAlign.Center
-                ),
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1F41BB),
-                modifier = Modifier.fillMaxWidth()
-            )
             
             // Category Selection Tabs
             Row(
@@ -2011,7 +2002,7 @@ private fun AttendanceOverviewCard(
                         )
                     } else if (genderError != null) {
                     Text(
-                            text = "Error loading gender data",
+                            text = "errorLoadingGenderData",
                             color = Color.Red,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -2033,12 +2024,12 @@ private fun AttendanceOverviewCard(
                             
                             // Show actual counts
                             Text(
-                                text = "Male: ${genderStats["male"] ?: 0}",
+                                text = "M: ${genderStats["male"] ?: 0}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaleColor
                             )
                             Text(
-                                text = "Female: ${genderStats["female"] ?: 0}",
+                                text = "F: ${genderStats["female"] ?: 0}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = FemaleColor
                             )

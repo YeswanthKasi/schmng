@@ -1,11 +1,13 @@
 package com.ecorvi.schmng.ui.screens
 
+import DeleteConfirmationDialog
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +22,8 @@ import com.ecorvi.schmng.ui.data.FirestoreDatabase
 import com.ecorvi.schmng.ui.data.model.Person
 import kotlinx.coroutines.launch
 
+private val TeacherBlue = Color(0xFF1F41BB) // Blue color for teacher theme
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TeacherProfileScreen(
@@ -29,227 +33,204 @@ fun TeacherProfileScreen(
 ) {
     var teacher by remember { mutableStateOf<Person?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var isDeleting by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
     var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isDeleting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Load teacher data
     LaunchedEffect(teacherId) {
-        isLoading = true
-        teacher = FirestoreDatabase.getTeacher(teacherId)
-        profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(teacherId)
-        isLoading = false
+        try {
+            teacher = FirestoreDatabase.getTeacher(teacherId)
+            try {
+                profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(teacherId)
+            } catch (e: Exception) {
+                // Handle photo loading error silently
+            }
+            isLoading = false
+        } catch (e: Exception) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Failed to load teacher profile: ${e.message}")
+            }
+            isLoading = false
+        }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { 
-                    Text(
-                        "Teacher Profile",
-                        color = Color(0xFF1F41BB),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text("Teacher Profile") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color(0xFF1F41BB)
-                        )
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     if (isAdmin) {
+                        // Edit button
                         IconButton(
-                            onClick = { navController.navigate("add_person/teacher?personId=$teacherId") }
+                            onClick = { 
+                                navController.navigate("add_person/teacher?personId=$teacherId") 
+                            }
                         ) {
                             Icon(
                                 Icons.Default.Edit,
                                 contentDescription = "Edit",
-                                tint = Color(0xFF1F41BB)
+                                tint = Color.White
                             )
                         }
-                    }
-                }
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            } else {
-                teacher?.let { teacher ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Profile Photo
-                        ProfilePhotoComponent(
-                            userId = teacherId,
-                            photoUrl = profilePhotoUrl,
-                            isEditable = isAdmin,
-                            themeColor = Color(0xFF1F41BB),
-                            onPhotoUpdated = { url ->
-                                profilePhotoUrl = url
-                            },
-                            onError = { error ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(error)
-                                }
-                            }
-                        )
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        // Personal Information Card
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White
-                            ),
-                            elevation = CardDefaults.cardElevation(
-                                defaultElevation = 2.dp
-                            )
+                        // Delete button
+                        IconButton(
+                            onClick = { showDeleteDialog = true }
                         ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                ProfileRow("First Name", teacher.firstName)
-                                ProfileRow("Last Name", teacher.lastName)
-                                ProfileRow("Email", teacher.email)
-                                ProfileRow("Phone", teacher.phone)
-                                ProfileRow("Class", teacher.className)
-                                ProfileRow("Gender", teacher.gender)
-                                ProfileRow("Date of Birth", teacher.dateOfBirth)
-                                ProfileRow("Mobile No", teacher.mobileNo)
-                                ProfileRow("Address", teacher.address)
-                                ProfileRow("Age", teacher.age.toString())
-                                ProfileRow("Designation", teacher.designation)
-                                ProfileRow("Department", teacher.department)
-                            }
-                        }
-
-                        if (isAdmin) {
-                            Spacer(modifier = Modifier.weight(1f))
-                            Button(
-                                onClick = { showDeleteDialog = true },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.Red,
-                                    contentColor = Color.White
-                                ),
-                                enabled = !isDeleting
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete")
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Delete Teacher")
-                            }
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = Color.White
+                            )
                         }
                     }
-                } ?: Box(
-                    modifier = Modifier.fillMaxSize(),
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = TeacherBlue,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
+            )
+        }
+    ) { padding ->
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = TeacherBlue)
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Profile Photo
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(TeacherBlue)
+                        .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Teacher not found")
+                    ProfilePhotoComponent(
+                        userId = teacherId,
+                        photoUrl = profilePhotoUrl,
+                        isEditable = isAdmin,
+                        themeColor = TeacherBlue,
+                        onPhotoUpdated = { url ->
+                            profilePhotoUrl = url
+                        }
+                    )
+                }
+                
+                // Profile Details
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 4.dp
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Personal Information",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = TeacherBlue
+                        )
+                        
+                        teacher?.let { teacher ->
+                            ProfileField("Name", "${teacher.firstName} ${teacher.lastName}")
+                            ProfileField("Email", teacher.email)
+                            ProfileField("Designation", teacher.designation ?: "")
+                            ProfileField("Department", teacher.department ?: "")
+                            ProfileField("Class", teacher.className ?: "")
+                            ProfileField("Gender", teacher.gender ?: "")
+                            ProfileField("Date of Birth", teacher.dateOfBirth ?: "")
+                            ProfileField("Age", teacher.age?.toString() ?: "")
+                            ProfileField("Mobile No", teacher.mobileNo ?: "")
+                            ProfileField("Phone", teacher.phone ?: "")
+                            ProfileField("Address", teacher.address ?: "")
+                        } ?: run {
+                            Text(
+                                text = "No teacher data available",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(top = 16.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
 
         // Delete Confirmation Dialog
         if (showDeleteDialog) {
-            AlertDialog(
-                onDismissRequest = { showDeleteDialog = false },
-                title = { Text("Confirm Delete") },
-                text = { 
-                    Text("Are you sure you want to delete ${teacher?.firstName} ${teacher?.lastName}? This action cannot be undone.")
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            if (!isDeleting) {
-                                isDeleting = true
-                                FirestoreDatabase.deleteTeacher(
-                                    teacherId = teacherId,
-                                    onSuccess = {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Teacher deleted successfully")
-                                            navController.popBackStack()
-                                        }
-                                        isDeleting = false
-                                        showDeleteDialog = false
-                                    },
-                                    onFailure = { exception ->
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Failed to delete teacher: ${exception.message}")
-                                        }
-                                        isDeleting = false
-                                        showDeleteDialog = false
-                                    }
-                                )
+            DeleteConfirmationDialog(
+                onConfirm = {
+                    isDeleting = true
+                    FirestoreDatabase.deleteTeacher(
+                        teacherId = teacherId,
+                        onSuccess = {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Teacher deleted successfully")
+                                navController.navigateUp()
                             }
                         },
-                        colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
-                    ) {
-                        if (isDeleting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = Color.Red
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                        onFailure = { e ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Failed to delete teacher: ${e.message}")
+                                isDeleting = false
+                                showDeleteDialog = false
+                            }
                         }
-                        Text(if (isDeleting) "Deleting..." else "Delete")
-                    }
+                    )
                 },
-                dismissButton = {
-                    TextButton(
-                        onClick = { showDeleteDialog = false }
-                    ) {
-                        Text("Cancel")
-                    }
-                }
+                onDismiss = { showDeleteDialog = false },
+                itemType = "teacher"
             )
         }
     }
 }
 
 @Composable
-private fun ProfileRow(label: String, value: String?) {
-    if (!value.isNullOrBlank()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = label,
-                color = Color.Gray,
-                fontSize = 16.sp,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = value,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black,
-                modifier = Modifier.weight(1f)
-            )
-        }
+private fun ProfileField(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Gray,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = value.ifEmpty { "Not provided" },
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.Black,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 } 

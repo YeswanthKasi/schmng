@@ -2435,14 +2435,38 @@ object FirestoreDatabase {
         onError: (String) -> Unit
     ) {
         try {
-            db.collection("non_teaching_staff")
+            db.collection("staff")
                 .document(staffId)
                 .update(field, value)
                 .await()
             onSuccess()
         } catch (e: Exception) {
-            Log.e("FirestoreDatabase", "Error updating staff field: ${e.message}")
-            onError(e.message ?: "Failed to update staff field")
+            onError(e.localizedMessage ?: "Failed to update staff field")
+        }
+    }
+
+    suspend fun deleteStaff(
+        staffId: String,
+        onSuccess: () -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        try {
+            // Delete staff document
+            db.collection("staff")
+                .document(staffId)
+                .delete()
+                .await()
+            
+            // Delete profile photo if exists
+            try {
+                storage.reference.child("profile_photos/$staffId").delete().await()
+            } catch (e: Exception) {
+                // Ignore if photo doesn't exist
+            }
+            
+            onSuccess()
+        } catch (e: Exception) {
+            onError(e)
         }
     }
 }

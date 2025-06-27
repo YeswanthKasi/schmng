@@ -66,6 +66,7 @@ import com.ecorvi.schmng.ui.components.TeacherAttendanceCard
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ecorvi.schmng.viewmodels.AttendanceViewModel
 import com.ecorvi.schmng.ui.navigation.StudentBottomNavItem
+import com.ecorvi.schmng.services.RemoteConfigService
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 private val ScheduleOrange = Color(0xFFFF9800)
@@ -273,6 +274,57 @@ fun StudentBottomNavigation(
     }
 }
 
+@Composable
+fun DashboardQuickActionCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .height(100.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = CardBackgroundColor.copy(alpha = CARD_BACKGROUND_ALPHA)
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = CARD_ELEVATION,
+            pressedElevation = CARD_PRESSED_ELEVATION
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(PrimaryBlue.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = PrimaryBlue,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = PrimaryBlue,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudentDashboardScreen(
@@ -433,9 +485,7 @@ fun StudentDashboardScreen(
                             selected = false,
                             onClick = {
                                 scope.launch { drawerState.close() }
-                                student?.id?.let { 
-                                    navController.navigate("view_profile/student/$it") 
-                                }
+                                navController.navigate(StudentBottomNavItem.Profile.route)
                             }
                         )
                         NavigationDrawerItem(
@@ -444,7 +494,7 @@ fun StudentDashboardScreen(
                             selected = false,
                             onClick = {
                                 scope.launch { drawerState.close() }
-                                navController.navigate("student_schedule")
+                                navController.navigate(StudentBottomNavItem.Schedule.route)
                             }
                         )
                         NavigationDrawerItem(
@@ -453,7 +503,7 @@ fun StudentDashboardScreen(
                             selected = false,
                             onClick = {
                                 scope.launch { drawerState.close() }
-                                navController.navigate("student_attendance")
+                                navController.navigate(StudentBottomNavItem.Attendance.route)
                             }
                         )
                         NavigationDrawerItem(
@@ -472,6 +522,15 @@ fun StudentDashboardScreen(
                             onClick = {
                                 scope.launch { drawerState.close() }
                                 navController.navigate("student_class_events")
+                            }
+                        )
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.School, contentDescription = "Class Teacher") },
+                            label = { Text("Class Teacher") },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                navController.navigate("student_teacher_info")
                             }
                         )
                         NavigationDrawerItem(
@@ -496,16 +555,6 @@ fun StudentDashboardScreen(
                                 ).show()
                             }
                         )
-                        NavigationDrawerItem(
-                            icon = { Icon(Icons.Default.School, contentDescription = "Class Teacher") },
-                            label = { Text("Class Teacher") },
-                            selected = false,
-                            onClick = {
-                                scope.launch { drawerState.close() }
-                                navController.navigate("student_teacher_info")
-                            }
-                        )
-                        Divider()
                         NavigationDrawerItem(
                             icon = { Icon(Icons.Default.Help, contentDescription = "Help") },
                             label = { Text("Help") },
@@ -562,75 +611,75 @@ fun StudentDashboardScreen(
             }
         }
     ) {
-        CommonBackground {
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                containerColor = Color.Transparent,
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Box(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "STUDENT DASHBOARD",
-                                    color = PrimaryBlue,
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(
-                                    Icons.Default.Menu,
-                                    contentDescription = "Menu",
-                                    tint = PrimaryBlue
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.White.copy(alpha = 0.95f)
-                        )
-                    )
-                },
-                bottomBar = {
-                    StudentBottomNavigation(
-                        currentRoute = currentRoute,
-                        onNavigate = { item ->
-                            onRouteSelected(item.route)
-                        }
-                    )
-                }
-            ) { padding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(padding)
-                    ) {
-                    if (isLoading) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator()
+                            Text(
+                                "STUDENT DASHBOARD",
+                                color = PrimaryBlue,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(BackgroundColor),
-                            contentPadding = PaddingValues(vertical = STANDARD_PADDING),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            item {
-                                StudentAiSearchBar(
-                                    modifier = Modifier.padding(horizontal = STANDARD_PADDING)
-                                )
-                            }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(
+                                Icons.Default.Menu,
+                                contentDescription = "Menu",
+                                tint = PrimaryBlue
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.White.copy(alpha = 0.95f)
+                    )
+                )
+            },
+            bottomBar = {
+                StudentBottomNavigation(
+                    currentRoute = currentRoute,
+                    onNavigate = { item ->
+                        onRouteSelected(item.route)
+                    }
+                )
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                if (isLoading) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(BackgroundColor),
+                        contentPadding = PaddingValues(vertical = STANDARD_PADDING),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        item {
+                            StudentAiSearchBar(
+                                modifier = Modifier.padding(horizontal = STANDARD_PADDING)
+                            )
+                        }
 
-                            // Teacher Attendance Card
+                        // Teacher Attendance Card - Check if attendance feature is enabled
+                        if (RemoteConfigService.isAttendanceFeatureEnabled()) {
                             item {
                                 student?.className?.let { className ->
                                     TeacherAttendanceCard(
@@ -639,19 +688,19 @@ fun StudentDashboardScreen(
                                     )
                                 }
                             }
+                        }
 
-                            // Today's Schedule Card
+                        // Today's Schedule
+                        if (todaySchedule.isNotEmpty()) {
                             item {
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                                        .padding(horizontal = STANDARD_PADDING),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = Color.White
+                                        containerColor = CardBackgroundColor
                                     ),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
-                                    shape = RoundedCornerShape(20.dp)
+                                    elevation = CardDefaults.cardElevation(defaultElevation = CARD_ELEVATION)
                                 ) {
                                     Column(
                                         modifier = Modifier
@@ -838,308 +887,52 @@ fun StudentDashboardScreen(
                                 }
                             }
                         }
+                    }
 
-                        if (errorMessage != null) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = "Error loading dashboard",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.Red
-                                )
-                                Text(
-                                    text = errorMessage ?: "Unknown error occurred",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.Gray
-                                )
-                            }
+                    if (errorMessage != null) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "Error loading dashboard",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.Red
+                            )
+                            Text(
+                                text = errorMessage ?: "Unknown error occurred",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray
+                            )
                         }
                     }
                 }
+            }
         }
     }
 }
 
 @Composable
-    fun ShimmerCard(
+fun ShimmerCard(
     modifier: Modifier = Modifier
 ) {
     com.ecorvi.schmng.ui.components.ShimmerCard(modifier = modifier)
 }
 
 @Composable
-fun DashboardCard(
+fun SectionHeader(
     title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit
-    ) {
-        var isVisible by remember { mutableStateOf(false) }
-
-        LaunchedEffect(Unit) {
-            isVisible = true
-        }
-
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = slideInVertically(
-                initialOffsetY = { it * 2 },
-                animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing)
-            ) + fadeIn(animationSpec = tween(300)),
-            exit = slideOutVertically() + fadeOut()
+    modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-                    .height(STANDARD_CARD_HEIGHT)
-                    .padding(horizontal = STANDARD_PADDING, vertical = HALF_PADDING)
-                    .graphicsLayer {
-                        clip = true
-                        shape = RoundedCornerShape(CARD_CORNER_RADIUS)
-                        alpha = CARD_BACKGROUND_ALPHA
-                    },
-                shape = RoundedCornerShape(CARD_CORNER_RADIUS),
-        colors = CardDefaults.cardColors(
-                    containerColor = CardBackgroundColor.copy(alpha = CARD_BACKGROUND_ALPHA),
-                    contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        elevation = CardDefaults.cardElevation(
-                    defaultElevation = CARD_ELEVATION,
-                    pressedElevation = CARD_PRESSED_ELEVATION,
-                    focusedElevation = CARD_ELEVATION,
-                    hoveredElevation = CARD_ELEVATION
-                ),
-                onClick = onClick
-    ) {
-        Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(STANDARD_PADDING),
-                    verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(ICON_BOX_SIZE)
-                                .background(color.copy(alpha = 0.1f), CircleShape),
-                            contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                                tint = color,
-                                modifier = Modifier.size(24.dp)
-                )
-                        }
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = color,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-                    Box(modifier = Modifier.weight(1f)) {
-            content()
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "View",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = color
-                        )
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Navigate",
-                            tint = color,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-        }
-    }
-}
-
-@Composable
-    fun HorizontalCardItem(
-        title: String,
-        icon: androidx.compose.ui.graphics.vector.ImageVector,
-        color: Color,
-        onClick: () -> Unit,
-        content: @Composable () -> Unit
-    ) {
-        var isVisible by remember { mutableStateOf(false) }
-
-        LaunchedEffect(Unit) {
-            isVisible = true
-        }
-
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = slideInHorizontally(
-                initialOffsetX = { it * 2 },
-                animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing)
-            ) + fadeIn(animationSpec = tween(300)),
-            exit = slideOutHorizontally() + fadeOut()
-        ) {
-            Card(
-            modifier = Modifier
-                    .width(280.dp)
-                    .height(QUICK_ACCESS_CARD_HEIGHT)
-                    .padding(horizontal = HALF_PADDING, vertical = HALF_PADDING)
-                    .graphicsLayer {
-                        clip = true
-                        shape = RoundedCornerShape(CARD_CORNER_RADIUS)
-                        alpha = CARD_BACKGROUND_ALPHA
-                    },
-                shape = RoundedCornerShape(CARD_CORNER_RADIUS),
-                colors = CardDefaults.cardColors(
-                    containerColor = CardBackgroundColor.copy(alpha = CARD_BACKGROUND_ALPHA),
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                elevation = CardDefaults.cardElevation(
-                    defaultElevation = CARD_ELEVATION,
-                    pressedElevation = CARD_PRESSED_ELEVATION,
-                    focusedElevation = CARD_ELEVATION,
-                    hoveredElevation = CARD_ELEVATION
-                ),
-                onClick = onClick
-            ) {
-                Column(
-                modifier = Modifier
-                        .fillMaxSize()
-                        .padding(STANDARD_PADDING),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(ICON_BOX_SIZE)
-                                .background(color.copy(alpha = 0.1f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                    Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = color,
-                        modifier = Modifier.size(24.dp)
-                    )
-                        }
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = color,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Box(modifier = Modifier.weight(1f)) {
-                        content()
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "View",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = color
-                        )
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Navigate",
-                            tint = color,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-        }
-    }
-}
-
-@Composable
-    fun TimetableEntry(entry: Timetable) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-                .padding(horizontal = STANDARD_PADDING, vertical = HALF_PADDING)
-                .graphicsLayer {
-                    clip = true
-                    shape = RoundedCornerShape(CARD_CORNER_RADIUS)
-                    shadowElevation = (CARD_ELEVATION / 2).toPx()
-                    alpha = 0.99f
-                },
-            shape = RoundedCornerShape(CARD_CORNER_RADIUS),
-        colors = CardDefaults.cardColors(
-                containerColor = CardBackgroundColor.copy(alpha = 0.95f),
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = CARD_ELEVATION / 2)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = entry.subject,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = entry.teacher,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Text(
-                    text = "Room ${entry.roomNumber}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-            Text(
-                text = entry.timeSlot,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-}
-
-@Composable
-    fun SectionHeader(
-        title: String,
-        modifier: Modifier = Modifier
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = PrimaryBlue,
-            fontWeight = FontWeight.Bold,
-            modifier = modifier
-                .padding(horizontal = STANDARD_PADDING, vertical = STANDARD_PADDING)
-        )
-    }
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        color = PrimaryBlue,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier
+            .padding(horizontal = STANDARD_PADDING, vertical = STANDARD_PADDING)
+    )
 }

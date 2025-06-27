@@ -229,13 +229,40 @@ fun AddStaffScreen(navController: NavController, personId: String? = null) {
                             singleLine = true
                         )
 
-                        OutlinedTextField(
-                            value = gender,
-                            onValueChange = { gender = it },
-                            label = { Text("Gender") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
+                        // Gender selection
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Gender",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = gender == "Male",
+                                    onClick = { gender = "Male" }
+                                )
+                                Text(
+                                    text = "Male",
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                                Spacer(modifier = Modifier.width(32.dp))
+                                RadioButton(
+                                    selected = gender == "Female",
+                                    onClick = { gender = "Female" }
+                                )
+                                Text(
+                                    text = "Female",
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                            }
+                        }
 
                         OutlinedTextField(
                             value = address,

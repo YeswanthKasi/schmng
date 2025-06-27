@@ -1,8 +1,11 @@
 package com.ecorvi.schmng.ui.screens
 
+import DeleteConfirmationDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.components.ProfilePhotoComponent
 import com.ecorvi.schmng.ui.data.FirestoreDatabase
@@ -31,90 +35,99 @@ fun StudentProfileScreen(
 ) {
     var student by remember { mutableStateOf<Person?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var isDeleting by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
     var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isDeleting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Load student data
     LaunchedEffect(studentId) {
-        isLoading = true
-        student = FirestoreDatabase.getStudent(studentId)
-        profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(studentId)
-        isLoading = false
+        try {
+            student = FirestoreDatabase.getStudent(studentId)
+            try {
+                profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(studentId)
+            } catch (e: Exception) {
+                // Handle photo loading error silently
+            }
+            isLoading = false
+        } catch (e: Exception) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Failed to load student profile: ${e.message}")
+            }
+            isLoading = false
+        }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { 
-                    Text(
-                        "Student Profile",
-                        color = StudentGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text("Student Profile") },
                 navigationIcon = {
-                    if (currentRoute == null) {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = "Back",
-                                tint = StudentGreen
-                            )
-                        }
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     if (isAdmin) {
+                        // Edit button
                         IconButton(
-                            onClick = { navController.navigate("add_person/student?personId=$studentId") }
+                            onClick = { 
+                                navController.navigate("add_person/student?personId=$studentId") 
+                            }
                         ) {
                             Icon(
                                 Icons.Default.Edit,
                                 contentDescription = "Edit",
-                                tint = StudentGreen
+                                tint = Color.White
+                            )
+                        }
+                        // Delete button
+                        IconButton(
+                            onClick = { showDeleteDialog = true }
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = Color.White
                             )
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = StudentGreen,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
             )
-        },
-        bottomBar = {
-            if (currentRoute != null && onRouteSelected != null) {
-                StudentBottomNavigation(
-                    currentRoute = currentRoute,
-                    onNavigate = { item ->
-                        onRouteSelected(item.route)
-                    }
-                )
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        }
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = StudentGreen
-                )
-            } else if (student == null) {
-                Text(
-                    "Failed to load student profile",
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            } else {
-                Column(
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = StudentGreen)
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Profile Photo
+                Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .fillMaxWidth()
+                        .background(StudentGreen)
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Profile Photo
                     ProfilePhotoComponent(
                         userId = studentId,
                         photoUrl = profilePhotoUrl,
@@ -124,112 +137,114 @@ fun StudentProfileScreen(
                             profilePhotoUrl = url
                         }
                     )
-                    
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
+                }
+                
+                // Profile Details
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 4.dp
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            ProfileField("First Name", student?.firstName ?: "")
-                            ProfileField("Last Name", student?.lastName ?: "")
-                            ProfileField("Email", student?.email ?: "")
-                            ProfileField("Class", student?.className ?: "")
-                            ProfileField("Gender", student?.gender ?: "")
-                            ProfileField("Date of Birth", student?.dateOfBirth ?: "")
-                            ProfileField("Mobile No", student?.mobileNo ?: "")
-                            ProfileField("Address", student?.address ?: "")
-                            ProfileField("Age", student?.age?.toString() ?: "")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    if (isAdmin) {
-                        Button(
-                            onClick = { showDeleteDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete")
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Delete Student")
+                        Text(
+                            text = "Personal Information",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = StudentGreen
+                        )
+                        
+                        student?.let { student ->
+                            ProfileField("Name", "${student.firstName} ${student.lastName}")
+                            ProfileField("Email", student.email)
+                            ProfileField("Class", student.className ?: "")
+                            ProfileField("Gender", student.gender ?: "")
+                            ProfileField("Date of Birth", student.dateOfBirth ?: "")
+                            ProfileField("Age", student.age?.toString() ?: "")
+                            ProfileField("Mobile No", student.mobileNo ?: "")
+                            ProfileField("Phone", student.phone ?: "")
+                            ProfileField("Address", student.address ?: "")
+                            
+                            // Show parent information if available
+                            student.parentInfo?.let { parent ->
+                                Text(
+                                    text = "Parent Information",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = StudentGreen,
+                                    modifier = Modifier.padding(top = 24.dp)
+                                )
+                                ProfileField("Parent Name", parent.name)
+                                ProfileField("Parent Email", parent.email)
+                                ProfileField("Parent Phone", parent.phone)
+                            }
+                        } ?: run {
+                            Text(
+                                text = "No student data available",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(top = 16.dp)
+                            )
                         }
                     }
                 }
             }
+        }
 
-            if (showDeleteDialog) {
-                AlertDialog(
-                    onDismissRequest = { showDeleteDialog = false },
-                    title = { Text("Delete Student") },
-                    text = { Text("Are you sure you want to delete this student? This action cannot be undone.") },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                isDeleting = true
-                                FirestoreDatabase.deleteStudent(
-                                    studentId = studentId,
-                                    onSuccess = {
-                                        isDeleting = false
-                                        showDeleteDialog = false
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Student deleted successfully")
-                                        }
-                                        navController.popBackStack()
-                                    },
-                                    onFailure = { e ->
-                                        isDeleting = false
-                                        showDeleteDialog = false
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Failed to delete student: ${e.message}")
-                                        }
-                                    }
-                                )
-                            },
-                            enabled = !isDeleting
-                        ) {
-                            if (isDeleting) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            } else {
-                                Text("Delete")
+        // Delete Confirmation Dialog
+        if (showDeleteDialog) {
+            DeleteConfirmationDialog(
+                onConfirm = {
+                    isDeleting = true
+                    FirestoreDatabase.deleteStudent(
+                        studentId = studentId,
+                        onSuccess = {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Student deleted successfully")
+                                navController.navigateUp()
+                            }
+                        },
+                        onFailure = { e ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Failed to delete student: ${e.message}")
+                                isDeleting = false
+                                showDeleteDialog = false
                             }
                         }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            onClick = { showDeleteDialog = false }
-                        ) {
-                            Text("Cancel")
-                        }
-                    }
-                )
-            }
+                    )
+                },
+                onDismiss = { showDeleteDialog = false },
+                itemType = "student"
+            )
         }
     }
 }
 
 @Composable
 private fun ProfileField(label: String, value: String) {
-    Column {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray
+            color = Color.Gray,
+            fontWeight = FontWeight.Medium
         )
         Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge
+            text = value.ifEmpty { "Not provided" },
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.Black,
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 } 

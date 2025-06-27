@@ -1,0 +1,125 @@
+{
+  "parameters": {
+    "enable_chat_feature": {
+      "defaultValue": {
+        "value": "false"
+      },
+      "description": "Toggle chat functionality in the app",
+      "valueType": "BOOLEAN"
+    },
+    "min_app_version": {
+      "defaultValue": {
+        "value": "1.0"
+      },
+      "description": "Minimum required app version",
+      "valueType": "STRING"
+    },
+    "student_features": {
+      "defaultValue": {
+        "value": " {     \"can_view_attendance\": true,     \"can_apply_leave\": true,     \"can_view_results\": true }"
+      },
+      "description": "Features enabled for students",
+      "valueType": "JSON"
+    },
+    "enable_fees_feature": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Toggle fees management system",
+      "valueType": "BOOLEAN"
+    },
+    "maintenance_mode": {
+      "defaultValue": {
+        "value": "false"
+      },
+      "description": "Enable/disable app maintenance mode",
+      "valueType": "BOOLEAN"
+    },
+    "school_name": {
+      "defaultValue": {
+        "value": "Ecorvi School Managaement"
+      },
+      "description": "Name of the school",
+      "valueType": "STRING"
+    },
+    "academic_year": {
+      "defaultValue": {
+        "value": "2025-2026"
+      },
+      "description": "Current academic year",
+      "valueType": "STRING"
+    },
+    "max_leave_days": {
+      "defaultValue": {
+        "value": "10"
+      },
+      "description": "Maximum allowed leave days per term",
+      "valueType": "NUMBER"
+    },
+    "enable_leave_management": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Toggle leave application system",
+      "valueType": "BOOLEAN"
+    },
+    "maintenance_message": {
+      "defaultValue": {
+        "value": "We're performing scheduled maintenance. Please try again later."
+      },
+      "description": "Message to display during maintenance",
+      "valueType": "STRING"
+    },
+    "enable_weekend_attendance": {
+      "defaultValue": {
+        "value": "false"
+      },
+      "description": "Enable/disable weekend attendance tracking",
+      "valueType": "BOOLEAN"
+    },
+    "teacher_features": {
+      "defaultValue": {
+        "value": "{     \"can_edit_attendance\": true,     \"can_approve_leave\": false,     \"can_send_notices\": true }"
+      },
+      "description": "Features enabled for teachers",
+      "valueType": "JSON"
+    },
+    "enable_push_notifications": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Toggle push notifications",
+      "valueType": "BOOLEAN"
+    },
+    "enable_attendance_feature": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Toggle attendance tracking system",
+      "valueType": "BOOLEAN"
+    },
+    "school_contact": {
+      "defaultValue": {
+        "value": "+91 9553266529"
+      },
+      "description": "School contact number",
+      "valueType": "STRING"
+    },
+    "attendance_cutoff_time": {
+      "defaultValue": {
+        "value": "10:00"
+      },
+      "description": "Daily attendance submission deadline",
+      "valueType": "STRING"
+    }
+  },
+  "version": {
+    "versionNumber": "2",
+    "updateTime": "2025-06-19T11:27:22.914324Z",
+    "updateUser": {
+      "email": "kasireddiyeswanth29@gmail.com"
+    },
+    "updateOrigin": "CONSOLE",
+    "updateType": "INCREMENTAL_UPDATE"
+  }
+}

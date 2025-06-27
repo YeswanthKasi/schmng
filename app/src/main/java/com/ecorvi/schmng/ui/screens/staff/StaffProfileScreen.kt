@@ -1,5 +1,7 @@
 package com.ecorvi.schmng.ui.screens.staff
 
+import DeleteConfirmationDialog
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -33,9 +35,8 @@ fun StaffProfileScreen(
     var staffData by remember { mutableStateOf<User?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
-    var isEditing by remember { mutableStateOf(false) }
-    var selectedGender by remember { mutableStateOf("") }
-    var showGenderDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isDeleting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -46,7 +47,6 @@ fun StaffProfileScreen(
             staffId = staffId,
             onComplete = { staff ->
                 staffData = staff
-                selectedGender = staff?.gender ?: ""
                 isLoading = false
             },
             onError = {
@@ -58,58 +58,6 @@ fun StaffProfileScreen(
 
     // Check if this screen is accessed from bottom navigation
     val isFromBottomNav = currentRoute?.startsWith("staff_profile/") == true && !isAdmin
-
-    if (showGenderDialog) {
-        AlertDialog(
-            onDismissRequest = { showGenderDialog = false },
-            title = { Text("Select Gender") },
-            text = {
-                Column {
-                    RadioButton(
-                        selected = selectedGender == "Male",
-                        onClick = { selectedGender = "Male" }
-                    )
-                    Text("Male")
-                    RadioButton(
-                        selected = selectedGender == "Female",
-                        onClick = { selectedGender = "Female" }
-                    )
-                    Text("Female")
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showGenderDialog = false
-                        scope.launch {
-                            FirestoreDatabase.updateStaffField(
-                                staffId = staffId,
-                                field = "gender",
-                                value = selectedGender,
-                                onSuccess = {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Gender updated successfully")
-                                    }
-                                },
-                                onError = { error ->
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Failed to update gender: $error")
-                                    }
-                                }
-                            )
-                        }
-                    }
-                ) {
-                    Text("Confirm")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showGenderDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 
     Scaffold(
         topBar = {
@@ -135,12 +83,23 @@ fun StaffProfileScreen(
                 },
                 actions = {
                     if (isAdmin) {
+                        // Edit button
                         IconButton(
                             onClick = { navController.navigate("add_person/staff?personId=$staffId") }
                         ) {
                             Icon(
                                 Icons.Default.Edit,
                                 contentDescription = "Edit",
+                                tint = Color(0xFF1F41BB)
+                            )
+                        }
+                        // Delete button
+                        IconButton(
+                            onClick = { showDeleteDialog = true }
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
                                 tint = Color(0xFF1F41BB)
                             )
                         }
@@ -229,36 +188,7 @@ fun StaffProfileScreen(
                             ProfileField("Mobile", staff.mobileNo)
                             ProfileField("Designation", staff.designation)
                             ProfileField("Department", staff.department)
-                            
-                            // Gender field with edit button for admin
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "Gender",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.Gray
-                                    )
-                                    Text(
-                                        text = selectedGender,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = Color(0xFF1F41BB)
-                                    )
-                                }
-                                if (isAdmin) {
-                                    IconButton(onClick = { showGenderDialog = true }) {
-                                        Icon(
-                                            Icons.Default.Edit,
-                                            contentDescription = "Edit Gender",
-                                            tint = Color(0xFF1F41BB)
-                                        )
-                                    }
-                                }
-                            }
-                            
+                            ProfileField("Gender", staff.gender.ifEmpty { "Not provided" })
                             ProfileField("Age", staff.age.toString())
                             ProfileField("Date of Birth", staff.dateOfBirth)
                             ProfileField("Address", staff.address)
@@ -266,6 +196,35 @@ fun StaffProfileScreen(
                     }
                 }
             }
+        }
+
+        // Delete Confirmation Dialog
+        if (showDeleteDialog) {
+            DeleteConfirmationDialog(
+                onConfirm = {
+                    isDeleting = true
+                    scope.launch {
+                        FirestoreDatabase.deleteStaff(
+                            staffId = staffId,
+                            onSuccess = {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Staff member deleted successfully")
+                                    navController.navigateUp()
+                                }
+                            },
+                            onError = { e ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Failed to delete staff member: ${e.localizedMessage ?: "Unknown error"}")
+                                    isDeleting = false
+                                    showDeleteDialog = false
+                                }
+                            }
+                        )
+                    }
+                },
+                onDismiss = { showDeleteDialog = false },
+                itemType = "staff member"
+            )
         }
     }
 }

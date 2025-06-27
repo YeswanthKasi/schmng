@@ -56,6 +56,15 @@ fun formatClassForStorage(className: String): String {
     }
 }
 
+fun enforceRoleTypeConsistency(personType: String, person: Person): Boolean {
+    return when (personType) {
+        "student" -> person.type.equals("student", ignoreCase = true)
+        "teacher" -> person.type.equals("teacher", ignoreCase = true)
+        "staff" -> person.type.equals("staff", ignoreCase = true) || person.type.equals("non_teaching_staff", ignoreCase = true)
+        else -> false
+    }
+}
+
 fun savePersonDirectly(
     person: Person,
     auth: FirebaseAuth,
@@ -66,6 +75,12 @@ fun savePersonDirectly(
     onSuccess: (String) -> Unit,
     onError: (Exception) -> Unit
 ) {
+    // Enforce type field matches personType
+    val correctedPerson = person.copy(type = personType)
+    if (!enforceRoleTypeConsistency(personType, correctedPerson)) {
+        onError(Exception("Role/type mismatch: $personType cannot be saved as ${correctedPerson.type}"))
+        return
+    }
     auth.createUserWithEmailAndPassword(email, password)
         .addOnSuccessListener { authResult ->
             val userId = authResult.user?.uid ?: return@addOnSuccessListener
@@ -75,11 +90,11 @@ fun savePersonDirectly(
             val userData = mapOf(
                 "role" to personType,
                 "email" to email,
-                "name" to "${person.firstName} ${person.lastName}",
+                "name" to "${correctedPerson.firstName} ${correctedPerson.lastName}",
                 "createdAt" to com.google.firebase.Timestamp.now(),
                 "userId" to userId,
-                "type" to person.type,
-                "className" to person.className
+                "type" to correctedPerson.type,
+                "className" to correctedPerson.className
             )
 
             // Create person document
@@ -92,7 +107,7 @@ fun savePersonDirectly(
             // Start a batch write
             val batch = db.batch()
             batch.set(userDocRef, userData)
-            batch.set(personDocRef, person.copy(id = userId))
+            batch.set(personDocRef, correctedPerson.copy(id = userId))
 
             // Commit the batch
             batch.commit()
@@ -147,6 +162,7 @@ fun AddPersonScreen(
     var isLoading by remember { mutableStateOf(personId != null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showErrorDialog by remember { mutableStateOf(false) }
+    var isErrorDialog by remember { mutableStateOf(false) }
     val adminEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
     var adminPassword by remember { mutableStateOf("") }
     var showAdminLoginDialog by remember { mutableStateOf(false) }
@@ -324,48 +340,86 @@ fun AddPersonScreen(
                                 )
                             )
 
-                            // Save both student and parent
-                            FirestoreDatabase.createParent(
-                                parent = parent,
-                                studentId = studentId,
+                            // 1. First, create the student document (and user doc)
+                            FirestoreDatabase.updateStudent(
+                                studentWithParent,
                                 onSuccess = {
-                                    FirestoreDatabase.updateStudent(
-                                        studentWithParent,
-                                        onSuccess = {
-                                            isLoading = false
-                                            errorMessage = "Student and parent accounts created successfully"
-                                            showErrorDialog = true
-                                            coroutineScope.launch {
-                                                snackbarHostState.showSnackbar("Student and parent accounts created successfully")
-                                                navController.popBackStack()
-                                            }
-                                        },
-                                        onFailure = { e ->
-                                            // If student update fails, delete parent
-                                            parentAuthResult.user?.delete()
-                                            FirestoreDatabase.deleteParent(
-                                                parentId,
-                                                onSuccess = {},
-                                                onFailure = {}
+                                    // Add student to users collection
+                                    val db = FirebaseFirestore.getInstance()
+                                    val studentUserDocRef = db.collection("users").document(studentId)
+                                    val studentUserData = mapOf(
+                                        "role" to "student",
+                                        "email" to email.trim(),
+                                        "name" to "${firstName.trim()} ${lastName.trim()}",
+                                        "createdAt" to com.google.firebase.Timestamp.now(),
+                                        "userId" to studentId,
+                                        "type" to "student",
+                                        "className" to formatClassForStorage(selectedClass)
+                                    )
+                                    studentUserDocRef.set(studentUserData)
+                                        .addOnSuccessListener {
+                                            // Add parent to users collection
+                                            val parentUserDocRef = db.collection("users").document(parentId)
+                                            val parentUserData = mapOf(
+                                                "role" to "parent",
+                                                "email" to parentEmail.trim(),
+                                                "name" to "$parentFirstName $parentLastName",
+                                                "createdAt" to com.google.firebase.Timestamp.now(),
+                                                "userId" to parentId,
+                                                "type" to "parent"
                                             )
+                                            parentUserDocRef.set(parentUserData)
+                                                .addOnSuccessListener {
+                                                    // Now call createParent (which will update the student with parent info and create the relationship)
+                                                    FirestoreDatabase.createParent(
+                                                        parent = parent,
+                                                        studentId = studentId,
+                                                        onSuccess = {
+                                                            isLoading = false
+                                                            isErrorDialog = false
+                                                            errorMessage = "Student and parent accounts created successfully"
+                                                            showErrorDialog = true
+                                                            coroutineScope.launch {
+                                                                snackbarHostState.showSnackbar("Student and parent accounts created successfully")
+                                                                navController.popBackStack()
+                                                            }
+                                                        },
+                                                        onFailure = { e ->
+                                                            // If parent creation fails, delete parent
+                                                            parentAuthResult.user?.delete()
+                                                            FirestoreDatabase.deleteParent(
+                                                                parentId,
+                                                                onSuccess = {},
+                                                                onFailure = {}
+                                                            )
+                                                            isLoading = false
+                                                            isErrorDialog = true
+                                                            errorMessage = "Error creating student account: ${e.message}"
+                                                            showErrorDialog = true
+                                                        }
+                                                    )
+                                                }
+                                                .addOnFailureListener { e ->
+                                                    isLoading = false
+                                                    isErrorDialog = true
+                                                    errorMessage = "Student created, but failed to add to users collection: ${e.message}"
+                                                    showErrorDialog = true
+                                                }
+                                        }
+                                        .addOnFailureListener { e ->
                                             isLoading = false
-                                            errorMessage = "Error creating student account: ${e.message}"
+                                            isErrorDialog = true
+                                            errorMessage = "Student created, but failed to add to users collection: ${e.message}"
                                             showErrorDialog = true
                                         }
-                                    )
                                 },
                                 onFailure = { e ->
-                                    // If parent creation fails, delete both auth accounts
-                                    studentAuthResult.user?.delete()
+                                    // If student creation fails, delete parent
                                     parentAuthResult.user?.delete()
-                                    FirebaseFirestore.getInstance().collection("parents")
-                                        .document(parentId)
-                                        .delete()
-                                        .addOnSuccessListener {
-                                            isLoading = false
-                                            errorMessage = "Error creating parent account and cleaning up: ${e.message}"
-                                            showErrorDialog = true
-                                        }
+                                    isLoading = false
+                                    isErrorDialog = true
+                                    errorMessage = "Error creating student account: ${e.message}"
+                                    showErrorDialog = true
                                 }
                             )
                         }
@@ -373,6 +427,7 @@ fun AddPersonScreen(
                             // If parent auth fails, delete student auth
                             studentAuthResult.user?.delete()
                             isLoading = false
+                            isErrorDialog = true
                             errorMessage = "Error creating parent authentication: ${e.message}"
                             showErrorDialog = true
                         }
@@ -381,17 +436,40 @@ fun AddPersonScreen(
                     FirestoreDatabase.updateStudent(
                         student,
                         onSuccess = {
-                            isLoading = false
-                            errorMessage = "Student account created successfully"
-                            showErrorDialog = true
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Student account created successfully")
-                                navController.popBackStack()
-                            }
+                            // Add to users collection
+                            val db = FirebaseFirestore.getInstance()
+                            val userDocRef = db.collection("users").document(studentId)
+                            val userData = mapOf(
+                                "role" to "student",
+                                "email" to email.trim(),
+                                "name" to "${firstName.trim()} ${lastName.trim()}",
+                                "createdAt" to com.google.firebase.Timestamp.now(),
+                                "userId" to studentId,
+                                "type" to "student",
+                                "className" to formatClassForStorage(selectedClass)
+                            )
+                            userDocRef.set(userData)
+                                .addOnSuccessListener {
+                                    isLoading = false
+                                    isErrorDialog = false
+                                    errorMessage = "Student account created successfully"
+                                    showErrorDialog = true
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Student account created successfully")
+                                        navController.popBackStack()
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    isLoading = false
+                                    isErrorDialog = true
+                                    errorMessage = "Student created, but failed to add to users collection: ${e.message}"
+                                    showErrorDialog = true
+                                }
                         },
                         onFailure = { e ->
                             studentAuthResult.user?.delete()
                             isLoading = false
+                            isErrorDialog = true
                             errorMessage = "Error creating student account: ${e.message}"
                             showErrorDialog = true
                         }
@@ -400,6 +478,7 @@ fun AddPersonScreen(
             }
             .addOnFailureListener { e ->
                 isLoading = false
+                isErrorDialog = true
                 errorMessage = "Error creating student authentication: ${e.message}"
                 showErrorDialog = true
             }
@@ -416,11 +495,36 @@ fun AddPersonScreen(
         val currentAdmin = auth.currentUser
         if (currentAdmin == null) {
             isLoading = false
+            isErrorDialog = true
             errorMessage = "Admin not logged in"
             showErrorDialog = true
             return
         }
 
+        // Prepare person object with enforced type
+        val correctedPerson = Person(
+            id = "",
+            firstName = firstName.trim(),
+            lastName = lastName.trim(),
+            email = email.trim(),
+            password = password,
+            phone = phone.trim(),
+            type = personType, // enforce type
+            className = formatClassForStorage(selectedClass),
+            rollNumber = rollNumber.trim(),
+            gender = gender,
+            dateOfBirth = dateOfBirth.trim(),
+            mobileNo = mobileNo.trim(),
+            address = address.trim(),
+            age = age.toIntOrNull() ?: 0
+        )
+        if (!enforceRoleTypeConsistency(personType, correctedPerson)) {
+            isLoading = false
+            isErrorDialog = true
+            errorMessage = "Role/type mismatch: $personType cannot be saved as ${correctedPerson.type}"
+            showErrorDialog = true
+            return
+        }
         // First create the authentication account
         auth.createUserWithEmailAndPassword(email, password)
             .addOnSuccessListener { authResult ->
@@ -440,7 +544,7 @@ fun AddPersonScreen(
                             "name" to "$firstName $lastName",
                             "createdAt" to com.google.firebase.Timestamp.now(),
                             "userId" to userId,
-                            "type" to personTypeValue,
+                            "type" to correctedPerson.type,
                             "className" to formatClassForStorage(selectedClass)
                         )
                         batch.set(userDocRef, userData)
@@ -451,23 +555,7 @@ fun AddPersonScreen(
                             "teacher" -> db.collection("teachers").document(userId)
                             else -> db.collection("non_teaching_staff").document(userId)
                         }
-                        val person = Person(
-                            id = userId,
-                            firstName = firstName.trim(),
-                            lastName = lastName.trim(),
-                            email = email.trim(),
-                            password = password,
-                            phone = phone.trim(),
-                            type = personTypeValue,
-                            className = formatClassForStorage(selectedClass),
-                            rollNumber = rollNumber.trim(),
-                            gender = gender,
-                            dateOfBirth = dateOfBirth.trim(),
-                            mobileNo = mobileNo.trim(),
-                            address = address.trim(),
-                            age = age.toIntOrNull() ?: 0
-                        )
-                        batch.set(personDocRef, person)
+                        batch.set(personDocRef, correctedPerson.copy(id = userId))
 
                         // Update auth user profile
                         authResult.user?.updateProfile(
@@ -480,6 +568,7 @@ fun AddPersonScreen(
                         batch.commit()
                             .addOnSuccessListener {
                                 isLoading = false
+                                isErrorDialog = false
                                 errorMessage = "${personType.capitalize()} added successfully"
                                 showErrorDialog = true
                                 coroutineScope.launch {
@@ -491,6 +580,7 @@ fun AddPersonScreen(
                                 // If Firestore fails, delete the auth user
                                 authResult.user?.delete()
                                 isLoading = false
+                                isErrorDialog = true
                                 errorMessage = "Error saving user data: ${e.message}"
                                 showErrorDialog = true
                             }
@@ -499,12 +589,14 @@ fun AddPersonScreen(
                         // If admin re-login fails, delete the created user
                         authResult.user?.delete()
                         isLoading = false
+                        isErrorDialog = true
                         errorMessage = "Error re-authenticating admin: ${e.message}"
                         showErrorDialog = true
                     }
             }
             .addOnFailureListener { e ->
                 isLoading = false
+                isErrorDialog = true
                 errorMessage = "Error creating user authentication: ${e.message}"
                 showErrorDialog = true
             }
@@ -1212,6 +1304,7 @@ fun AddPersonScreen(
                                         personType,
                                         {
                                             isLoading = false
+                                            isErrorDialog = false
                                             errorMessage = "${personType.capitalize()} updated successfully"
                                             showErrorDialog = true
                                             coroutineScope.launch {
@@ -1221,12 +1314,59 @@ fun AddPersonScreen(
                                         },
                                         { e ->
                                             isLoading = false
+                                            isErrorDialog = true
                                             errorMessage = "Error updating ${personType.capitalize()}: ${e.message}"
                                             showErrorDialog = true
                                         }
                                     )
                                 } else {
-                                    savePerson()
+                                    if (personType == "student") {
+                                        savePerson()
+                                    } else {
+                                        // For teacher or staff, use savePersonDirectly
+                                        val auth = FirebaseAuth.getInstance()
+                                        val db = FirebaseFirestore.getInstance()
+                                        val person = Person(
+                                            id = "",
+                                            firstName = firstName.trim(),
+                                            lastName = lastName.trim(),
+                                            email = email.trim(),
+                                            password = password,
+                                            phone = phone.trim(),
+                                            type = personType, // enforce type
+                                            className = formatClassForStorage(selectedClass),
+                                            rollNumber = rollNumber.trim(),
+                                            gender = gender,
+                                            dateOfBirth = dateOfBirth.trim(),
+                                            mobileNo = mobileNo.trim(),
+                                            address = address.trim(),
+                                            age = age.toIntOrNull() ?: 0
+                                        )
+                                        savePersonDirectly(
+                                            person = person,
+                                            auth = auth,
+                                            db = db,
+                                            email = email.trim(),
+                                            password = password,
+                                            personType = personType,
+                                            onSuccess = {
+                                                isLoading = false
+                                                isErrorDialog = false
+                                                errorMessage = "${personType.capitalize()} account created successfully"
+                                                showErrorDialog = true
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar("${personType.capitalize()} account created successfully")
+                                                    navController.popBackStack()
+                                                }
+                                            },
+                                            onError = { e ->
+                                                isLoading = false
+                                                isErrorDialog = true
+                                                errorMessage = "Error creating ${personType.capitalize()} account: ${e.message}"
+                                                showErrorDialog = true
+                                            }
+                                        )
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -1382,8 +1522,13 @@ fun AddPersonScreen(
         if (showErrorDialog) {
             AlertDialog(
                 onDismissRequest = { showErrorDialog = false },
-                title = { Text("Error") },
-                text = { Text(errorMessage ?: "An unknown error occurred") },
+                title = {
+                    Text(
+                        if (isErrorDialog) "Error" else "Success",
+                        color = if (isErrorDialog) Color.Red else Color(0xFF4CAF50)
+                    )
+                },
+                text = { Text(errorMessage ?: if (isErrorDialog) "An unknown error occurred" else "Operation successful") },
                 confirmButton = {
                     TextButton(onClick = { showErrorDialog = false }) {
                         Text("OK")

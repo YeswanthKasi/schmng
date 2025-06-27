@@ -36,6 +36,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import com.ecorvi.schmng.services.RemoteConfigService
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 
@@ -576,42 +577,73 @@ fun TeacherDashboardScreen(
                         title = "Timetable",
                         onClick = { navController.navigate("teacher_timetable") }
                     )
-                    DashboardCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Group,
-                        title = "Students",
-                        onClick = { navController.navigate("teacher_students") }
-                    )
-                    DashboardCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Event,
-                        title = "Events",
-                        onClick = { navController.navigate("teacher_events") }
-                    )
+
+                    // Show Students card if attendance feature is enabled
+                    if (RemoteConfigService.isAttendanceFeatureEnabled()) {
+                        DashboardCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.Group,
+                            title = "Students",
+                            onClick = { navController.navigate("teacher_students") }
+                        )
+                    }
+
+                    // Show Events card if enabled
+                    if (RemoteConfigService.isEventsFeatureEnabled()) {
+                        DashboardCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.Event,
+                            title = "Events",
+                            onClick = { navController.navigate("teacher_events") }
+                        )
+                    }
                 }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    DashboardCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.CheckCircle,
-                        title = "Attendance",
-                        onClick = { navController.navigate("teacher_attendance") }
-                    )
+                    // Show Attendance card if enabled
+                    if (RemoteConfigService.isAttendanceFeatureEnabled()) {
+                        DashboardCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.CheckCircle,
+                            title = "Attendance",
+                            onClick = { navController.navigate("teacher_attendance") }
+                        )
+                    }
+
                     DashboardCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Person,
                         title = "Profile",
                         onClick = { navController.navigate("teacher_profile") }
                     )
-                    DashboardCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.EventNote,
-                        title = "Leave",
-                        onClick = { navController.navigate("teacher_leave_list") }
-                    )
+
+                    // Show Leave card if enabled
+                    if (RemoteConfigService.isLeaveManagementEnabled()) {
+                        DashboardCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.EventNote,
+                            title = "Leave",
+                            onClick = { navController.navigate("teacher_leave_list") }
+                        )
+                    }
+                }
+
+                // Show Chat section if enabled
+                if (RemoteConfigService.isChatFeatureEnabled()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        DashboardCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.Chat,
+                            title = "Messages",
+                            onClick = { navController.navigate("teacher_messages") }
+                        )
+                    }
                 }
 
                 // Notice Board Card

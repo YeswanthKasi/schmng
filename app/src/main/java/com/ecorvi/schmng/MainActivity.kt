@@ -47,7 +47,10 @@ import android.net.Network
 import android.net.NetworkRequest
 import android.os.Handler
 import android.os.Looper
+import com.ecorvi.schmng.services.RemoteConfigService
 import com.google.android.play.core.install.InstallState
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
 
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
@@ -202,6 +205,13 @@ class MainActivity : ComponentActivity() {
             // Initialize app update manager
             appUpdateManager = AppUpdateManagerFactory.create(this)
 
+            // Initialize Remote Config and check settings
+            scope.launch {
+                if (RemoteConfigService.fetchAndActivate()) {
+                    applyRemoteConfigSettings()
+                }
+            }
+
             // Setup initial state and auth listener
             setupInitialState()
             setupAuthStateListener()
@@ -209,6 +219,84 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing components", e)
             throw e
+        }
+    }
+
+    private fun applyRemoteConfigSettings() {
+        // Check maintenance mode
+        if (RemoteConfigService.isInMaintenanceMode()) {
+            showMaintenanceDialog()
+            return
+        }
+
+        // Check minimum app version
+        checkAppVersion()
+
+        // Update school information
+        updateSchoolInfo()
+    }
+
+    private fun showMaintenanceDialog() {
+        val message = RemoteConfigService.getMaintenanceMessage()
+        AlertDialog.Builder(this)
+            .setTitle("Maintenance Mode")
+            .setMessage(message)
+            .setCancelable(false)
+            .setPositiveButton("Exit") { _, _ -> finish() }
+            .show()
+    }
+
+    private fun checkAppVersion() {
+        try {
+            val currentVersion = packageManager.getPackageInfo(packageName, 0).versionName
+            val minVersion = RemoteConfigService.getMinAppVersion()
+            
+            if (isVersionLower(currentVersion.toString(), minVersion)) {
+                AlertDialog.Builder(this)
+                    .setTitle("Update Required")
+                    .setMessage("A new version of the app is required. Please update to continue.")
+                    .setCancelable(false)
+                    .setPositiveButton("Update") { _, _ -> 
+                        openPlayStore()
+                        finish()
+                    }
+                    .show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking app version", e)
+        }
+    }
+
+    private fun updateSchoolInfo() {
+        try {
+            // Save school info to SharedPreferences for easy access
+            prefs.edit().apply {
+                putString("school_name", RemoteConfigService.getSchoolName())
+                putString("academic_year", RemoteConfigService.getAcademicYear())
+                putString("school_contact", RemoteConfigService.getSchoolContact())
+                apply()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating school info", e)
+        }
+    }
+
+    private fun isVersionLower(current: String, minimum: String): Boolean {
+        try {
+            val currentParts = current.split(".").map { it.toInt() }
+            val minimumParts = minimum.split(".").map { it.toInt() }
+            
+            for (i in 0..2) {
+                val currentPart = currentParts.getOrNull(i) ?: 0
+                val minimumPart = minimumParts.getOrNull(i) ?: 0
+                
+                if (currentPart < minimumPart) return true
+                if (currentPart > minimumPart) return false
+            }
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error comparing versions", e)
+            return false
         }
     }
 
