@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun AttendancePieChart(present: Int, absent: Int, leave: Int, total: Int) {
+fun AttendancePieChart(present: Int, absent: Int, leave: Int, total: Int, modifier: Modifier = Modifier) {
     val data = if (total > 0) {
         listOf(
             present.toFloat() / total.coerceAtLeast(1),
@@ -30,9 +30,7 @@ fun AttendancePieChart(present: Int, absent: Int, leave: Int, total: Int) {
     val hasData = data.any { it > 0f }
 
     Box(
-        modifier = Modifier
-            .size(200.dp)
-            .padding(16.dp)
+        modifier = modifier
     ) {
         Canvas(
             modifier = Modifier.fillMaxSize()
@@ -51,10 +49,9 @@ fun AttendancePieChart(present: Int, absent: Int, leave: Int, total: Int) {
                     }
                 }
             } else {
-                // Draw empty circle if no data
+                // Draw filled circle if no data
                 drawCircle(
-                    color = Color.LightGray,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                    color = Color(0xFFE0E0E0) // Soft gray fill
                 )
             }
         }

@@ -118,19 +118,18 @@ fun TeacherProfileScreen(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Profile Photo
+                // Profile Photo (no extra blue background, fully visible)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(TeacherBlue)
-                        .padding(24.dp),
+                        .padding(top = 32.dp, bottom = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     ProfilePhotoComponent(
                         userId = teacherId,
                         photoUrl = profilePhotoUrl,
                         isEditable = isAdmin,
-                        themeColor = TeacherBlue,
+                        themeColor = Color.LightGray, // or Color.Transparent for no border
                         onPhotoUpdated = { url ->
                             profilePhotoUrl = url
                         }

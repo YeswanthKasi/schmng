@@ -108,7 +108,7 @@ fun StudentAttendanceScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Attendance") },
+                title = { Text("Attendance") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White.copy(alpha = 0.95f)
                 )

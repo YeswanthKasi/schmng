@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ecorvi.schmng.ui.components.CommonBackground
 import com.ecorvi.schmng.ui.data.model.Timetable
@@ -100,7 +101,28 @@ fun TeacherDashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Teacher Dashboard") },
+                title = { Text("") },
+                navigationIcon = {
+                    // Live date and time display in top left
+                    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+                    LaunchedEffect(Unit) {
+                        while (true) {
+                            currentTime = System.currentTimeMillis()
+                            kotlinx.coroutines.delay(1000)
+                        }
+                    }
+                    val dateFormat = remember { java.text.SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+                    val timeFormat = remember { java.text.SimpleDateFormat("hh:mm:ss a", Locale.getDefault()) }
+                    val date = remember(currentTime) { dateFormat.format(Date(currentTime)) }
+                    val time = remember(currentTime) { timeFormat.format(Date(currentTime)) }
+                    Column(
+                        horizontalAlignment = Alignment.Start,
+                        modifier = Modifier.padding(start = 12.dp)
+                    ) {
+                        Text(date, color = PrimaryBlue, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text(time, color = PrimaryBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                },
                 actions = {
                     IconButton(onClick = { 
                         viewModel.signOut()
@@ -135,7 +157,7 @@ fun TeacherDashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Welcome Card
-                Card(
+                /*Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = PrimaryBlue
@@ -159,7 +181,7 @@ fun TeacherDashboardScreen(
                             color = Color.White
                         )
                     }
-                }
+                }*/
 
                 // Error message if any
                 error?.let { errorMessage ->

@@ -51,6 +51,9 @@ import com.ecorvi.schmng.services.RemoteConfigService
 import com.google.android.play.core.install.InstallState
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.graphics.Color
 
 class MainActivity : ComponentActivity() {
     private lateinit var appUpdateManager: AppUpdateManager
@@ -158,6 +161,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         try {
             registerNetworkCallback()
             initializeComponents()
@@ -302,6 +306,10 @@ class MainActivity : ComponentActivity() {
 
     private fun setupContent() {
         setContent {
+            val systemUiController = rememberSystemUiController()
+            SideEffect {
+                systemUiController.setStatusBarColor(Color.Transparent, darkIcons = true)
+            }
             SchmngTheme {
                 navController = rememberNavController()
                 

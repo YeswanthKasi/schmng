@@ -29,6 +29,7 @@ import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.sqrt
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.saveable.rememberSaveable
 
 private val TeacherBlue = Color(0xFF2196F3)
 private val StudentGreen = Color(0xFF4CAF50)
@@ -42,7 +43,9 @@ fun AnalyticsPieChart(
     onStudentClick: () -> Unit,
     onTeacherClick: () -> Unit,
     onStaffClick: () -> Unit,  // Added parameter
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hasAnimated: Boolean = false,
+    setHasAnimated: () -> Unit = {}
 ) {
     val total = studentCount + teacherCount + staffCount
     if (total == 0) return
@@ -51,16 +54,8 @@ fun AnalyticsPieChart(
     var teacherPressed by remember { mutableStateOf(false) }
     var staffPressed by remember { mutableStateOf(false) }  // Added state
 
-    var animationProgress by remember { mutableStateOf(0f) }
-    val animatedProgress by animateFloatAsState(
-        targetValue = animationProgress,
-        animationSpec = tween(1000),
-        label = "pieProgress"
-    )
-
-    LaunchedEffect(Unit) {
-        animationProgress = 1f
-    }
+    // REMOVE ANIMATION: always use 1f for progress
+    val animatedProgress = 1f
 
     // Get screen width to determine layout
     val configuration = LocalConfiguration.current

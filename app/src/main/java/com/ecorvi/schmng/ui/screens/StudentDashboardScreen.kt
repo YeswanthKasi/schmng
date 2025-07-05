@@ -67,6 +67,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ecorvi.schmng.viewmodels.AttendanceViewModel
 import com.ecorvi.schmng.ui.navigation.StudentBottomNavItem
 import com.ecorvi.schmng.services.RemoteConfigService
+import com.airbnb.lottie.compose.*
+import com.ecorvi.schmng.R
 
 private val PrimaryBlue = Color(0xFF1F41BB)
 private val ScheduleOrange = Color(0xFFFF9800)
@@ -164,7 +166,7 @@ fun StudentAiSearchBar(modifier: Modifier = Modifier) {
     val brush = Brush.linearGradient(
         colors = StudentGradientColors,
         start = Offset(0f, 0f),
-        end = Offset(400f * (0.5f + 0.5f * kotlin.math.sin(animatedOffset * 2 * Math.PI).toFloat()), 
+        end = Offset(400f * (0.5f + 0.5f * kotlin.math.sin(animatedOffset * 2 * Math.PI).toFloat()),
                      400f * (0.5f - 0.5f * kotlin.math.cos(animatedOffset * 2 * Math.PI).toFloat()))
     )
     
@@ -508,7 +510,7 @@ fun StudentDashboardScreen(
                         )
                         NavigationDrawerItem(
                             icon = { Icon(Icons.Default.Announcement, contentDescription = "Notices") },
-                            label = { Text("Notices") },
+                            label = { Text("Notifications") },
                             selected = false,
                             onClick = {
                                 scope.launch { drawerState.close() }
@@ -617,17 +619,7 @@ fun StudentDashboardScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "STUDENT DASHBOARD",
-                                color = PrimaryBlue,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Box(modifier = Modifier.fillMaxWidth()) {}
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
@@ -636,6 +628,23 @@ fun StudentDashboardScreen(
                                 contentDescription = "Menu",
                                 tint = PrimaryBlue
                             )
+                        }
+                    },
+                    actions = {
+                        var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+                        LaunchedEffect(Unit) {
+                            while (true) {
+                                currentTime = System.currentTimeMillis()
+                                kotlinx.coroutines.delay(1000)
+                            }
+                        }
+                        val dateFormat = remember { java.text.SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+                        val timeFormat = remember { java.text.SimpleDateFormat("hh:mm:ss a", Locale.getDefault()) }
+                        val date = remember(currentTime) { dateFormat.format(Date(currentTime)) }
+                        val time = remember(currentTime) { timeFormat.format(Date(currentTime)) }
+                        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 12.dp)) {
+                            Text(date, color = PrimaryBlue, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(time, color = PrimaryBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -652,9 +661,15 @@ fun StudentDashboardScreen(
                 )
             }
         ) { padding ->
+            // Gradient background
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color(0xFFF5F7FA), Color(0xFFE3ECF7))
+                        )
+                    )
                     .padding(padding)
             ) {
                 if (isLoading) {
@@ -667,222 +682,155 @@ fun StudentDashboardScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(BackgroundColor),
+                            .fillMaxSize(),
                         contentPadding = PaddingValues(vertical = STANDARD_PADDING),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         item {
-                            StudentAiSearchBar(
-                                modifier = Modifier.padding(horizontal = STANDARD_PADDING)
-                            )
-                        }
+                            // Section header with icon
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+                            ) {
 
-                        // Teacher Attendance Card - Check if attendance feature is enabled
-                        if (RemoteConfigService.isAttendanceFeatureEnabled()) {
-                            item {
-                                student?.className?.let { className ->
-                                    TeacherAttendanceCard(
-                                        className = className,
-                                        viewModel = viewModel()
-                                    )
-                                }
                             }
-                        }
-
-                        // Today's Schedule
-                        if (todaySchedule.isNotEmpty()) {
-                            item {
-                                Card(
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = STANDARD_PADDING)
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color(0xFFE0E0E0),
+                                        shape = RoundedCornerShape(20.dp)
+                                    ),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color.White.copy(alpha = 0.98f)
+                                ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                            ) {
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = STANDARD_PADDING),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = CardBackgroundColor
-                                    ),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = CARD_ELEVATION)
+                                        .padding(18.dp)
                                 ) {
-                                    Column(
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "School Schedule",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = PrimaryBlue
+                                        )
+                                        IconButton(
+                                            onClick = { navController.navigate("student_timetable") }
+                                        ) {
+                                            Icon(
+                                                Icons.Default.OpenInNew,
+                                                contentDescription = "View Full Timetable",
+                                                tint = PrimaryBlue
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    // Day selector row
+                                    Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(18.dp)
+                                            .padding(bottom = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "Today's Schedule",
-                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = PrimaryBlue
-                                            )
-                                            IconButton(
-                                                onClick = { navController.navigate("student_timetable") }
+                                        val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+                                        days.forEach { day ->
+                                            val isSelected = day == selectedDay
+                                            val shortDay = day.take(3)
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(CircleShape)
+                                                    .clickable { selectedDay = day }
+                                                    .background(
+                                                        if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.surface
+                                                    )
+                                                    .border(
+                                                        width = 1.dp,
+                                                        color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.outline,
+                                                        shape = CircleShape
+                                                    )
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                contentAlignment = Alignment.Center
                                             ) {
-                                                Icon(
-                                                    Icons.Default.OpenInNew,
-                                                    contentDescription = "View Full Timetable",
-                                                    tint = PrimaryBlue
+                                                Text(
+                                                    text = shortDay,
+                                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                                 )
                                             }
                                         }
-                                        Spacer(Modifier.height(8.dp))
-                                        // Day selector row
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 8.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
-                                            days.forEach { day ->
-                                                val isSelected = day == selectedDay
-                                                val shortDay = day.take(3)
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(CircleShape)
-                                                        .clickable { selectedDay = day }
-                                                        .background(
-                                                            if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.surface
-                                                        )
-                                                        .border(
-                                                            width = 1.dp,
-                                                            color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.outline,
-                                                            shape = CircleShape
-                                                        )
-                                                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = shortDay,
-                                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        // Timetable content
-                                        if (timeSlots.isEmpty()) {
-                                            Box(
+                                    }
+                                    // Timetable content
+                                    val isSunday = selectedDay == "Sunday"
+                                    var showTable by remember(isSunday) { mutableStateOf(false) }
+                                    if (isSunday) {
+                                        if (!showTable) {
+                                            Column(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .height(200.dp),
-                                                contentAlignment = Alignment.Center
+                                                    .padding(24.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
-                                                CircularProgressIndicator(color = PrimaryBlue)
+                                                // Lottie animation for happy Sunday
+                                                val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.enjoy))
+                                                val progress by animateLottieCompositionAsState(composition, iterations = LottieConstants.IterateForever)
+                                                LottieAnimation(
+                                                    composition = composition,
+                                                    progress = { progress },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth(0.95f)
+                                                        .height(200.dp)
+                                                        .padding(bottom = 8.dp)
+                                                )
+                                                Text(
+                                                    text = "It's Sunday!",
+                                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                                    color = PrimaryBlue,
+                                                    modifier = Modifier.padding(bottom = 8.dp)
+                                                )
+                                                Text(
+                                                    text = "Relax, recharge, and get ready for a new week!",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = Color.Gray,
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.padding(bottom = 16.dp)
+                                                )
+                                                Text(
+                                                    text = "\"The beautiful thing about learning is that no one can take it away from you.\"\n– B.B. King",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = Color(0xFF4CAF50),
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.padding(bottom = 24.dp)
+                                                )
+                                                Button(onClick = { showTable = true }) {
+                                                    Text("View Timetable")
+                                                }
                                             }
                                         } else {
-                                            Column(
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                // Header
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .background(PrimaryBlue.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
-                                                        .padding(vertical = 10.dp, horizontal = 8.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween
-                                                ) {
-                                                    Text(
-                                                        text = "Time",
-                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                        color = PrimaryBlue,
-                                                        modifier = Modifier.weight(1.2f)
-                                                    )
-                                                    Text(
-                                                        text = "Subject",
-                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                        color = PrimaryBlue,
-                                                        modifier = Modifier.weight(1.1f)
-                                                    )
-                                                    Text(
-                                                        text = "Teacher",
-                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                        color = PrimaryBlue,
-                                                        modifier = Modifier.weight(1.1f)
-                                                    )
-                                                    Text(
-                                                        text = "Room",
-                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                        color = PrimaryBlue,
-                                                        modifier = Modifier.weight(0.7f),
-                                                        textAlign = TextAlign.End
-                                                    )
-                                                }
-                                                Spacer(Modifier.height(4.dp))
-                                                // Time slots
-                                                timeSlots.forEachIndexed { idx, timeSlot ->
-                                                    val classForThisSlot = weeklyTimetable.find {
-                                                        it.timeSlot == timeSlot &&
-                                                        normalizeDayName(it.dayOfWeek) == normalizeDayName(selectedDay)
-                                                    }
-                                                    val isFilled = classForThisSlot != null
-                                                    val timeText = if (idx == 0 && timeSlot.contains("-")) {
-                                                        val parts = timeSlot.split("-")
-                                                        if (parts.size == 2) parts[0].trim() + "-\n" + parts[1].trim() else timeSlot
-                                                    } else timeSlot
-                                                    Row(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(vertical = 4.dp, horizontal = 2.dp),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Text(
-                                                            text = timeText,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            color = if (isFilled) PrimaryBlue else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                                            fontWeight = if (isFilled) FontWeight.Medium else FontWeight.Normal,
-                                                            modifier = Modifier.weight(1.2f)
-                                                        )
-                                                        if (isFilled) {
-                                                            Text(
-                                                                text = classForThisSlot!!.subject,
-                                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                                                color = Color.Black,
-                                                                modifier = Modifier.weight(1.1f)
-                                                            )
-                                                            Text(
-                                                                text = classForThisSlot.teacher,
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                color = Color.Black.copy(alpha = 0.85f),
-                                                                modifier = Modifier.weight(1.1f)
-                                                            )
-                                                            Text(
-                                                                text = classForThisSlot.roomNumber,
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                color = Color.Black.copy(alpha = 0.85f),
-                                                                modifier = Modifier.weight(0.7f),
-                                                                textAlign = TextAlign.End
-                                                            )
-                                                        } else {
-                                                            Text(
-                                                                text = "-",
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                                                modifier = Modifier.weight(1.1f),
-                                                                textAlign = TextAlign.Center
-                                                            )
-                                                            Text(
-                                                                text = "-",
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                                                modifier = Modifier.weight(1.1f),
-                                                                textAlign = TextAlign.Center
-                                                            )
-                                                            Text(
-                                                                text = "-",
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                                                modifier = Modifier.weight(0.7f),
-                                                                textAlign = TextAlign.End
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                            // Show timetable as usual for Sunday if requested
+                                            TimetableTable(
+                                                timeSlots = timeSlots,
+                                                weeklyTimetable = weeklyTimetable,
+                                                selectedDay = selectedDay
+                                            )
                                         }
+                                    } else {
+                                        // Always show timetable for other days
+                                        TimetableTable(
+                                            timeSlots = timeSlots,
+                                            weeklyTimetable = weeklyTimetable,
+                                            selectedDay = selectedDay
+                                        )
                                     }
                                 }
                             }
@@ -935,4 +883,133 @@ fun SectionHeader(
         modifier = modifier
             .padding(horizontal = STANDARD_PADDING, vertical = STANDARD_PADDING)
     )
+}
+
+@Composable
+private fun TimetableTable(
+    timeSlots: List<String>,
+    weeklyTimetable: List<Timetable>,
+    selectedDay: String
+) {
+    if (timeSlots.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = PrimaryBlue)
+        }
+    } else {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(PrimaryBlue.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                    .padding(vertical = 10.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Time",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = PrimaryBlue,
+                    modifier = Modifier.weight(1.2f)
+                )
+                Text(
+                    text = "Subject",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = PrimaryBlue,
+                    modifier = Modifier.weight(1.1f)
+                )
+                Text(
+                    text = "Teacher",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = PrimaryBlue,
+                    modifier = Modifier.weight(1.1f)
+                )
+                Text(
+                    text = "Room",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = PrimaryBlue,
+                    modifier = Modifier.weight(0.7f),
+                    textAlign = TextAlign.End
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            // Time slots
+            timeSlots.forEachIndexed { idx, timeSlot ->
+                val classForThisSlot = weeklyTimetable.find {
+                    it.timeSlot == timeSlot &&
+                    normalizeDayName(it.dayOfWeek) == normalizeDayName(selectedDay)
+                }
+                val isFilled = classForThisSlot != null
+                // Always split the time slot into two lines
+                val timeText = if (timeSlot.contains("-")) {
+                    val parts = timeSlot.split("-")
+                    if (parts.size == 2) parts[0].trim() + "-\n" + parts[1].trim() else timeSlot
+                } else timeSlot
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp, horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = timeText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isFilled) PrimaryBlue else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        fontWeight = if (isFilled) FontWeight.Medium else FontWeight.Normal,
+                        modifier = Modifier.weight(1.2f),
+                        maxLines = 2
+                    )
+                    if (isFilled) {
+                        Text(
+                            text = classForThisSlot!!.subject,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = Color.Black,
+                            modifier = Modifier.weight(1.1f)
+                        )
+                        Text(
+                            text = classForThisSlot.teacher,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Black.copy(alpha = 0.85f),
+                            modifier = Modifier.weight(1.1f)
+                        )
+                        Text(
+                            text = classForThisSlot.roomNumber,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Black.copy(alpha = 0.85f),
+                            modifier = Modifier.weight(0.7f),
+                            textAlign = TextAlign.End
+                        )
+                    } else {
+                        Text(
+                            text = "-",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            modifier = Modifier.weight(1.1f),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "-",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            modifier = Modifier.weight(1.1f),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "-",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            modifier = Modifier.weight(0.7f),
+                            textAlign = TextAlign.End
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

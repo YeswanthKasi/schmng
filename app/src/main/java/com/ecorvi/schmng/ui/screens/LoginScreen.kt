@@ -35,6 +35,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -271,15 +272,30 @@ fun LoginScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Welcome Text
-            Text(
-                text = "Ecorvi School Management",
-                style = TextStyle(
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1F41BB)
+            // Welcome Text (split into two lines, centered, responsive)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Ecorvi",
+                    style = TextStyle(
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1F41BB)
+                    ),
+                    textAlign = TextAlign.Center
                 )
-            )
+                Text(
+                    text = "School Management",
+                    style = TextStyle(
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1F41BB)
+                    ),
+                    textAlign = TextAlign.Center
+                )
+            }
 
             Text(
                 text = "Sign in to continue",
@@ -427,7 +443,7 @@ fun LoginScreen(navController: NavController) {
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .align(Alignment.End)
-                            .clickable { /* TODO: Implement forgot password */ }
+                            .clickable { navController.navigate("forgot_password") }
                             .padding(top = 8.dp)
                     )
 

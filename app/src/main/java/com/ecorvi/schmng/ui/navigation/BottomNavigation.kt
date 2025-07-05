@@ -16,6 +16,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 
 // Sealed class for bottom navigation items
 sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
@@ -41,21 +42,22 @@ sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: 
 fun BottomNav(
     navController: NavController,
     currentRoute: String,
-    onItemSelected: (BottomNavItem) -> Unit
+    onItemSelected: (BottomNavItem) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     // Get screen width to calculate responsive sizes
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp
 
     // Calculate responsive sizes
-    val iconSize = (screenWidth * 0.06f).coerceIn(24f, 32f).dp
+    val iconSize = ((screenWidth * 0.06f) + 3f).coerceIn(25f, 33f).dp
     val labelSize = (screenWidth * 0.028f).coerceIn(10f, 14f).sp
 
     // Map the current route to a BottomNavItem
     val currentItem = BottomNavItem.fromRoute(currentRoute)
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight(),
         color = Color.White,
@@ -87,13 +89,14 @@ fun BottomNav(
                                 contentDescription = item.label,
                                 modifier = Modifier.size(iconSize)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = item.label,
                                 style = TextStyle(
                                     fontSize = labelSize,
-                                    fontWeight = if (currentItem == item) 
-                                        FontWeight.Medium else FontWeight.Normal
+                                    fontWeight = if (currentItem == item) FontWeight.Medium else FontWeight.Normal,
+                                    color = if (currentItem == item) Color(0xFF1F41BB) else Color.Gray,
+                                    textAlign = TextAlign.Center
                                 ),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis

@@ -17,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 34
-        versionCode = 45
-        versionName = "1.42"
+        versionCode = 46
+        versionName = "1.43"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -39,6 +39,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            useLegacyPackaging = false
         }
     }
 
@@ -164,7 +167,7 @@ dependencies {
     implementation("com.google.firebase:firebase-storage-ktx:20.3.0")
     
     // Image Cropping
-    implementation("com.github.yalantis:ucrop:2.2.8-native")
+    implementation("com.github.yalantis:ucrop:2.2.8")
     
     // Image Loading and Caching
     implementation("io.coil-kt:coil-compose:2.5.0")
@@ -174,5 +177,8 @@ dependencies {
     
     // Image Compression
     implementation("id.zelory:compressor:3.0.1")
+
+    // Lottie Compose
+    implementation("com.airbnb.android:lottie-compose:6.3.0")
 }
 

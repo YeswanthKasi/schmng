@@ -63,10 +63,12 @@ fun StudentProfileScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Student Profile") },
+                title = { Text("Profile") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    if (isAdmin || currentRoute == null || onRouteSelected == null) {
+                        IconButton(onClick = { navController.navigateUp() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {
@@ -101,6 +103,14 @@ fun StudentProfileScreen(
                     navigationIconContentColor = Color.White
                 )
             )
+        },
+        bottomBar = {
+            if (!isAdmin && currentRoute != null && onRouteSelected != null) {
+                StudentBottomNavigation(
+                    currentRoute = currentRoute,
+                    onNavigate = { item -> onRouteSelected(item.route) }
+                )
+            }
         }
     ) { padding ->
         if (isLoading) {
@@ -120,24 +130,30 @@ fun StudentProfileScreen(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Profile Photo
+                // Profile Photo Holder (fully visible below the top bar)
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .background(StudentGreen)
-                        .padding(24.dp),
+                        .offset(y = 24.dp)
+                        .size(110.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     ProfilePhotoComponent(
                         userId = studentId,
                         photoUrl = profilePhotoUrl,
-                        isEditable = isAdmin,
-                        themeColor = StudentGreen,
-                        onPhotoUpdated = { url ->
-                            profilePhotoUrl = url
-                        }
+                        isEditable = false, // Always view-only for students
+                        themeColor = StudentGreen
                     )
                 }
+                Text(
+                    text = "Profile Photo",
+                    color = StudentGreen,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .offset(y = 28.dp)
+                        .padding(bottom = 0.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
                 
                 // Profile Details
                 Card(

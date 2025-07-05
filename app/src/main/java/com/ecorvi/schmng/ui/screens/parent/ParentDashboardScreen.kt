@@ -46,6 +46,7 @@ import com.ecorvi.schmng.ui.theme.ParentBlue
 import com.ecorvi.schmng.ui.components.ParentBottomNavigation
 import java.text.SimpleDateFormat
 import java.util.*
+import com.airbnb.lottie.compose.*
 
 private val CardBackgroundColor = Color.White
 
@@ -586,10 +587,12 @@ fun ParentDashboardScreen(
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f),
+                                .weight(1f)
+                                .border(BorderStroke(2.dp, ParentBlue), shape = RoundedCornerShape(20.dp)),
                             colors = CardDefaults.cardColors(
                                 containerColor = Color.White
-                            )
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                         ) {
                             Column(
                                 modifier = Modifier
@@ -621,7 +624,6 @@ fun ParentDashboardScreen(
                                     }
                                 }
                                 Spacer(Modifier.height(8.dp))
-                                
                                 // Day selector row
                                 Row(
                                     modifier = Modifier
@@ -661,9 +663,31 @@ fun ParentDashboardScreen(
                                         }
                                     }
                                 }
-                                
-                                // Timetable content
-                                if (timeSlots.isEmpty()) {
+                                // Timetable or Sunday animation
+                                if (normalizeDayName(selectedDay) == "sunday") {
+                                    // Show family animation and message
+                                    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.family))
+                                    val progress by animateLottieCompositionAsState(composition, iterations = LottieConstants.IterateForever)
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        LottieAnimation(
+                                            composition = composition,
+                                            progress = { progress },
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.85f)
+                                                .height(200.dp)
+                                                .padding(bottom = 8.dp)
+                                        )
+                                        Text(
+                                            text = "Enjoy family time!",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = ParentBlue,
+                                            modifier = Modifier.padding(top = 8.dp)
+                                        )
+                                    }
+                                } else if (timeSlots.isEmpty()) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -711,7 +735,6 @@ fun ParentDashboardScreen(
                                             )
                                         }
                                         Spacer(Modifier.height(4.dp))
-                                        
                                         // Time slots
                                         timeSlots.forEachIndexed { idx, timeSlot ->
                                             val classForThisSlot = weeklyTimetable.find {
@@ -723,7 +746,6 @@ fun ParentDashboardScreen(
                                                 val parts = timeSlot.split("-")
                                                 if (parts.size == 2) parts[0].trim() + "-\n" + parts[1].trim() else timeSlot
                                             } else timeSlot
-                                            
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()

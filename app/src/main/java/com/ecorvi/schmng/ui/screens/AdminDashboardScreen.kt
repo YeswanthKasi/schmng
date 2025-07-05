@@ -122,6 +122,14 @@ import com.ecorvi.schmng.models.AttendanceStatus
 import com.ecorvi.schmng.models.UserType
 import com.ecorvi.schmng.ui.data.model.Person
 import com.ecorvi.schmng.ui.components.AttendancePieChart
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
+import androidx.compose.runtime.saveable.rememberSaveable
 
 // Define primary colors used throughout the dashboard
 private val PrimaryBlue = Color(0xFF1F41BB)    // Main theme color
@@ -147,6 +155,20 @@ private val PresentColor = Color(0xFF4CAF50)  // Green for present
 private val AbsentColor = Color(0xFFE57373)   // Red for absent
 private val LeaveColor = Color(0xFFFFB74D)    // Orange for leave
 
+// Define pleasant card backgrounds
+private val AnalyticsCardBrush = Brush.linearGradient(listOf(Color(0xFFe3f0ff), Color(0xFFb3d1ff)))
+private val FeeCardBrush = Brush.linearGradient(listOf(Color(0xFFf3e5f5), Color(0xFFd1c4e9)))
+private val AttendanceCardBrush = Brush.linearGradient(listOf(Color(0xFFe8f5e9), Color(0xFFb9f6ca)))
+
+// Premium palette
+private val PremiumGradient = Brush.horizontalGradient(listOf(Color(0xFF232526), Color(0xFF414345))) // deep blue/gray
+private val PremiumAccent = Color(0xFF8F94FB) // soft purple/blue accent
+private val PremiumText = Color.White
+private val PremiumNumber = Color(0xFFFDCB82) // gold accent for numbers
+
+// Modern font (fallback to default if not available)
+private val PremiumFontFamily = FontFamily.SansSerif
+
 // Main composable function for the Admin Dashboard Screen
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
@@ -155,6 +177,25 @@ fun AdminDashboardScreen(
     currentRoute: String,
     onRouteSelected: (String) -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
+    val useDarkIcons = !isDark
+    val dashboardGradient = if (isDark) {
+        Brush.linearGradient(listOf(Color(0xFF23243A), Color(0xFF3A3B5A)))
+    } else {
+        Brush.linearGradient(listOf(Color(0xFFe3f0ff), Color(0xFFb3d1ff)))
+    }
+    val barGradient = if (isDark) {
+        Brush.linearGradient(listOf(Color(0xFF23243A), Color(0xFF3A3B5A)))
+    } else {
+        Brush.linearGradient(listOf(Color(0xFFb3d1ff), Color(0xFFe3f0ff)))
+    }
+    val drawerGradient = if (isDark) {
+        Brush.verticalGradient(listOf(Color(0xFF353A5A), Color(0xFF4B4F7A), Color(0xFF7C5CBF)))
+    } else {
+        Brush.verticalGradient(listOf(Color(0xFFb3d1ff), Color(0xFFe3f0ff), Color(0xFFE3D1FF)))
+    }
+    val statusBarColor = if (isDark) Color(0xFF23243A) else Color(0xFFb3d1ff)
+    val drawerTextColor = if (isDark) Color.White else Color.Black
     // Initialize Firebase Authentication instance
     val auth = FirebaseAuth.getInstance()
     // Get current context for Android operations
@@ -200,6 +241,17 @@ fun AdminDashboardScreen(
     var showDropdownMenu by remember { mutableStateOf(false) }
     var showNavigationDrawer by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+
+    // Profile photo state
+    var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
+    val currentUser = FirebaseAuth.getInstance().currentUser
+
+    // Load profile photo URL for admin
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser?.uid != null) {
+            profilePhotoUrl = FirestoreDatabase.getProfilePhotoUrl(currentUser.uid!!)
+        }
+    }
 
     // Initialize drawer state
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -542,7 +594,7 @@ fun AdminDashboardScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Title
@@ -592,7 +644,7 @@ fun AdminDashboardScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier.padding(10.dp)
                     ) {
                         ShimmerText(
                             modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -633,7 +685,7 @@ fun AdminDashboardScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier.padding(10.dp)
                     ) {
                         ShimmerText(
                             modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -698,8 +750,10 @@ fun AdminDashboardScreen(
         drawerContent = {
             // Drawer content layout
             ModalDrawerSheet(
-                modifier = Modifier.width(300.dp),
-                drawerContainerColor = Color.White.copy(alpha = 0.95f)
+                modifier = Modifier
+                    .width(300.dp)
+                    .background(drawerGradient),
+                drawerContainerColor = Color.Transparent
             ) {
                 // App logo and title section
                 Spacer(modifier = Modifier.height(16.dp))
@@ -727,7 +781,7 @@ fun AdminDashboardScreen(
                     Text(
                         text = "Ecorvi School Management",
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
-                        color = PrimaryBlue,
+                        color = drawerTextColor,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -735,16 +789,16 @@ fun AdminDashboardScreen(
                 // Navigation menu items
                 Spacer(modifier = Modifier.height(12.dp))
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("home", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Home", tint = drawerTextColor) },
+                    label = { Text("Home", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Students") },
-                    label = { Text("students", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.Person, contentDescription = "Students", tint = drawerTextColor) },
+                    label = { Text("Students", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -752,8 +806,8 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.School, contentDescription = "Teachers") },
-                    label = { Text("teachers", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.School, contentDescription = "Teachers", tint = drawerTextColor) },
+                    label = { Text("Teachers", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -761,8 +815,8 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Group, contentDescription = "Staff") },
-                    label = { Text("nonTeachingStaff", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.Group, contentDescription = "Staff", tint = drawerTextColor) },
+                    label = { Text("Non-Teaching Staff", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -770,8 +824,8 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Announcement, contentDescription = "Notices") },
-                    label = { Text("notices", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.Announcement, contentDescription = "Notices", tint = drawerTextColor) },
+                    label = { Text("Notifications", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -779,8 +833,8 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.EventNote, contentDescription = "Leave Requests") },
-                    label = { Text("leaveRequests", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.EventNote, contentDescription = "Leave Requests", tint = drawerTextColor) },
+                    label = { Text("Leave Requests", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -788,8 +842,8 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Schedule, contentDescription = "Timetable") },
-                    label = { Text("timetable", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.Schedule, contentDescription = "Timetable", tint = drawerTextColor) },
+                    label = { Text("Time-table", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -797,8 +851,8 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Schedule, contentDescription = "Schedule") },
-                    label = { Text("schedule", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.Schedule, contentDescription = "Schedule", tint = drawerTextColor) },
+                    label = { Text("Schedule", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -806,8 +860,8 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.CheckCircle, contentDescription = "Attendance") },
-                    label = { Text("attendance", fontSize = 16.sp) },
+                    icon = { Icon(Icons.Default.CheckCircle, contentDescription = "Attendance", tint = drawerTextColor) },
+                    label = { Text("Attendance", fontSize = 16.sp, color = drawerTextColor) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -815,8 +869,8 @@ fun AdminDashboardScreen(
                     }
                 )
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.DirectionsBus, contentDescription = "Bus Tracking") },
-                    label = {Text("busTracking", fontSize = 16.sp)},
+                    icon = { Icon(Icons.Default.DirectionsBus, contentDescription = "Bus Tracking", tint = drawerTextColor) },
+                    label = {Text("Bus Status", fontSize = 16.sp, color = drawerTextColor)},
                     selected = false,
                     onClick = {
                         Toast.makeText(context, "Bus Tracking is coming soon!", Toast.LENGTH_SHORT).show()
@@ -832,7 +886,7 @@ fun AdminDashboardScreen(
                 ) {
                     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
                     Text(
-                        text = "version ${packageInfo.versionName}",
+                        text = "Version ${packageInfo.versionName}",
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                         color = Color.Gray,
                         maxLines = 1
@@ -854,7 +908,7 @@ fun AdminDashboardScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "checkForUpdates",
+                            text = "Check For Updates",
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                             color = PrimaryBlue,
                             maxLines = 1,
@@ -877,10 +931,14 @@ fun AdminDashboardScreen(
                         title = {
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 Text(
-                                    "adminHub",
-                                    color = PrimaryBlue,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold
+                                    "Admin Hub",
+                                    color = PremiumText,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = PremiumFontFamily,
+                                    letterSpacing = 2.sp,
+                                    style = MaterialTheme.typography.titleLarge.copy(textAlign = TextAlign.Center),
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         },
@@ -896,17 +954,21 @@ fun AdminDashboardScreen(
                                 Icon(
                                     Icons.Default.Menu,
                                     contentDescription = "Menu",
-                                    tint = PrimaryBlue
+                                    tint = PremiumText
                                 )
                             }
                         },
                         actions = {
                             Box {
                                 IconButton(onClick = { showMenu = true }) {
-                                    Icon(
-                                        Icons.Default.AccountCircle,
-                                        contentDescription = "Profile Menu",
-                                        tint = PrimaryBlue
+                                    ProfilePhotoComponent(
+                                        userId = currentUser?.uid ?: "",
+                                        photoUrl = profilePhotoUrl,
+                                        isEditable = false,
+                                        themeColor = PremiumText,
+                                        onPhotoUpdated = {},
+                                        onError = {},
+                                        modifier = Modifier.size(36.dp)
                                     )
                                 }
                                 DropdownMenu(
@@ -916,14 +978,6 @@ fun AdminDashboardScreen(
                                         .background(Color.White)
                                         .width(160.dp)
                                 ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Profile") },
-                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                        onClick = {
-                                            showMenu = false
-                                            navController.navigate("admin_profile")
-                                        }
-                                    )
                                     DropdownMenuItem(
                                         text = { Text("Privacy & Security") },
                                         leadingIcon = { Icon(Icons.Default.Security, contentDescription = null) },
@@ -944,7 +998,6 @@ fun AdminDashboardScreen(
                                             context.startActivity(intent)
                                         }
                                     )
-                                    Divider()
                                     DropdownMenuItem(
                                         text = { Text("Logout", color = Color.Red) },
                                         leadingIcon = { 
@@ -963,15 +1016,19 @@ fun AdminDashboardScreen(
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.White.copy(alpha = 0.95f)
-                        )
+                            containerColor = Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .background(barGradient)
                     )
                 },
                 bottomBar = {
                     BottomNav(
                         navController = navController,
                         currentRoute = currentRoute,
-                        onItemSelected = { item -> onRouteSelected(item.route) }
+                        onItemSelected = { item -> onRouteSelected(item.route) },
+                        modifier = Modifier
+                            .background(barGradient)
                     )
                 },
                 snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -1034,39 +1091,48 @@ fun AdminDashboardScreen(
                                     AiSearchBar()
                                 }
                                 item {
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = BackgroundColor,
-                                        shadowElevation = 2.dp
-                                    ) {
-
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
+                                    AnimatedVisibility(visible = true, enter = fadeIn()) {
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp),
+                                            shape = RoundedCornerShape(16.dp),
+                                            shadowElevation = 6.dp,
+                                            color = Color.Transparent
                                         ) {
-                                            // Text on top
-                                            Text(
-                                                "totalCount",
-                                                style = MaterialTheme.typography.titleMedium.copy(
-                                                    textAlign = TextAlign.Center
-                                                ),
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1F41BB),
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            // Pie Chart below the text
-                                            AnalyticsPieChart(
-                                                studentCount = studentCount,
-                                                teacherCount = teacherCount,
-                                                staffCount = staffCount,
-                                                onStudentClick = { navController.navigate("students") },
-                                                onTeacherClick = { navController.navigate("teachers") },
-                                                onStaffClick = { navController.navigate("staff") } // Assuming this navigation exists
-                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(AnalyticsCardBrush, RoundedCornerShape(16.dp))
+                                                    .padding(10.dp)
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    // Text on top
+                                                    Text(
+                                                        "Head Count",
+                                                        style = MaterialTheme.typography.titleMedium.copy(
+                                                            textAlign = TextAlign.Center
+                                                        ),
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF1F41BB),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                    Spacer(modifier = Modifier.height(16.dp))
+                                                    // Pie Chart below the text
+                                                    var hasAnimatedPie by rememberSaveable { mutableStateOf(false) }
+                                                    AnalyticsPieChart(
+                                                        studentCount = studentCount,
+                                                        teacherCount = teacherCount,
+                                                        staffCount = staffCount,
+                                                        onStudentClick = { navController.navigate("students") },
+                                                        onTeacherClick = { navController.navigate("teachers") },
+                                                        onStaffClick = { navController.navigate("staff") },
+                                                        hasAnimated = hasAnimatedPie,
+                                                        setHasAnimated = { hasAnimatedPie = true }
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1078,45 +1144,49 @@ fun AdminDashboardScreen(
                                 // Attendance Analytics Card
                                 item {
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp)
-                                            .clickable { navController.navigate("attendance_analytics") },
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = BackgroundColor,
-                                        shadowElevation = 2.dp
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp)
+                                    AnimatedVisibility(visible = true, enter = fadeIn()) {
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp)
+                                                .clickable { navController.navigate("attendance_analytics") },
+                                            shape = RoundedCornerShape(16.dp),
+                                            shadowElevation = 6.dp,
+                                            color = Color.Transparent
                                         ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(AttendanceCardBrush, RoundedCornerShape(16.dp))
+                                                    .padding(10.dp)
                                             ) {
-                                                Text(
-                                                    "attendanceOverview",
-                                                    style = MaterialTheme.typography.titleMedium.copy(
-                                                        textAlign = TextAlign.Center
-                                                    ),
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFF1F41BB),
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                                Column {
+                                                    // Title row with icon
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = "Attendance Overview",
+                                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                                textAlign = TextAlign.Center
+                                                            ),
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = PrimaryBlue
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    AttendanceOverviewCardContent(
+                                                        studentCount = studentCount,
+                                                        teacherCount = teacherCount,
+                                                        staffCount = staffCount,
+                                                        studentAttendance = studentAttendance,
+                                                        teacherAttendance = teacherAttendance,
+                                                        staffAttendance = staffAttendance
+                                                    )
+                                                }
                                             }
-                                            
-                                            Spacer(modifier = Modifier.height(15.dp))
-                                            
-                                            // Attendance Overview with Pie Chart
-                                            AttendanceOverviewCard(
-                                                studentCount = studentCount,
-                                                teacherCount = teacherCount,
-                                                staffCount = staffCount,
-                                                studentAttendance = studentAttendance,
-                                                teacherAttendance = teacherAttendance,
-                                                staffAttendance = staffAttendance
-                                            )
                                         }
                                     }
                                 }
@@ -1124,8 +1194,8 @@ fun AdminDashboardScreen(
                                 item {
                                     Spacer(modifier = Modifier.height(8.dp))
                                     AnimatedSummaryRow(
-                                        leftTitle = "manageTeacherAbsences",
-                                        rightTitle = "pendingFees",
+                                        leftTitle = "Manage Teacher Absences",
+                                        rightTitle = "Pending Fee",
                                         leftIcon = Icons.Default.PersonOff,
                                         rightIcon = Icons.Default.CurrencyRupee,
                                         leftClick = { 
@@ -1644,160 +1714,168 @@ private fun AttendanceCountRow(
 
 @Composable
 fun FeeAnalyticsCard(navController: NavController) {
-    var selectedMonth by remember { mutableStateOf<Int?>(null) }
-    
-    // Fixed monthly data for first 6 months
-    val monthlyFees = remember {
-        listOf(
-            120000, // Jan
-            135000, // Feb
-            95000,  // Mar
-            110000, // Apr
-            125000, // May
-            140000  // Jun
-        )
-    }
-
-    // Handle navigation when a month is selected
-    LaunchedEffect(selectedMonth) {
-        if (selectedMonth != null) {
-            navController.navigate("fee_analytics/${selectedMonth}")
-            selectedMonth = null
+    AnimatedVisibility(visible = true, enter = fadeIn()) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(220.dp),
+            shape = RoundedCornerShape(16.dp),
+            shadowElevation = 6.dp,
+            color = Color.Transparent
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(FeeCardBrush, RoundedCornerShape(16.dp))
+                    .fillMaxSize()
+                    .padding(10.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Text(
+                        "Monthly Fee Statistics",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            textAlign = TextAlign.Center
+                        ),
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1F41BB),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                             .height(120.dp)
+                    ){
+                        FeeAnalyticsChart(navController)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    FeeAnalyticsMonthLabels()
+                }
+            }
         }
     }
+}
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(220.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = BackgroundColor,
-        shadowElevation = 2.dp
-    ) {
+@Composable
+fun FeeAnalyticsChart(navController: NavController) {
+    var selectedMonth by remember { mutableStateOf<Int?>(null) }
+    val monthlyFees = listOf(120000, 135000, 95000, 110000, 125000, 140000)
+    val maxFee = monthlyFees.maxOrNull()?.toFloat() ?: 0f
+    val yLabels = 4
+    Box(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth()
+                .fillMaxHeight()
+                .width(36.dp)
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                "monthlyFee",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    textAlign = TextAlign.Center
-                ),
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1F41BB),
-                modifier = Modifier.fillMaxWidth()
+            for (i in yLabels downTo 0) {
+                val value = (maxFee * i / yLabels).toInt()
+                Text(
+                    text = if (value >= 1000) "${value / 1000}K" else value.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.offset(y = (-6).dp)
+                )
+            }
+        }
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 24.dp, top = 8.dp, bottom = 8.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        val barWidth = (size.width - 24f) / 6
+                        val clickedIndex = ((offset.x - 24f) / barWidth).toInt()
+                        if (clickedIndex in monthlyFees.indices) {
+                            selectedMonth = clickedIndex
+                            navController.navigate("fee_analytics/$clickedIndex")
+                        }
+                    }
+                }
+        ) {
+            val barWidth = (size.width - 24f) / 6
+            val maxFee = monthlyFees.maxOrNull()?.toFloat() ?: 0f
+            drawLine(
+                color = Color.Gray.copy(alpha = 0.5f),
+                start = Offset(40f, 0f),
+                end = Offset(40f, size.height - 20f),
+                strokeWidth = 1f
             )
-            
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 8.dp)
-                            .pointerInput(Unit) {
-                                detectTapGestures { offset ->
-                                    val barWidth = (size.width - 40f) / 6
-                                    val clickedIndex = ((offset.x - 40f) / barWidth).toInt()
-                                    if (clickedIndex in monthlyFees.indices) {
-                                        selectedMonth = clickedIndex
-                                    }
-                                }
-                            }
-                    ) {
-                        val barWidth = (size.width - 40f) / 6
-                        val maxFee = monthlyFees.maxOrNull()?.toFloat() ?: 0f
-                        
-                        // Draw axes
-                        drawLine(
-                            color = Color.Gray.copy(alpha = 0.5f),
-                            start = Offset(40f, 0f),
-                            end = Offset(40f, size.height - 20f),
-                            strokeWidth = 1f
-                        )
-                        drawLine(
-                            color = Color.Gray.copy(alpha = 0.5f),
-                            start = Offset(40f, size.height - 20f),
-                            end = Offset(size.width, size.height - 20f),
-                            strokeWidth = 1f
-                        )
-                        
-                        monthlyFees.forEachIndexed { index, fee ->
-                            val barHeight = (fee / maxFee) * (size.height - 40f)
-                            val performance = fee / maxFee
-                            val barColor = when {
-                                performance > 0.8f -> Color(0xFF4CAF50)
-                                performance > 0.6f -> Color(0xFF8BC34A)
-                                performance > 0.4f -> Color(0xFFFFC107)
-                                performance > 0.2f -> Color(0xFFFF9800)
-                                else -> Color(0xFFF44336)
-                            }
-                            
-                            val isSelected = selectedMonth == index
-                            val barAlpha = if (isSelected) 1f else 0.7f
-                            
-                            // Calculate bar position
-                            val barX = 40f + (index * barWidth) + 15f
-                            
-                            drawRect(
-                                color = barColor.copy(alpha = barAlpha),
-                                topLeft = Offset(
-                                    barX,
-                                    size.height - 20f - barHeight
-                                ),
-                                size = Size(barWidth - 30f, barHeight)
-                            )
-                            
-                            if (isSelected) {
-                                drawContext.canvas.nativeCanvas.drawText(
-                                    "₹${fee/1000}K",
-                                    barX,
-                                    size.height - 20f - barHeight - 10f,
-                                    android.graphics.Paint().apply {
-                                        color = android.graphics.Color.BLACK
-                                        textSize = 30f
-                                        textAlign = android.graphics.Paint.Align.LEFT
-                                    }
-                                )
-                            }
-                        }
-                    }
+            drawLine(
+                color = Color.Gray.copy(alpha = 0.5f),
+                start = Offset(40f, size.height - 20f),
+                end = Offset(size.width, size.height - 20f),
+                strokeWidth = 1f
+            )
+            monthlyFees.forEachIndexed { index, fee ->
+                val barHeight = (fee / maxFee) * (size.height - 40f)
+                val performance = fee / maxFee
+                val barColor = when {
+                    performance > 0.8f -> Color(0xFF4CAF50)
+                    performance > 0.6f -> Color(0xFF8BC34A)
+                    performance > 0.4f -> Color(0xFFFFC107)
+                    performance > 0.2f -> Color(0xFFFF9800)
+                    else -> Color(0xFFF44336)
                 }
-                
-                // Month labels
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 28.dp, end = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun")
-                        val barWidth = (LocalConfiguration.current.screenWidthDp - 64) / 6f
-                        
-                        months.forEachIndexed { index, month ->
-                            Box(
-                                modifier = Modifier
-                                    .width(barWidth.dp)
-                                    .offset(x = (-8).dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = month,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
+                val isSelected = selectedMonth == index
+                val barAlpha = if (isSelected) 1f else 0.7f
+                val barX = 40f + (index * barWidth) + 15f
+                drawRect(
+                    color = barColor.copy(alpha = barAlpha),
+                    topLeft = Offset(
+                        barX,
+                        size.height - 20f - barHeight
+                    ),
+                    size = Size(barWidth - 30f, barHeight)
+                )
+                if (isSelected) {
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "₹${fee/1000}K",
+                        barX,
+                        size.height - 20f - barHeight - 10f,
+                        android.graphics.Paint().apply {
+                            color = android.graphics.Color.BLACK
+                            textSize = 30f
+                            textAlign = android.graphics.Paint.Align.LEFT
                         }
-                    }
+                    )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun FeeAnalyticsMonthLabels() {
+    val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun")
+    val barWidth = (LocalConfiguration.current.screenWidthDp - 64) / 6f
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 28.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        months.forEachIndexed { index, month ->
+            Box(
+                modifier = Modifier
+                    .width(barWidth.dp)
+                    .offset(x = (-8).dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = month,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
         }
     }
@@ -1827,8 +1905,10 @@ private fun QuickStatCard(
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = color
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = PremiumFontFamily,
+                letterSpacing = 1.sp,
+                color = PremiumNumber
             )
         }
     }
@@ -1868,7 +1948,7 @@ private fun AttendanceStatItem(label: String, color: Color) {
 }
 
 @Composable
-private fun AttendanceOverviewCard(
+private fun AttendanceOverviewCardContent(
     studentCount: Int,
     teacherCount: Int,
     staffCount: Int,
@@ -1878,8 +1958,6 @@ private fun AttendanceOverviewCard(
 ) {
     var selectedCategory by remember { mutableStateOf("Students") }
     val categories = listOf("Students", "Teachers", "Staff")
-    
-    // State for gender statistics
     var genderStats by remember { mutableStateOf<Map<String, Int>>(mapOf("male" to 0, "female" to 0)) }
     var isLoadingGenderStats by remember { mutableStateOf(true) }
     var genderError by remember { mutableStateOf<String?>(null) }
@@ -1905,194 +1983,162 @@ private fun AttendanceOverviewCard(
         }
     }
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = BackgroundColor,
-        shadowElevation = 2.dp
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+    Column(modifier = Modifier.padding(10.dp)) {
+        // Category Selection Tabs
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            
-            // Category Selection Tabs
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                categories.forEach { category ->
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { selectedCategory = category },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (selectedCategory == category) 
-                            PrimaryBlue.copy(alpha = 0.1f) 
-                        else 
-                            Color.Transparent,
-                        border = BorderStroke(
-                            1.dp,
-                            if (selectedCategory == category) PrimaryBlue else Color.Gray.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                    Text(
-                                text = category,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (selectedCategory == category) 
-                                    PrimaryBlue 
-                                else 
-                                    Color.Gray
-                    )
-                        }
-                    }
-                }
-            }
-
-            // Analysis Content
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Left side: Attendance Pie Chart
-                    Box(
-                        modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val (attendance, total) = when (selectedCategory) {
-                        "Students" -> studentAttendance to studentCount
-                        "Teachers" -> teacherAttendance to teacherCount
-                        else -> staffAttendance to staffCount
-                    }
-                    
-                    val present = attendance.count { it.status == AttendanceStatus.PRESENT }
-                    val absent = attendance.count { it.status == AttendanceStatus.ABSENT }
-                    val leave = attendance.count { it.status == AttendanceStatus.PERMISSION }
-                    
-                    AttendancePieChart(
-                        present = present,
-                        absent = absent,
-                        leave = leave,
-                        total = total
-                    )
-                }
-
-                // Right side: Gender Distribution
-                Box(
+            categories.forEach { category ->
+                Surface(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight(),
-                    contentAlignment = Alignment.Center
+                        .clickable { selectedCategory = category },
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (selectedCategory == category)
+                        PrimaryBlue.copy(alpha = 0.1f)
+                    else
+                        Color.Transparent,
+                    border = BorderStroke(
+                        1.dp,
+                        if (selectedCategory == category) PrimaryBlue else Color.Gray.copy(alpha = 0.3f)
+                    )
                 ) {
-                    if (isLoadingGenderStats) {
-                        CircularProgressIndicator(
-                            color = PrimaryBlue,
-                            modifier = Modifier.size(48.dp)
+                    Box(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = category,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (selectedCategory == category)
+                                PrimaryBlue
+                            else
+                                Color.Gray
                         )
-                    } else if (genderError != null) {
-                    Text(
-                            text = "errorLoadingGenderData",
-                            color = Color.Red,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    } else {
-                        val total = (genderStats["male"] ?: 0) + (genderStats["female"] ?: 0)
-                        val malePercentage = if (total > 0) (genderStats["male"] ?: 0).toFloat() / total else 0f
-                        val femalePercentage = if (total > 0) (genderStats["female"] ?: 0).toFloat() / total else 0f
-                        
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            GenderDistributionChart(
-                                malePercentage = malePercentage,
-                                femalePercentage = femalePercentage,
-                                otherPercentage = 0f
-                            )
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            // Show actual counts
-                            Text(
-                                text = "M: ${genderStats["male"] ?: 0}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaleColor
-                            )
-                            Text(
-                                text = "F: ${genderStats["female"] ?: 0}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = FemaleColor
-                            )
-                        }
                     }
                 }
             }
-
-            // Legend
-            Column(
+        }
+        // Pies Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Attendance Pie
+            Box(
+                modifier = Modifier.weight(1f).aspectRatio(1f).padding(12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val (attendance, total) = when (selectedCategory) {
+                    "Students" -> studentAttendance to studentCount
+                    "Teachers" -> teacherAttendance to teacherCount
+                    else -> staffAttendance to staffCount
+                }
+                val present = attendance.count { it.status == AttendanceStatus.PRESENT }
+                val absent = attendance.count { it.status == AttendanceStatus.ABSENT }
+                val leave = attendance.count { it.status == AttendanceStatus.PERMISSION }
+                AttendancePieChart(
+                    present = present,
+                    absent = absent,
+                    leave = leave,
+                    total = total,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (total == 0) {
+                    Surface(
+                        color = Color.White.copy(alpha = 0.92f),
+                        shape = RoundedCornerShape(20.dp),
+                        shadowElevation = 4.dp
+                    ) {
+                        Text(
+                            text = "Attendance Not Taken",
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                        )
+                    }
+                }
+            }
+            // Gender Pie
+            Box(
+                modifier = Modifier.weight(1f).aspectRatio(1f).padding(12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (genderError != null) {
+                    Text(
+                        text = "errorLoadingGenderData",
+                        color = Color.Red,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    val total = (genderStats["male"] ?: 0) + (genderStats["female"] ?: 0)
+                    val malePercentage = if (total > 0) (genderStats["male"] ?: 0).toFloat() / total else 0f
+                    val femalePercentage = if (total > 0) (genderStats["female"] ?: 0).toFloat() / total else 0f
+                    if (total == 0) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Info, contentDescription = "No data", tint = Color.LightGray, modifier = Modifier.size(40.dp))
+                            Text("No data", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else {
+                        GenderDistributionChart(
+                            malePercentage = malePercentage,
+                            femalePercentage = femalePercentage,
+                            otherPercentage = 0f,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
+        }
+        // Legends Row (traditional, compact)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LegendDot("Present", PresentColor)
+            LegendDot("Absent", AbsentColor)
+            LegendDot("Leave", LeaveColor)
+            LegendDot("Male", MaleColor)
+            LegendDot("Female", FemaleColor)
+        }
+        // Gender counts row
+        if (!isLoadingGenderStats && genderError == null) {
+            val male = genderStats["male"] ?: 0
+            val female = genderStats["female"] ?: 0
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp)
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.Center
             ) {
-                // Attendance Legend
-                Text(
-                    "Attendance Status",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    LegendItem("Present", PresentColor)
-                    LegendItem("Absent", AbsentColor)
-                    LegendItem("Leave", LeaveColor)
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Gender Legend - modified to only show male and female
-                Text(
-                    "Gender Distribution",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    LegendItem("Male", MaleColor)
-                    LegendItem("Female", FemaleColor)
-                }
+                Text("M: $male", color = MaleColor, style = MaterialTheme.typography.bodySmall, fontSize = 12.sp)
+                Spacer(Modifier.width(8.dp))
+                Text("F: $female", color = FemaleColor, style = MaterialTheme.typography.bodySmall, fontSize = 12.sp)
             }
         }
     }
 }
 
 @Composable
-private fun LegendItem(label: String, color: Color) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-                    Box(
-                        modifier = Modifier
-                .size(8.dp)
+private fun LegendDot(label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
                 .background(color, CircleShape)
-                    )
-                    Text(
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
             color = Color.DarkGray
@@ -2104,12 +2150,11 @@ private fun LegendItem(label: String, color: Color) {
 private fun GenderDistributionChart(
     malePercentage: Float,
     femalePercentage: Float,
-    otherPercentage: Float // We'll keep this parameter to avoid breaking changes but won't use it
+    otherPercentage: Float, // We'll keep this parameter to avoid breaking changes but won't use it
+    modifier: Modifier = Modifier
 ) {
     Canvas(
-        modifier = Modifier
-            .size(160.dp)
-            .padding(8.dp)
+        modifier = modifier
     ) {
         val width = size.width
         val height = size.height

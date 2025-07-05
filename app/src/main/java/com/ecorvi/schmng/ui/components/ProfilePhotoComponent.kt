@@ -42,7 +42,8 @@ fun ProfilePhotoComponent(
     isEditable: Boolean = false,
     themeColor: Color = Color(0xFF1F41BB),
     onPhotoUpdated: (String) -> Unit = {},
-    onError: (String) -> Unit = {}
+    onError: (String) -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -122,15 +123,20 @@ fun ProfilePhotoComponent(
         onImagePicked = { uri -> processImage(uri) }
     ) { imagePicker, showPicker ->
         Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape)
-                .border(2.dp, themeColor, CircleShape)
-                .clickable(enabled = isEditable && !isUploading) {
-                    if (isEditable && !isUploading) {
-                        showPicker()
+            modifier = if (isEditable) {
+                (if (modifier == Modifier) Modifier.size(120.dp) else modifier)
+                    .clip(CircleShape)
+                    .border(2.dp, themeColor, CircleShape)
+                    .clickable(enabled = !isUploading) {
+                        if (!isUploading) {
+                            showPicker()
+                        }
                     }
-                },
+            } else {
+                (if (modifier == Modifier) Modifier.size(120.dp) else modifier)
+                    .clip(CircleShape)
+                    .border(2.dp, themeColor, CircleShape)
+            },
             contentAlignment = Alignment.Center
         ) {
             if (isUploading) {

@@ -100,6 +100,7 @@ fun AppNavigation(
         composable("welcome") { WelcomeScreen(navController) }
         composable("login") { LoginScreen(navController) }
         composable("register") { RegisterScreen(navController) }
+        composable("forgot_password") { ForgotPasswordScreen(navController) }
 
         // Admin Screens with Bottom Navigation
         composable(BottomNavItem.Home.route) { 

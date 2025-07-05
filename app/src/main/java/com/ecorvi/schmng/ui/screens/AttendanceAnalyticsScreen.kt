@@ -55,6 +55,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.ui.draw.clip
@@ -567,19 +568,45 @@ fun AttendanceAnalyticsScreen(navController: NavController) {
                                     val uniqueLeave = latestStatusByUser.values.count { it == AttendanceStatus.PERMISSION }
                                     
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(160.dp)
+                                            .padding(vertical = 8.dp),
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            AttendancePieChart(
-                                                present = uniquePresent,
-                                                absent = uniqueAbsent,
-                                                leave = uniqueLeave,
-                                                total = totalEnrolled
-                                            )
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(8.dp)
+                                                .size(140.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (totalEnrolled == 0) {
+                                                // Placeholder ring and message if no data
+                                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize(0.8f)) {
+                                                    drawCircle(
+                                                        color = Color(0xFFB0BEC5),
+                                                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                                            width = 14.dp.toPx(),
+                                                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(18f, 12f))
+                                                        )
+                                                    )
+                                                }
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
+                                                    Icon(Icons.Default.EventBusy, contentDescription = "No attendance", tint = Color.LightGray, modifier = Modifier.size(40.dp))
+                                                    Spacer(Modifier.height(4.dp))
+                                                    Text("No attendance yet", color = Color.LightGray, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                                }
+                                            } else {
+                                                AttendancePieChart(
+                                                    present = uniquePresent,
+                                                    absent = uniqueAbsent,
+                                                    leave = uniqueLeave,
+                                                    total = totalEnrolled,
+                                                    modifier = Modifier.size(110.dp)
+                                                )
+                                            }
                                         }
-                                        
                                         Column(
                                             modifier = Modifier.weight(1f),
                                             verticalArrangement = Arrangement.spacedBy(8.dp)
