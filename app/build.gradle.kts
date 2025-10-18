@@ -84,6 +84,7 @@ android {
 
 dependencies {
     implementation(libs.play.services.maps)
+    implementation(libs.androidx.animation.core)
     // Add core library desugaring for compatibility with older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 

@@ -61,6 +61,7 @@ object FirestoreDatabase {
     val staffCollection: CollectionReference = db.collection("non_teaching_staff")
     val pendingFeesCollection: CollectionReference = db.collection("pending_fees")
     val parentsCollection: CollectionReference = db.collection("parents")
+    private val metaCollection: CollectionReference = db.collection("meta")
 
     private var teacherListener: ListenerRegistration? = null
     private var studentListener: ListenerRegistration? = null
@@ -74,6 +75,72 @@ object FirestoreDatabase {
     private const val PROFILE_PHOTOS_PATH = "profile_photos"
     private const val DOCUMENTS_PATH = "documents"
     private const val MAX_PHOTO_SIZE = 1024 * 1024 // 1MB
+
+    // Admission number generator using Firestore transaction on counters
+    suspend fun generateNextAdmissionNumber(): String {
+        return try {
+            val year = Calendar.getInstance().get(Calendar.YEAR)
+            val counterDoc = metaCollection.document("counters.studentsAdmission.$year")
+
+            val nextValue = FirebaseFirestore.getInstance().runTransaction { txn ->
+                val snapshot = txn.get(counterDoc)
+                val current = snapshot.getLong("value") ?: 0L
+                val updated = current + 1
+                txn.set(counterDoc, mapOf("value" to updated), com.google.firebase.firestore.SetOptions.merge())
+                updated
+            }.await()
+
+            val padded = nextValue.toString().padStart(6, '0')
+            "ADM-$year-$padded"
+        } catch (e: Exception) {
+            Log.e("Firestore", "Failed to generate admission number: ${e.message}")
+            // Fallback to timestamp-based unique string
+            val year = Calendar.getInstance().get(Calendar.YEAR)
+            "ADM-$year-${System.currentTimeMillis().toString().takeLast(6)}"
+        }
+    }
+
+    // Peek last issued admission number for a given academic year (no increment)
+    suspend fun getLastIssuedAdmissionNumber(year: Int = Calendar.getInstance().get(Calendar.YEAR)): String? {
+        return try {
+            val doc = metaCollection.document("counters.studentsAdmission.$year").get().await()
+            val value = doc.getLong("value")
+            if (value != null && value > 0) {
+                val padded = value.toString().padStart(6, '0')
+                "ADM-$year-$padded"
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // Check if an admission number already exists (uniqueness)
+    suspend fun isAdmissionNumberTaken(admissionNumber: String): Boolean {
+        return try {
+            val snapshot = studentsCollection
+                .whereEqualTo("admissionNumber", admissionNumber)
+                .limit(1)
+                .get()
+                .await()
+            !snapshot.isEmpty
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    // Academic year helper (e.g., 2025-26)
+    fun getCurrentAcademicYear(): String {
+        val cal = Calendar.getInstance()
+        val year = cal.get(Calendar.YEAR)
+        val month = cal.get(Calendar.MONTH) + 1
+        return if (month >= 4) {
+            val shortNext = (year + 1).toString().takeLast(2)
+            "$year-$shortNext"
+        } else {
+            val shortThis = year.toString().takeLast(2)
+            "${year - 1}-$shortThis"
+        }
+    }
 
     private suspend fun cleanupOldProfilePhotos(userId: String) = withContext(Dispatchers.IO) {
         try {

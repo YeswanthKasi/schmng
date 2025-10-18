@@ -66,6 +66,15 @@ fun MessagesScreen(
                         fontWeight = FontWeight.Bold
                     )
                 },
+                actions = {
+                    IconButton(onClick = { navController.navigate("chatbot") }) {
+                        Icon(
+                            imageVector = Icons.Default.SmartToy,
+                            contentDescription = "AI Assistant",
+                            tint = Color(0xFF1F41BB)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.White.copy(alpha = 0.95f)
                 )

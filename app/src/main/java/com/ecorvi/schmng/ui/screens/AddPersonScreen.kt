@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.app.DatePickerDialog
 import android.R.attr.password
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -147,6 +148,13 @@ fun AddPersonScreen(
     var phone by remember { mutableStateOf("") }
     var personTypeValue by remember { mutableStateOf("Regular") }
 
+    // Admissions-only (student)
+    var admissionNumber by remember { mutableStateOf("") }
+    var admissionDate by remember { mutableStateOf("") } // default today, editable
+    var academicYear by remember { mutableStateOf(FirestoreDatabase.getCurrentAcademicYear()) }
+    var aadharNumber by remember { mutableStateOf("") }
+    var aaparId by remember { mutableStateOf("") }
+
     // Parent-related state variables
     var parentFirstName by remember { mutableStateOf("") }
     var parentLastName by remember { mutableStateOf("") }
@@ -201,6 +209,21 @@ fun AddPersonScreen(
                     mobileNo = person.mobileNo
                     address = person.address
                     age = if (person.age > 0) person.age.toString() else ""
+                    admissionNumber = person.admissionNumber
+                    admissionDate = person.admissionDate
+                    academicYear = if (person.academicYear.isNotBlank()) person.academicYear else FirestoreDatabase.getCurrentAcademicYear()
+                    aadharNumber = person.aadharNumber
+                    aaparId = person.aaparId
+
+                    // Edit-mode prefill for legacy students without admission fields
+                    if (personType == "student" && admissionNumber.isBlank()) {
+                        val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+                        admissionNumber = "ADM-$year-"
+                    }
+                    if (personType == "student" && admissionDate.isBlank()) {
+                        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                        admissionDate = fmt.format(java.util.Calendar.getInstance().time)
+                    }
 
                     // If this is a student, fetch parent information
                     if (personType == "student") {
@@ -240,6 +263,22 @@ fun AddPersonScreen(
                 showErrorDialog = true
             }
             isLoading = false
+        }
+    }
+
+    // Generate defaults for new student
+    LaunchedEffect(personType, isEditMode) {
+        if (!isEditMode && personType == "student") {
+            try {
+                admissionNumber = FirestoreDatabase.generateNextAdmissionNumber()
+            } catch (e: Exception) {
+                admissionNumber = ""
+            }
+            // Set today's date in yyyy-MM-dd to match backend scripts
+            val cal = java.util.Calendar.getInstance()
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            admissionDate = fmt.format(cal.time)
+            if (academicYear.isBlank()) academicYear = FirestoreDatabase.getCurrentAcademicYear()
         }
     }
 
@@ -284,6 +323,22 @@ fun AddPersonScreen(
         isLoading = true
         val auth = FirebaseAuth.getInstance()
 
+        // Validate admission number and aadhar before creating account
+        if (personType == "student") {
+            if (!com.ecorvi.schmng.ui.utils.AdmissionUtils.isValidAdmissionNumber(admissionNumber)) {
+                isErrorDialog = true
+                errorMessage = "Invalid admission number format. Use ADM-YYYY-XXXXXX"
+                showErrorDialog = true
+                return
+            }
+            if (!com.ecorvi.schmng.ui.utils.AdmissionUtils.isValidAadhar(aadharNumber)) {
+                isErrorDialog = true
+                errorMessage = "Aadhar must be 12 digits"
+                showErrorDialog = true
+                return
+            }
+        }
+
         // First create student account and data
         auth.createUserWithEmailAndPassword(email, password)
             .addOnSuccessListener { studentAuthResult ->
@@ -303,8 +358,28 @@ fun AddPersonScreen(
                     dateOfBirth = dateOfBirth.trim(),
                     mobileNo = mobileNo.trim(),
                     address = address.trim(),
-                    age = age.toIntOrNull() ?: 0
+                    age = age.toIntOrNull() ?: 0,
+                    admissionNumber = admissionNumber,
+                    admissionDate = admissionDate,
+                    academicYear = academicYear,
+                    aadharNumber = aadharNumber,
+                    aaparId = aaparId
                 )
+
+                // Ensure admission number is unique before write
+                if (personType == "student") {
+                    // Fire and forget check; if taken, abort
+                    kotlinx.coroutines.GlobalScope.launch {
+                        val taken = FirestoreDatabase.isAdmissionNumberTaken(admissionNumber)
+                        if (taken) {
+                            isLoading = false
+                            isErrorDialog = true
+                            errorMessage = "Admission number already in use. Please choose another."
+                            showErrorDialog = true
+                            return@launch
+                        }
+                    }
+                }
 
                 // If parent information exists, create parent account and data
                 if (parentEmail.isNotBlank() && parentPassword.isNotBlank()) {
@@ -516,7 +591,12 @@ fun AddPersonScreen(
             dateOfBirth = dateOfBirth.trim(),
             mobileNo = mobileNo.trim(),
             address = address.trim(),
-            age = age.toIntOrNull() ?: 0
+            age = age.toIntOrNull() ?: 0,
+            admissionNumber = admissionNumber,
+            admissionDate = admissionDate,
+            academicYear = academicYear,
+            aadharNumber = aadharNumber,
+            aaparId = aaparId
         )
         if (!enforceRoleTypeConsistency(personType, correctedPerson)) {
             isLoading = false
@@ -1117,13 +1197,71 @@ fun AddPersonScreen(
                     item {
                         OutlinedTextField(
                             value = dateOfBirth,
-                            onValueChange = { dateOfBirth = it },
+                            onValueChange = { input ->
+                                dateOfBirth = input
+                                // Try to auto-calc age when DOB changes
+                                val parsed = runCatching {
+                                    val fmt1 = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
+                                    fmt1.isLenient = false
+                                    fmt1.parse(input)
+                                }.getOrNull() ?: runCatching {
+                                    val fmt2 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                    fmt2.isLenient = false
+                                    fmt2.parse(input)
+                                }.getOrNull()
+                                if (parsed != null) {
+                                    val dobCal = java.util.Calendar.getInstance().apply { time = parsed }
+                                    val now = java.util.Calendar.getInstance()
+                                    var years = now.get(java.util.Calendar.YEAR) - dobCal.get(java.util.Calendar.YEAR)
+                                    if (now.get(java.util.Calendar.DAY_OF_YEAR) < dobCal.get(java.util.Calendar.DAY_OF_YEAR)) {
+                                        years -= 1
+                                    }
+                                    age = years.coerceAtLeast(0).toString()
+                                }
+                            },
                             label = { Text("Date of Birth (mm/dd/yyyy)") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp),
                             trailingIcon = {
-                                Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                                IconButton(onClick = {
+                                    val cal = java.util.Calendar.getInstance()
+                                    // Prefill from existing value if present
+                                    val prefill = runCatching {
+                                        val f1 = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
+                                        f1.isLenient = false
+                                        f1.parse(dateOfBirth)
+                                    }.getOrNull() ?: runCatching {
+                                        val f2 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                        f2.isLenient = false
+                                        f2.parse(dateOfBirth)
+                                    }.getOrNull()
+                                    if (prefill != null) cal.time = prefill
+
+                                    DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val picked = java.util.Calendar.getInstance().apply {
+                                                set(year, month, dayOfMonth)
+                                            }
+                                            val outFmt = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
+                                            dateOfBirth = outFmt.format(picked.time)
+                                            // Update age
+                                            val now = java.util.Calendar.getInstance()
+                                            var years = now.get(java.util.Calendar.YEAR) - year
+                                            val temp = java.util.Calendar.getInstance().apply { set(year, month, dayOfMonth) }
+                                            if (now.get(java.util.Calendar.DAY_OF_YEAR) < temp.get(java.util.Calendar.DAY_OF_YEAR)) {
+                                                years -= 1
+                                            }
+                                            age = years.coerceAtLeast(0).toString()
+                                        },
+                                        cal.get(java.util.Calendar.YEAR),
+                                        cal.get(java.util.Calendar.MONTH),
+                                        cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                    ).show()
+                                }) {
+                                    Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                                }
                             }
                         )
                     }
@@ -1226,23 +1364,16 @@ fun AddPersonScreen(
                         }
                     }
 
-                    // Age
+                    // Age (auto-calculated)
                     item {
                         OutlinedTextField(
                             value = age,
-                            onValueChange = { newValue ->
-                                // Only allow numeric input
-                                if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
-                                    age = newValue
-                                }
-                            },
+                            onValueChange = { },
                             label = { Text("Age") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Number
-                            )
+                            enabled = false
                         )
                     }
 
@@ -1256,6 +1387,124 @@ fun AddPersonScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
                         )
+                    }
+
+                    // Student admissions fields
+                    if (personType == "student") {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = admissionNumber,
+                                    onValueChange = { admissionNumber = it },
+                                    label = { Text("Admission Number (manual override)") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                // Last issued hint for legacy students (only when editing and value is a prefix)
+                                val year = remember(admissionNumber) {
+                                    com.ecorvi.schmng.ui.utils.AdmissionUtils.getAdmissionYear(admissionNumber)
+                                        ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+                                }
+                                var lastIssued by remember { mutableStateOf<String?>(null) }
+                                LaunchedEffect(isEditMode, admissionNumber, year) {
+                                    if (isEditMode && admissionNumber.endsWith("-")) {
+                                        lastIssued = FirestoreDatabase.getLastIssuedAdmissionNumber(year)
+                                    } else {
+                                        lastIssued = null
+                                    }
+                                }
+                                if (lastIssued != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(text = "Last issued: ${lastIssued}", color = Color.Gray, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = admissionDate,
+                                onValueChange = { admissionDate = it },
+                                label = { Text("Date of Admission (yyyy-MM-dd)") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                trailingIcon = {
+                                    IconButton(onClick = {
+                                        val cal = java.util.Calendar.getInstance()
+                                        val prefill = runCatching {
+                                            val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                            f.isLenient = false
+                                            f.parse(admissionDate)
+                                        }.getOrNull()
+                                        if (prefill != null) cal.time = prefill
+
+                                        DatePickerDialog(
+                                            context,
+                                            { _, year, month, dayOfMonth ->
+                                                val picked = java.util.Calendar.getInstance().apply { set(year, month, dayOfMonth) }
+                                                val outFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                                admissionDate = outFmt.format(picked.time)
+                                            },
+                                            cal.get(java.util.Calendar.YEAR),
+                                            cal.get(java.util.Calendar.MONTH),
+                                            cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                        ).show()
+                                    }) {
+                                        Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                                    }
+                                }
+                            )
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = academicYear,
+                                onValueChange = { academicYear = it },
+                                label = { Text("Academic Year (e.g., 2025-26)") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            )
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = aadharNumber,
+                                onValueChange = { value ->
+                                    val digits = value.filter { it.isDigit() }.take(12)
+                                    aadharNumber = digits
+                                },
+                                label = { Text("Aadhar Number (12 digits)") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number
+                                )
+                            )
+                        }
+                        if (aadharNumber.length in 1..11) {
+                            item {
+                                Text(
+                                    text = "Aadhar must be 12 digits",
+                                    color = Color.Red,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                )
+                            }
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = aaparId,
+                                onValueChange = { aaparId = it.trim() },
+                                label = { Text("AAPAR ID") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            )
+                        }
                     }
 
                     // Add parent information section when creating a student OR editing a student
@@ -1299,7 +1548,12 @@ fun AddPersonScreen(
                                             dateOfBirth = dateOfBirth.trim(),
                                             mobileNo = mobileNo.trim(),
                                             address = address.trim(),
-                                            age = age.toIntOrNull() ?: 0
+                                            age = age.toIntOrNull() ?: 0,
+                                            admissionNumber = admissionNumber,
+                                            admissionDate = admissionDate,
+                                            academicYear = academicYear,
+                                            aadharNumber = aadharNumber,
+                                            aaparId = aaparId
                                         ),
                                         personType,
                                         {
@@ -1340,7 +1594,12 @@ fun AddPersonScreen(
                                             dateOfBirth = dateOfBirth.trim(),
                                             mobileNo = mobileNo.trim(),
                                             address = address.trim(),
-                                            age = age.toIntOrNull() ?: 0
+                                            age = age.toIntOrNull() ?: 0,
+                                            admissionNumber = if (personType == "student") admissionNumber else "",
+                                            admissionDate = if (personType == "student") admissionDate else "",
+                                            academicYear = if (personType == "student") academicYear else "",
+                                            aadharNumber = if (personType == "student") aadharNumber else "",
+                                            aaparId = if (personType == "student") aaparId else ""
                                         )
                                         savePersonDirectly(
                                             person = person,
