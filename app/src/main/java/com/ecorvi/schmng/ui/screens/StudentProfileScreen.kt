@@ -191,6 +191,22 @@ fun StudentProfileScreen(
                             ProfileField("Mobile No", student.mobileNo ?: "")
                             ProfileField("Phone", student.phone ?: "")
                             ProfileField("Address", student.address ?: "")
+
+                            // Admin-only: show admissions fields and IDs
+                            if (isAdmin) {
+                                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                                Text(
+                                    text = "Admissions",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = StudentGreen,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                ProfileField("Admission Number", student.admissionNumber)
+                                ProfileField("Date of Admission", student.admissionDate)
+                                ProfileField("Academic Year", student.academicYear)
+                                ProfileField("Aadhar Number", student.aadharNumber)
+                                ProfileField("AAPAR ID", student.aaparId)
+                            }
                             
                             // Show parent information if available
                             student.parentInfo?.let { parent ->

@@ -1,5 +1,5 @@
 [versions]
-agp = "8.10.0"
+agp = "8.12.0"
 firebaseFirestoreKtx = "25.1.2"
 kotlin = "2.1.0"
 coreKtx = "1.15.0"
@@ -33,6 +33,7 @@ firebaseFirestore = "25.1.3"
 firebaseInappmessagingDisplay = "21.0.2"
 firebaseDatabaseKtx = "21.0.0"
 playServicesMaps = "19.2.0"
+animationCore = "1.9.0"
 
 [libraries]
 
@@ -74,6 +75,7 @@ firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore
 firebase-inappmessaging-display = { group = "com.google.firebase", name = "firebase-inappmessaging-display", version.ref = "firebaseInappmessagingDisplay" }
 firebase-database-ktx = { group = "com.google.firebase", name = "firebase-database-ktx", version.ref = "firebaseDatabaseKtx" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
+androidx-animation-core = { group = "androidx.compose.animation", name = "animation-core", version.ref = "animationCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

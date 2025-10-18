@@ -64,6 +64,7 @@ import com.ecorvi.schmng.ui.screens.staff.StaffLeaveHistoryScreen
 import com.ecorvi.schmng.ui.screens.staff.StaffMessagesScreen
 import com.ecorvi.schmng.ui.screens.staff.StaffChatScreen
 
+
 @Composable
 fun AppNavigation(
     navController: NavHostController,
@@ -517,6 +518,8 @@ fun AppNavigation(
                 noticeId = backStackEntry.arguments?.getString("noticeId")
             )
         }
+
+
 
         // Class Event Management routes
         composable("teacher_events") {

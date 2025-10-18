@@ -17,8 +17,8 @@ android {
         applicationId = "com.ecorvi.schmng"
         minSdk = 24
         targetSdk = 34
-        versionCode = 46
-        versionName = "1.43"
+        versionCode = 47
+        versionName = "1.44"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -84,6 +84,7 @@ android {
 
 dependencies {
     implementation(libs.play.services.maps)
+    implementation(libs.androidx.animation.core)
     // Add core library desugaring for compatibility with older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 

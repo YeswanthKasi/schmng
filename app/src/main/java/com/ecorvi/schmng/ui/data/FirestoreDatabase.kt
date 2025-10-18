@@ -61,6 +61,7 @@ object FirestoreDatabase {
     val staffCollection: CollectionReference = db.collection("non_teaching_staff")
     val pendingFeesCollection: CollectionReference = db.collection("pending_fees")
     val parentsCollection: CollectionReference = db.collection("parents")
+    private val metaCollection: CollectionReference = db.collection("meta")
 
     private var teacherListener: ListenerRegistration? = null
     private var studentListener: ListenerRegistration? = null
@@ -74,6 +75,218 @@ object FirestoreDatabase {
     private const val PROFILE_PHOTOS_PATH = "profile_photos"
     private const val DOCUMENTS_PATH = "documents"
     private const val MAX_PHOTO_SIZE = 1024 * 1024 // 1MB
+
+    // Preview next admission number without incrementing counter (for UI display)
+    suspend fun previewNextAdmissionNumber(): String {
+        return try {
+            val year = Calendar.getInstance().get(Calendar.YEAR)
+            val counterDoc = metaCollection.document("counters.studentsAdmission.$year")
+            val doc = counterDoc.get().await()
+            val current = doc.getLong("value") ?: 0L
+            val nextValue = current + 1
+            val padded = nextValue.toString().padStart(6, '0')
+            "ADM-$year-$padded"
+        } catch (e: Exception) {
+            Log.e("Firestore", "Failed to preview admission number: ${e.message}")
+            val year = Calendar.getInstance().get(Calendar.YEAR)
+            "ADM-$year-${System.currentTimeMillis().toString().takeLast(6)}"
+        }
+    }
+
+    // Generate and reserve admission number - increments counter only on successful student creation
+    suspend fun generateAndReserveAdmissionNumber(): String {
+        return try {
+            val year = Calendar.getInstance().get(Calendar.YEAR)
+            val counterDoc = metaCollection.document("counters.studentsAdmission.$year")
+
+            val nextValue = FirebaseFirestore.getInstance().runTransaction { txn ->
+                val snapshot = txn.get(counterDoc)
+                val current = snapshot.getLong("value") ?: 0L
+                val updated = current + 1
+                // Store the updated value (which represents the next admission number to be issued)
+                txn.set(counterDoc, mapOf("value" to updated), com.google.firebase.firestore.SetOptions.merge())
+                updated
+            }.await()
+
+            val padded = nextValue.toString().padStart(6, '0')
+            "ADM-$year-$padded"
+        } catch (e: Exception) {
+            Log.e("Firestore", "Failed to generate admission number: ${e.message}")
+            // Fallback to timestamp-based unique string
+            val year = Calendar.getInstance().get(Calendar.YEAR)
+            "ADM-$year-${System.currentTimeMillis().toString().takeLast(6)}"
+        }
+    }
+
+    // Peek last issued admission number for a given academic year (no increment)
+    suspend fun getLastIssuedAdmissionNumber(year: Int = Calendar.getInstance().get(Calendar.YEAR)): String? {
+        return try {
+            val doc = metaCollection.document("counters.studentsAdmission.$year").get().await()
+            val value = doc.getLong("value")
+            if (value != null && value > 0) {
+                val padded = value.toString().padStart(6, '0')
+                "ADM-$year-$padded"
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // Comprehensive admission number validation
+    suspend fun validateAdmissionNumber(admissionNumber: String): ValidationResult {
+        return try {
+            // Check format: ADM-YYYY-NNNNNN
+            val pattern = Regex("^ADM-(\\d{4})-(\\d{6})$")
+            val match = pattern.find(admissionNumber)
+            
+            if (match == null) {
+                return ValidationResult(false, "Invalid format. Use ADM-YYYY-NNNNNN (e.g., ADM-2025-000001)")
+            }
+            
+            val year = match.groupValues[1].toInt()
+            val number = match.groupValues[2].toInt()
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            
+            // Check year validity
+            if (year < 2020 || year > currentYear + 1) {
+                return ValidationResult(false, "Year must be between 2020 and ${currentYear + 1}")
+            }
+            
+            // Check if number is too low (should be greater than 0)
+            if (number <= 0) {
+                return ValidationResult(false, "Admission number must be greater than 0")
+            }
+            
+            // Check if number is already taken
+            val isTaken = isAdmissionNumberTaken(admissionNumber)
+            if (isTaken) {
+                return ValidationResult(false, "Admission number already exists")
+            }
+            
+            // Check if number is too high compared to current counter
+            val lastIssued = getLastIssuedAdmissionNumber(year)
+            if (lastIssued != null) {
+                val lastNumber = lastIssued.substringAfterLast("-").toInt()
+                if (number > lastNumber + 100) { // Allow some buffer for manual entries
+                    return ValidationResult(false, "Admission number is too high. Last issued: $lastIssued")
+                }
+            }
+            
+            ValidationResult(true, "Valid admission number")
+        } catch (e: Exception) {
+            ValidationResult(false, "Error validating admission number: ${e.message}")
+        }
+    }
+    
+    // Comprehensive Aadhar number validation
+    fun validateAadharNumber(aadharNumber: String): ValidationResult {
+        return try {
+            // Remove any spaces or dashes
+            val cleanAadhar = aadharNumber.replace("\\s|-".toRegex(), "")
+            
+            // Check if it's exactly 12 digits
+            if (!cleanAadhar.matches(Regex("^\\d{12}$"))) {
+                return ValidationResult(false, "Aadhar number must be exactly 12 digits")
+            }
+            
+            // Check for invalid patterns (all same digits, sequential, etc.)
+            if (cleanAadhar.matches(Regex("^(\\d)\\1{11}$"))) {
+                return ValidationResult(false, "Aadhar number cannot be all same digits")
+            }
+            
+            if (cleanAadhar.matches(Regex("^(0123456789|9876543210)$"))) {
+                return ValidationResult(false, "Aadhar number cannot be sequential")
+            }
+            
+            // Basic checksum validation (simplified)
+            if (!isValidAadharChecksum(cleanAadhar)) {
+                return ValidationResult(false, "Invalid Aadhar number checksum")
+            }
+            
+            ValidationResult(true, "Valid Aadhar number")
+        } catch (e: Exception) {
+            ValidationResult(false, "Error validating Aadhar number: ${e.message}")
+        }
+    }
+    
+    // Simple Aadhar checksum validation
+    private fun isValidAadharChecksum(aadhar: String): Boolean {
+        try {
+            // Verhoeff algorithm implementation (simplified)
+            val verhoeffTableD = arrayOf(
+                intArrayOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+                intArrayOf(1, 2, 3, 4, 0, 6, 7, 8, 9, 5),
+                intArrayOf(2, 3, 4, 0, 1, 7, 8, 9, 5, 6),
+                intArrayOf(3, 4, 0, 1, 2, 8, 9, 5, 6, 7),
+                intArrayOf(4, 0, 1, 2, 3, 9, 5, 6, 7, 8),
+                intArrayOf(5, 9, 8, 7, 6, 0, 4, 3, 2, 1),
+                intArrayOf(6, 5, 9, 8, 7, 1, 0, 4, 3, 2),
+                intArrayOf(7, 6, 5, 9, 8, 2, 1, 0, 4, 3),
+                intArrayOf(8, 7, 6, 5, 9, 3, 2, 1, 0, 4),
+                intArrayOf(9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+            )
+            
+            val verhoeffTableP = arrayOf(
+                intArrayOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+                intArrayOf(1, 5, 7, 6, 2, 8, 3, 0, 9, 4),
+                intArrayOf(5, 8, 0, 3, 7, 9, 6, 1, 4, 2),
+                intArrayOf(8, 9, 1, 6, 0, 4, 3, 5, 2, 7),
+                intArrayOf(9, 4, 5, 3, 1, 2, 6, 8, 7, 0),
+                intArrayOf(4, 2, 8, 6, 5, 7, 3, 9, 0, 1),
+                intArrayOf(2, 7, 9, 3, 8, 0, 6, 4, 1, 5),
+                intArrayOf(7, 0, 4, 6, 9, 1, 3, 2, 5, 8)
+            )
+            
+            var c = 0
+            val myArray = IntArray(aadhar.length)
+            
+            for (i in aadhar.indices) {
+                myArray[i] = aadhar[i].toString().toInt()
+            }
+            
+            for (i in myArray.indices) {
+                c = verhoeffTableD[c][verhoeffTableP[((i + 1) % 8)][myArray[myArray.size - 1 - i]]]
+            }
+            
+            return c == 0
+        } catch (e: Exception) {
+            return false
+        }
+    }
+    
+    // Check if an admission number already exists (uniqueness)
+    suspend fun isAdmissionNumberTaken(admissionNumber: String): Boolean {
+        return try {
+            val snapshot = studentsCollection
+                .whereEqualTo("admissionNumber", admissionNumber)
+                .limit(1)
+                .get()
+                .await()
+            !snapshot.isEmpty
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    // Data class for validation results
+    data class ValidationResult(
+        val isValid: Boolean,
+        val message: String
+    )
+
+    // Academic year helper (e.g., 2025-26)
+    fun getCurrentAcademicYear(): String {
+        val cal = Calendar.getInstance()
+        val year = cal.get(Calendar.YEAR)
+        val month = cal.get(Calendar.MONTH) + 1
+        return if (month >= 4) {
+            val shortNext = (year + 1).toString().takeLast(2)
+            "$year-$shortNext"
+        } else {
+            val shortThis = year.toString().takeLast(2)
+            "${year - 1}-$shortThis"
+        }
+    }
 
     private suspend fun cleanupOldProfilePhotos(userId: String) = withContext(Dispatchers.IO) {
         try {

@@ -18,6 +18,12 @@ data class Person(
     val designation: String = "",
     val department: String = "",
     val password: String = "", // Added for registration, not stored in Firestore
+    // Admissions-related fields (students only; harmless defaults for others)
+    val admissionNumber: String = "",
+    val admissionDate: String = "",
+    val academicYear: String = "",
+    val aadharNumber: String = "",
+    val aaparId: String = "",
     
     // For students: their parent's info
     val parentInfo: ParentInfo? = null,
@@ -43,6 +49,11 @@ data class Person(
         designation = "",
         department = "",
         password = "",
+        admissionNumber = "",
+        admissionDate = "",
+        academicYear = "",
+        aadharNumber = "",
+        aaparId = "",
         parentInfo = null,
         childInfo = null
     )

@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.screens
 
+import android.app.DatePickerDialog
 import android.R.attr.password
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -147,6 +148,13 @@ fun AddPersonScreen(
     var phone by remember { mutableStateOf("") }
     var personTypeValue by remember { mutableStateOf("Regular") }
 
+    // Admissions-only (student)
+    var admissionNumber by remember { mutableStateOf("") }
+    var admissionDate by remember { mutableStateOf("") } // default today, editable
+    var academicYear by remember { mutableStateOf(FirestoreDatabase.getCurrentAcademicYear()) }
+    var aadharNumber by remember { mutableStateOf("") }
+    var aaparId by remember { mutableStateOf("") }
+
     // Parent-related state variables
     var parentFirstName by remember { mutableStateOf("") }
     var parentLastName by remember { mutableStateOf("") }
@@ -201,6 +209,21 @@ fun AddPersonScreen(
                     mobileNo = person.mobileNo
                     address = person.address
                     age = if (person.age > 0) person.age.toString() else ""
+                    admissionNumber = person.admissionNumber
+                    admissionDate = person.admissionDate
+                    academicYear = if (person.academicYear.isNotBlank()) person.academicYear else FirestoreDatabase.getCurrentAcademicYear()
+                    aadharNumber = person.aadharNumber
+                    aaparId = person.aaparId
+
+                    // Edit-mode prefill for legacy students without admission fields
+                    if (personType == "student" && admissionNumber.isBlank()) {
+                        val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+                        admissionNumber = "ADM-$year-"
+                    }
+                    if (personType == "student" && admissionDate.isBlank()) {
+                        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                        admissionDate = fmt.format(java.util.Calendar.getInstance().time)
+                    }
 
                     // If this is a student, fetch parent information
                     if (personType == "student") {
@@ -243,6 +266,23 @@ fun AddPersonScreen(
         }
     }
 
+    // Generate defaults for new student
+    LaunchedEffect(personType, isEditMode) {
+        if (!isEditMode && personType == "student") {
+            try {
+                // Preview next admission number without incrementing counter
+                admissionNumber = FirestoreDatabase.previewNextAdmissionNumber()
+            } catch (e: Exception) {
+                admissionNumber = ""
+            }
+            // Set today's date in yyyy-MM-dd to match backend scripts
+            val cal = java.util.Calendar.getInstance()
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            admissionDate = fmt.format(cal.time)
+            if (academicYear.isBlank()) academicYear = FirestoreDatabase.getCurrentAcademicYear()
+        }
+    }
+
     @Composable
     fun ShowMessage(message: String) {
         val context = LocalContext.current
@@ -275,74 +315,45 @@ fun AddPersonScreen(
         }
         return isValid
     }
-
-    fun savePerson() {
-        if (!validateInputs()) {
-            return
-        }
-        
-        isLoading = true
+    
+    fun createStudentWithReservedNumber(student: Person, studentId: String) {
         val auth = FirebaseAuth.getInstance()
-
-        // First create student account and data
-        auth.createUserWithEmailAndPassword(email, password)
-            .addOnSuccessListener { studentAuthResult ->
-                val studentId = studentAuthResult.user?.uid ?: return@addOnSuccessListener
-
-                // Create student document
-                val student = Person(
-                    id = studentId,
-                    firstName = firstName.trim(),
-                    lastName = lastName.trim(),
-                    email = email.trim(),
-                    phone = phone.trim(),
-                    type = personTypeValue,
-                    className = formatClassForStorage(selectedClass),
-                    rollNumber = rollNumber.trim(),
-                    gender = gender,
-                    dateOfBirth = dateOfBirth.trim(),
-                    mobileNo = mobileNo.trim(),
-                    address = address.trim(),
-                    age = age.toIntOrNull() ?: 0
-                )
-
-                // If parent information exists, create parent account and data
-                if (parentEmail.isNotBlank() && parentPassword.isNotBlank()) {
-                    // Create parent authentication account
-                    auth.createUserWithEmailAndPassword(parentEmail, parentPassword)
-                        .addOnSuccessListener { parentAuthResult ->
-                            val parentId = parentAuthResult.user?.uid ?: return@addOnSuccessListener
-
-                            // Create parent document
-                            val parent = Person(
-                                id = parentId,
-                                firstName = parentFirstName.trim(),
-                                lastName = parentLastName.trim(),
-                                email = parentEmail.trim(),
-                                phone = parentPhone.trim(),
-                                address = parentAddress.trim(),
-                                type = "parent",
-                                childInfo = ChildInfo(
-                                    id = studentId,
-                                    name = "${student.firstName} ${student.lastName}".trim(),
-                                    className = student.className,
-                                    rollNumber = student.rollNumber
-                                )
-                            )
-
-                            // Update student with parent info
-                            val studentWithParent = student.copy(
-                                parentInfo = ParentInfo(
-                                    id = parentId,
-                                    name = "$parentFirstName $parentLastName".trim(),
-                                    email = parentEmail.trim(),
-                                    phone = parentPhone.trim()
-                                )
-                            )
-
-                            // 1. First, create the student document (and user doc)
-                            FirestoreDatabase.updateStudent(
-                                studentWithParent,
+        // Handle parent information if provided
+        if (parentEmail.isNotBlank() && parentPassword.isNotBlank()) {
+            // Create parent authentication account
+            auth.createUserWithEmailAndPassword(parentEmail, parentPassword)
+                .addOnSuccessListener { parentAuthResult ->
+                    val parentId = parentAuthResult.user?.uid ?: return@addOnSuccessListener
+                    
+                    // Create parent document
+                    val parent = Person(
+                        id = parentId,
+                        firstName = parentFirstName.trim(),
+                        lastName = parentLastName.trim(),
+                        email = parentEmail.trim(),
+                        phone = parentPhone.trim(),
+                        childInfo = ChildInfo(
+                            id = studentId,
+                            name = "${student.firstName} ${student.lastName}".trim(),
+                            className = student.className,
+                            rollNumber = student.rollNumber
+                        )
+                    )
+                    
+                    // Create student with parent info
+                    val studentWithParent = student.copy(
+                        parentInfo = ParentInfo(
+                            id = parentId,
+                            name = "${parent.firstName} ${parent.lastName}".trim(),
+                            email = parentEmail.trim(),
+                            phone = parentPhone.trim()
+                        )
+                    )
+                    
+                    // Save both student and parent
+                    FirestoreDatabase.createParent(parent, studentId,
+                        onSuccess = {
+                            FirestoreDatabase.updateStudent(studentWithParent,
                                 onSuccess = {
                                     // Add student to users collection
                                     val db = FirebaseFirestore.getInstance()
@@ -354,134 +365,230 @@ fun AddPersonScreen(
                                         "createdAt" to com.google.firebase.Timestamp.now(),
                                         "userId" to studentId,
                                         "type" to "student",
-                                        "className" to formatClassForStorage(selectedClass)
+                                        "className" to student.className
                                     )
                                     studentUserDocRef.set(studentUserData)
                                         .addOnSuccessListener {
-                                            // Add parent to users collection
-                                            val parentUserDocRef = db.collection("users").document(parentId)
-                                            val parentUserData = mapOf(
-                                                "role" to "parent",
-                                                "email" to parentEmail.trim(),
-                                                "name" to "$parentFirstName $parentLastName",
-                                                "createdAt" to com.google.firebase.Timestamp.now(),
-                                                "userId" to parentId,
-                                                "type" to "parent"
-                                            )
-                                            parentUserDocRef.set(parentUserData)
-                                                .addOnSuccessListener {
-                                                    // Now call createParent (which will update the student with parent info and create the relationship)
-                                                    FirestoreDatabase.createParent(
-                                                        parent = parent,
-                                                        studentId = studentId,
-                                                        onSuccess = {
-                                                            isLoading = false
-                                                            isErrorDialog = false
-                                                            errorMessage = "Student and parent accounts created successfully"
-                                                            showErrorDialog = true
-                                                            coroutineScope.launch {
-                                                                snackbarHostState.showSnackbar("Student and parent accounts created successfully")
-                                                                navController.popBackStack()
-                                                            }
-                                                        },
-                                                        onFailure = { e ->
-                                                            // If parent creation fails, delete parent
-                                                            parentAuthResult.user?.delete()
-                                                            FirestoreDatabase.deleteParent(
-                                                                parentId,
-                                                                onSuccess = {},
-                                                                onFailure = {}
-                                                            )
-                                                            isLoading = false
-                                                            isErrorDialog = true
-                                                            errorMessage = "Error creating student account: ${e.message}"
-                                                            showErrorDialog = true
-                                                        }
-                                                    )
-                                                }
-                                                .addOnFailureListener { e ->
-                                                    isLoading = false
-                                                    isErrorDialog = true
-                                                    errorMessage = "Student created, but failed to add to users collection: ${e.message}"
-                                                    showErrorDialog = true
-                                                }
+                                            isLoading = false
+                                            navController.popBackStack()
                                         }
                                         .addOnFailureListener { e ->
                                             isLoading = false
-                                            isErrorDialog = true
-                                            errorMessage = "Student created, but failed to add to users collection: ${e.message}"
+                                            errorMessage = "Error creating user document: ${e.message}"
                                             showErrorDialog = true
                                         }
                                 },
                                 onFailure = { e ->
-                                    // If student creation fails, delete parent
-                                    parentAuthResult.user?.delete()
                                     isLoading = false
-                                    isErrorDialog = true
-                                    errorMessage = "Error creating student account: ${e.message}"
+                                    errorMessage = "Error creating student: ${e.message}"
                                     showErrorDialog = true
                                 }
                             )
-                        }
-                        .addOnFailureListener { e ->
-                            // If parent auth fails, delete student auth
-                            studentAuthResult.user?.delete()
-                            isLoading = false
-                            isErrorDialog = true
-                            errorMessage = "Error creating parent authentication: ${e.message}"
-                            showErrorDialog = true
-                        }
-                } else {
-                    // No parent info, just save student
-                    FirestoreDatabase.updateStudent(
-                        student,
-                        onSuccess = {
-                            // Add to users collection
-                            val db = FirebaseFirestore.getInstance()
-                            val userDocRef = db.collection("users").document(studentId)
-                            val userData = mapOf(
-                                "role" to "student",
-                                "email" to email.trim(),
-                                "name" to "${firstName.trim()} ${lastName.trim()}",
-                                "createdAt" to com.google.firebase.Timestamp.now(),
-                                "userId" to studentId,
-                                "type" to "student",
-                                "className" to formatClassForStorage(selectedClass)
-                            )
-                            userDocRef.set(userData)
-                                .addOnSuccessListener {
-                                    isLoading = false
-                                    isErrorDialog = false
-                                    errorMessage = "Student account created successfully"
-                                    showErrorDialog = true
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Student account created successfully")
-                                        navController.popBackStack()
-                                    }
-                                }
-                                .addOnFailureListener { e ->
-                                    isLoading = false
-                                    isErrorDialog = true
-                                    errorMessage = "Student created, but failed to add to users collection: ${e.message}"
-                                    showErrorDialog = true
-                                }
                         },
                         onFailure = { e ->
-                            studentAuthResult.user?.delete()
                             isLoading = false
-                            isErrorDialog = true
-                            errorMessage = "Error creating student account: ${e.message}"
+                            errorMessage = "Error creating parent: ${e.message}"
                             showErrorDialog = true
                         }
                     )
                 }
+                .addOnFailureListener { e ->
+                    isLoading = false
+                    errorMessage = "Error creating parent account: ${e.message}"
+                    showErrorDialog = true
+                }
+        } else {
+            // No parent info, just create student
+            FirestoreDatabase.updateStudent(student,
+                onSuccess = {
+                    // Add student to users collection
+                    val db = FirebaseFirestore.getInstance()
+                    val studentUserDocRef = db.collection("users").document(studentId)
+                    val studentUserData = mapOf(
+                        "role" to "student",
+                        "email" to email.trim(),
+                        "name" to "${firstName.trim()} ${lastName.trim()}",
+                        "createdAt" to com.google.firebase.Timestamp.now(),
+                        "userId" to studentId,
+                        "type" to "student",
+                        "className" to student.className
+                    )
+                    studentUserDocRef.set(studentUserData)
+                        .addOnSuccessListener {
+                            isLoading = false
+                            navController.popBackStack()
+                        }
+                        .addOnFailureListener { e ->
+                            isLoading = false
+                            errorMessage = "Error creating user document: ${e.message}"
+                            showErrorDialog = true
+                        }
+                },
+                onFailure = { e ->
+                    isLoading = false
+                    errorMessage = "Error creating student: ${e.message}"
+                    showErrorDialog = true
+                }
+            )
+        }
+    }
+    
+    fun createPersonDirectly(person: Person, userId: String) {
+        val auth = FirebaseAuth.getInstance()
+        // Add to users collection
+        val db = FirebaseFirestore.getInstance()
+        val userDocRef = db.collection("users").document(userId)
+        val userData = mapOf(
+            "role" to personType,
+            "email" to email.trim(),
+            "name" to "${firstName.trim()} ${lastName.trim()}",
+            "createdAt" to com.google.firebase.Timestamp.now(),
+            "userId" to userId,
+            "type" to personType,
+            "className" to person.className
+        )
+        
+        // Create person document
+        val personDocRef = when (personType) {
+            "teacher" -> db.collection("teachers").document(userId)
+            else -> db.collection("non_teaching_staff").document(userId)
+        }
+        
+        // Start a batch write
+        val batch = db.batch()
+        batch.set(userDocRef, userData)
+        batch.set(personDocRef, person.copy(id = userId))
+        
+        // Commit the batch
+        batch.commit()
+            .addOnSuccessListener {
+                isLoading = false
+                navController.popBackStack()
+            }
+            .addOnFailureListener { e ->
+                // If Firestore fails, delete the auth user
+                auth.currentUser?.delete()
+                isLoading = false
+                errorMessage = "Error creating ${personType}: ${e.message}"
+                showErrorDialog = true
+            }
+    }
+
+    fun proceedWithAccountCreation() {
+        isLoading = true
+        val auth = FirebaseAuth.getInstance()
+
+        // First create student account and data
+        auth.createUserWithEmailAndPassword(email, password)
+            .addOnSuccessListener { studentAuthResult ->
+                val studentId = studentAuthResult.user?.uid ?: return@addOnSuccessListener
+
+                // Generate and reserve admission number only when student is being saved
+                if (personType == "student") {
+                    kotlinx.coroutines.GlobalScope.launch {
+                        try {
+                            // Generate and reserve the admission number (increments counter)
+                            val reservedAdmissionNumber = FirestoreDatabase.generateAndReserveAdmissionNumber()
+                            
+                            // Create student document with reserved admission number
+                            val student = Person(
+                                id = studentId,
+                                firstName = firstName.trim(),
+                                lastName = lastName.trim(),
+                                email = email.trim(),
+                                phone = phone.trim(),
+                                type = personTypeValue,
+                                className = formatClassForStorage(selectedClass),
+                                rollNumber = rollNumber.trim(),
+                                gender = gender,
+                                dateOfBirth = dateOfBirth.trim(),
+                                mobileNo = mobileNo.trim(),
+                                address = address.trim(),
+                                age = age.toIntOrNull() ?: 0,
+                                admissionNumber = reservedAdmissionNumber,
+                                admissionDate = admissionDate,
+                                academicYear = academicYear,
+                                aadharNumber = aadharNumber,
+                                aaparId = aaparId
+                            )
+                            
+                            // Continue with student creation using the reserved admission number
+                            createStudentWithReservedNumber(student, studentId)
+                        } catch (e: Exception) {
+                            isLoading = false
+                            errorMessage = "Error generating admission number: ${e.message}"
+                            showErrorDialog = true
+                        }
+                    }
+                } else {
+                    // For non-students, create normally
+                    val person = Person(
+                        id = studentId,
+                        firstName = firstName.trim(),
+                        lastName = lastName.trim(),
+                        email = email.trim(),
+                        phone = phone.trim(),
+                        type = personTypeValue,
+                        className = formatClassForStorage(selectedClass),
+                        rollNumber = rollNumber.trim(),
+                        gender = gender,
+                        dateOfBirth = dateOfBirth.trim(),
+                        mobileNo = mobileNo.trim(),
+                        address = address.trim(),
+                        age = age.toIntOrNull() ?: 0
+                    )
+                    createPersonDirectly(person, studentId)
+                }
+
             }
             .addOnFailureListener { e ->
                 isLoading = false
-                isErrorDialog = true
-                errorMessage = "Error creating student authentication: ${e.message}"
+                errorMessage = "Error creating user authentication: ${e.message}"
                 showErrorDialog = true
             }
+    }
+
+    fun savePerson() {
+        if (!validateInputs()) {
+            return
+        }
+        
+        isLoading = true
+        val auth = FirebaseAuth.getInstance()
+
+        // Validate admission number and aadhar before creating account
+        if (personType == "student") {
+            // Use comprehensive validation in coroutine scope
+            kotlinx.coroutines.GlobalScope.launch {
+                try {
+                    val admissionValidation = FirestoreDatabase.validateAdmissionNumber(admissionNumber)
+                    if (!admissionValidation.isValid) {
+                        isLoading = false
+                        errorMessage = admissionValidation.message
+                        showErrorDialog = true
+                        return@launch
+                    }
+                    
+                    val aadharValidation = FirestoreDatabase.validateAadharNumber(aadharNumber)
+                    if (!aadharValidation.isValid) {
+                        isLoading = false
+                        errorMessage = aadharValidation.message
+                        showErrorDialog = true
+                        return@launch
+                    }
+                    
+                    // If validation passes, proceed with account creation
+                    proceedWithAccountCreation()
+                } catch (e: Exception) {
+                    isLoading = false
+                    errorMessage = "Validation error: ${e.message}"
+                    showErrorDialog = true
+                }
+            }
+        } else {
+            // For non-students, proceed directly
+            proceedWithAccountCreation()
+        }
     }
 
     fun savePersonWithAdmin() {
@@ -516,7 +623,12 @@ fun AddPersonScreen(
             dateOfBirth = dateOfBirth.trim(),
             mobileNo = mobileNo.trim(),
             address = address.trim(),
-            age = age.toIntOrNull() ?: 0
+            age = age.toIntOrNull() ?: 0,
+            admissionNumber = admissionNumber,
+            admissionDate = admissionDate,
+            academicYear = academicYear,
+            aadharNumber = aadharNumber,
+            aaparId = aaparId
         )
         if (!enforceRoleTypeConsistency(personType, correctedPerson)) {
             isLoading = false
@@ -1117,13 +1229,71 @@ fun AddPersonScreen(
                     item {
                         OutlinedTextField(
                             value = dateOfBirth,
-                            onValueChange = { dateOfBirth = it },
+                            onValueChange = { input ->
+                                dateOfBirth = input
+                                // Try to auto-calc age when DOB changes
+                                val parsed = runCatching {
+                                    val fmt1 = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
+                                    fmt1.isLenient = false
+                                    fmt1.parse(input)
+                                }.getOrNull() ?: runCatching {
+                                    val fmt2 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                    fmt2.isLenient = false
+                                    fmt2.parse(input)
+                                }.getOrNull()
+                                if (parsed != null) {
+                                    val dobCal = java.util.Calendar.getInstance().apply { time = parsed }
+                                    val now = java.util.Calendar.getInstance()
+                                    var years = now.get(java.util.Calendar.YEAR) - dobCal.get(java.util.Calendar.YEAR)
+                                    if (now.get(java.util.Calendar.DAY_OF_YEAR) < dobCal.get(java.util.Calendar.DAY_OF_YEAR)) {
+                                        years -= 1
+                                    }
+                                    age = years.coerceAtLeast(0).toString()
+                                }
+                            },
                             label = { Text("Date of Birth (mm/dd/yyyy)") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp),
                             trailingIcon = {
-                                Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                                IconButton(onClick = {
+                                    val cal = java.util.Calendar.getInstance()
+                                    // Prefill from existing value if present
+                                    val prefill = runCatching {
+                                        val f1 = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
+                                        f1.isLenient = false
+                                        f1.parse(dateOfBirth)
+                                    }.getOrNull() ?: runCatching {
+                                        val f2 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                        f2.isLenient = false
+                                        f2.parse(dateOfBirth)
+                                    }.getOrNull()
+                                    if (prefill != null) cal.time = prefill
+
+                                    DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val picked = java.util.Calendar.getInstance().apply {
+                                                set(year, month, dayOfMonth)
+                                            }
+                                            val outFmt = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
+                                            dateOfBirth = outFmt.format(picked.time)
+                                            // Update age
+                                            val now = java.util.Calendar.getInstance()
+                                            var years = now.get(java.util.Calendar.YEAR) - year
+                                            val temp = java.util.Calendar.getInstance().apply { set(year, month, dayOfMonth) }
+                                            if (now.get(java.util.Calendar.DAY_OF_YEAR) < temp.get(java.util.Calendar.DAY_OF_YEAR)) {
+                                                years -= 1
+                                            }
+                                            age = years.coerceAtLeast(0).toString()
+                                        },
+                                        cal.get(java.util.Calendar.YEAR),
+                                        cal.get(java.util.Calendar.MONTH),
+                                        cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                    ).show()
+                                }) {
+                                    Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                                }
                             }
                         )
                     }
@@ -1226,23 +1396,16 @@ fun AddPersonScreen(
                         }
                     }
 
-                    // Age
+                    // Age (auto-calculated)
                     item {
                         OutlinedTextField(
                             value = age,
-                            onValueChange = { newValue ->
-                                // Only allow numeric input
-                                if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
-                                    age = newValue
-                                }
-                            },
+                            onValueChange = { },
                             label = { Text("Age") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Number
-                            )
+                            enabled = false
                         )
                     }
 
@@ -1256,6 +1419,124 @@ fun AddPersonScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
                         )
+                    }
+
+                    // Student admissions fields
+                    if (personType == "student") {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = admissionNumber,
+                                    onValueChange = { admissionNumber = it },
+                                    label = { Text("Admission Number (manual override)") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                // Last issued hint for legacy students (only when editing and value is a prefix)
+                                val year = remember(admissionNumber) {
+                                    com.ecorvi.schmng.ui.utils.AdmissionUtils.getAdmissionYear(admissionNumber)
+                                        ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+                                }
+                                var lastIssued by remember { mutableStateOf<String?>(null) }
+                                LaunchedEffect(isEditMode, admissionNumber, year) {
+                                    if (isEditMode && admissionNumber.endsWith("-")) {
+                                        lastIssued = FirestoreDatabase.getLastIssuedAdmissionNumber(year)
+                                    } else {
+                                        lastIssued = null
+                                    }
+                                }
+                                if (lastIssued != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(text = "Last issued: ${lastIssued}", color = Color.Gray, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = admissionDate,
+                                onValueChange = { admissionDate = it },
+                                label = { Text("Date of Admission (yyyy-MM-dd)") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                trailingIcon = {
+                                    IconButton(onClick = {
+                                        val cal = java.util.Calendar.getInstance()
+                                        val prefill = runCatching {
+                                            val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                            f.isLenient = false
+                                            f.parse(admissionDate)
+                                        }.getOrNull()
+                                        if (prefill != null) cal.time = prefill
+
+                                        DatePickerDialog(
+                                            context,
+                                            { _, year, month, dayOfMonth ->
+                                                val picked = java.util.Calendar.getInstance().apply { set(year, month, dayOfMonth) }
+                                                val outFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                                admissionDate = outFmt.format(picked.time)
+                                            },
+                                            cal.get(java.util.Calendar.YEAR),
+                                            cal.get(java.util.Calendar.MONTH),
+                                            cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                        ).show()
+                                    }) {
+                                        Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                                    }
+                                }
+                            )
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = academicYear,
+                                onValueChange = { academicYear = it },
+                                label = { Text("Academic Year (e.g., 2025-26)") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            )
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = aadharNumber,
+                                onValueChange = { value ->
+                                    val digits = value.filter { it.isDigit() }.take(12)
+                                    aadharNumber = digits
+                                },
+                                label = { Text("Aadhar Number (12 digits)") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number
+                                )
+                            )
+                        }
+                        if (aadharNumber.length in 1..11) {
+                            item {
+                                Text(
+                                    text = "Aadhar must be 12 digits",
+                                    color = Color.Red,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                )
+                            }
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = aaparId,
+                                onValueChange = { aaparId = it.trim() },
+                                label = { Text("AAPAR ID") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            )
+                        }
                     }
 
                     // Add parent information section when creating a student OR editing a student
@@ -1299,7 +1580,12 @@ fun AddPersonScreen(
                                             dateOfBirth = dateOfBirth.trim(),
                                             mobileNo = mobileNo.trim(),
                                             address = address.trim(),
-                                            age = age.toIntOrNull() ?: 0
+                                            age = age.toIntOrNull() ?: 0,
+                                            admissionNumber = admissionNumber,
+                                            admissionDate = admissionDate,
+                                            academicYear = academicYear,
+                                            aadharNumber = aadharNumber,
+                                            aaparId = aaparId
                                         ),
                                         personType,
                                         {
@@ -1340,7 +1626,12 @@ fun AddPersonScreen(
                                             dateOfBirth = dateOfBirth.trim(),
                                             mobileNo = mobileNo.trim(),
                                             address = address.trim(),
-                                            age = age.toIntOrNull() ?: 0
+                                            age = age.toIntOrNull() ?: 0,
+                                            admissionNumber = if (personType == "student") admissionNumber else "",
+                                            admissionDate = if (personType == "student") admissionDate else "",
+                                            academicYear = if (personType == "student") academicYear else "",
+                                            aadharNumber = if (personType == "student") aadharNumber else "",
+                                            aaparId = if (personType == "student") aaparId else ""
                                         )
                                         savePersonDirectly(
                                             person = person,
