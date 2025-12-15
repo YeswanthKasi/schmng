@@ -33,9 +33,10 @@ This will:
 - Create a new branch based on master
 - Switch to your new branch
 
-Make your changes, commit, and push:
+Make your changes, review them, commit, and push:
 ```bash
-git add .
+git status  # Review your changes
+git add <files>  # Stage specific files (or 'git add .' for all)
 git commit -m "Description of your changes"
 git push -u origin feature/your-feature-name
 ```
