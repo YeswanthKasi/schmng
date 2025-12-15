@@ -38,7 +38,8 @@ To keep the main branch stable and avoid conflicts, we follow a feature branch w
 
 4. **Commit your changes:**
    ```bash
-   git add .
+   git status  # Review your changes
+   git add <files>  # Stage specific files
    git commit -m "Brief description of your changes"
    ```
 
