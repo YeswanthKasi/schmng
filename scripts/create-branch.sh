@@ -59,11 +59,13 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
     exit 1
 fi
 
-# Check for uncommitted changes
-if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-    print_warning "You have uncommitted changes. Please commit or stash them first."
-    git status --short
-    exit 1
+# Check for uncommitted changes (skip check if HEAD doesn't exist)
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        print_warning "You have uncommitted changes. Please commit or stash them first."
+        git status --short
+        exit 1
+    fi
 fi
 
 print_info "Fetching latest changes from origin..."

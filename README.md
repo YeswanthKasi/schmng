@@ -36,7 +36,7 @@ This will:
 Make your changes, review them, commit, and push:
 ```bash
 git status  # Review your changes
-git add <files>  # Stage specific files (or 'git add .' for all)
+git add <files>  # Stage specific files
 git commit -m "Description of your changes"
 git push -u origin feature/your-feature-name
 ```
