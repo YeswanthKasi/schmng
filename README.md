@@ -17,6 +17,31 @@ An AI-powered school operations management solution with fully functional landin
    ```
 2. Open in Android Studio and build the project.
 
+## Contributing
+
+We follow a feature branch workflow to keep the main branch stable. See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+### Quick Start for Contributors
+
+Create a new feature branch:
+```bash
+./scripts/create-branch.sh feature your-feature-name
+```
+
+This will:
+- Fetch the latest changes from master
+- Create a new branch based on master
+- Switch to your new branch
+
+Make your changes, commit, and push:
+```bash
+git add .
+git commit -m "Description of your changes"
+git push -u origin feature/your-feature-name
+```
+
+Then create a Pull Request on GitHub!
+
 ## Tech Stack
 
 - Kotlin
