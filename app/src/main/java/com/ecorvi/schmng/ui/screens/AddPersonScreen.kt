@@ -154,6 +154,17 @@ fun AddPersonScreen(
     var academicYear by remember { mutableStateOf(FirestoreDatabase.getCurrentAcademicYear()) }
     var aadharNumber by remember { mutableStateOf("") }
     var aaparId by remember { mutableStateOf("") }
+    
+    // New fields for students
+    var caste by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
+    var subCaste by remember { mutableStateOf("") }
+    var modeOfTransport by remember { mutableStateOf("") }
+    var feeStructure by remember { mutableStateOf("") }
+    var feePaid by remember { mutableStateOf("") }
+    var showFeeConfirmationDialog by remember { mutableStateOf(false) }
+    var pendingFeeStructure by remember { mutableStateOf<String?>(null) }
+    var pendingFeePaid by remember { mutableStateOf<String?>(null) }
 
     // Parent-related state variables
     var parentFirstName by remember { mutableStateOf("") }
@@ -179,6 +190,14 @@ fun AddPersonScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
+
+    // Transport Options
+    val transportOptions = listOf("School Bus", "Own Transport", "Public Transport", "Walking")
+    var showTransportDialog by remember { mutableStateOf(false) }
+
+    // Category Options
+    val categoryOptions = listOf("General", "OBC", "SC", "ST", "EWS", "Others")
+    var showCategoryDialog by remember { mutableStateOf(false) }
 
     // Define person type options
     val typeOptions = if (personType == "student") {
@@ -214,6 +233,12 @@ fun AddPersonScreen(
                     academicYear = if (person.academicYear.isNotBlank()) person.academicYear else FirestoreDatabase.getCurrentAcademicYear()
                     aadharNumber = person.aadharNumber
                     aaparId = person.aaparId
+                    caste = person.caste
+                    category = person.category
+                    subCaste = person.subCaste
+                    modeOfTransport = person.modeOfTransport
+                    feeStructure = if (person.feeStructure > 0) person.feeStructure.toString() else ""
+                    feePaid = if (person.feePaid > 0) person.feePaid.toString() else ""
 
                     // Edit-mode prefill for legacy students without admission fields
                     if (personType == "student" && admissionNumber.isBlank()) {
@@ -490,6 +515,11 @@ fun AddPersonScreen(
                             // Generate and reserve the admission number (increments counter)
                             val reservedAdmissionNumber = FirestoreDatabase.generateAndReserveAdmissionNumber()
                             
+                            // Calculate fee remaining
+                            val feeStruct = feeStructure.toDoubleOrNull() ?: 0.0
+                            val paid = feePaid.toDoubleOrNull() ?: 0.0
+                            val remaining = (feeStruct - paid).coerceAtLeast(0.0)
+                            
                             // Create student document with reserved admission number
                             val student = Person(
                                 id = studentId,
@@ -509,7 +539,14 @@ fun AddPersonScreen(
                                 admissionDate = admissionDate,
                                 academicYear = academicYear,
                                 aadharNumber = aadharNumber,
-                                aaparId = aaparId
+                                aaparId = aaparId,
+                                caste = caste.trim(),
+                                category = category.trim(),
+                                subCaste = subCaste.trim(),
+                                modeOfTransport = modeOfTransport,
+                                feeStructure = feeStruct,
+                                feePaid = paid,
+                                feeRemaining = remaining
                             )
                             
                             // Continue with student creation using the reserved admission number
@@ -522,6 +559,11 @@ fun AddPersonScreen(
                     }
                 } else {
                     // For non-students, create normally
+                    // Calculate fee remaining for students
+                    val feeStruct = if (personType == "student") feeStructure.toDoubleOrNull() ?: 0.0 else 0.0
+                    val paid = if (personType == "student") feePaid.toDoubleOrNull() ?: 0.0 else 0.0
+                    val remaining = (feeStruct - paid).coerceAtLeast(0.0)
+                    
                     val person = Person(
                         id = studentId,
                         firstName = firstName.trim(),
@@ -535,7 +577,19 @@ fun AddPersonScreen(
                         dateOfBirth = dateOfBirth.trim(),
                         mobileNo = mobileNo.trim(),
                         address = address.trim(),
-                        age = age.toIntOrNull() ?: 0
+                        age = age.toIntOrNull() ?: 0,
+                        admissionNumber = if (personType == "student") admissionNumber else "",
+                        admissionDate = if (personType == "student") admissionDate else "",
+                        academicYear = if (personType == "student") academicYear else "",
+                        aadharNumber = if (personType == "student") aadharNumber else "",
+                        aaparId = if (personType == "student") aaparId else "",
+                        caste = if (personType == "student") caste.trim() else "",
+                        category = if (personType == "student") category.trim() else "",
+                        subCaste = if (personType == "student") subCaste.trim() else "",
+                        modeOfTransport = if (personType == "student") modeOfTransport else "",
+                        feeStructure = feeStruct,
+                        feePaid = paid,
+                        feeRemaining = remaining
                     )
                     createPersonDirectly(person, studentId)
                 }
@@ -609,6 +663,11 @@ fun AddPersonScreen(
         }
 
         // Prepare person object with enforced type
+        // Calculate fee remaining for students
+        val feeStruct = if (personType == "student") feeStructure.toDoubleOrNull() ?: 0.0 else 0.0
+        val paid = if (personType == "student") feePaid.toDoubleOrNull() ?: 0.0 else 0.0
+        val remaining = (feeStruct - paid).coerceAtLeast(0.0)
+        
         val correctedPerson = Person(
             id = "",
             firstName = firstName.trim(),
@@ -628,7 +687,14 @@ fun AddPersonScreen(
             admissionDate = admissionDate,
             academicYear = academicYear,
             aadharNumber = aadharNumber,
-            aaparId = aaparId
+            aaparId = aaparId,
+            caste = if (personType == "student") caste.trim() else "",
+            category = if (personType == "student") category.trim() else "",
+            subCaste = if (personType == "student") subCaste.trim() else "",
+            modeOfTransport = if (personType == "student") modeOfTransport else "",
+            feeStructure = feeStruct,
+            feePaid = paid,
+            feeRemaining = remaining
         )
         if (!enforceRoleTypeConsistency(personType, correctedPerson)) {
             isLoading = false
@@ -1112,44 +1178,71 @@ fun AddPersonScreen(
                         )
                     }
 
-                    // First Name and Last Name
+
                     item {
-                        Row(
+                        // 1. Personal Information Section
+                        Text(
+                            text = "Personal Information",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (personType == "student") StudentGreen else TeacherBlue,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = firstName,
+                            onValueChange = { firstName = it },
+                            label = { Text("First Name") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = firstName,
-                                onValueChange = { firstName = it },
-                                label = { Text("First Name") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = lastName,
-                                onValueChange = { lastName = it },
-                                label = { Text("Last Name") },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Email
-                    item {
+                        OutlinedTextField(
+                            value = lastName,
+                            onValueChange = { lastName = it },
+                            label = { Text("Last Name") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Admission Number (Grouped with Name for Students)
+                        if (personType == "student") {
+                            OutlinedTextField(
+                                value = admissionNumber,
+                                onValueChange = { admissionNumber = it },
+                                label = { Text("Admission Number") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                singleLine = true,
+                                enabled = !isEditMode, // Usually auto-generated or fixed
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    disabledTextColor = Color.Black,
+                                    disabledLabelColor = Color.Gray
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         OutlinedTextField(
                             value = email,
                             onValueChange = { email = it },
-                            label = { Text("Email ID") },
+                            label = { Text("Email") },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
+                                .padding(horizontal = 16.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
                         )
-                    }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Password (only show for new users)
-                    if (!isEditMode) {
-                        item {
+                        if (!isEditMode) {
                             OutlinedTextField(
                                 value = password,
                                 onValueChange = { password = it },
@@ -1157,387 +1250,341 @@ fun AddPersonScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),
+                                singleLine = true,
                                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Password
-                                ),
                                 trailingIcon = {
                                     IconButton(onClick = { showPassword = !showPassword }) {
                                         Icon(
-                                            imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                            contentDescription = if (showPassword) "Hide password" else "Show password"
+                                            if (showPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            contentDescription = "Toggle password visibility"
                                         )
                                     }
-                                },
-                                supportingText = { Text("Minimum 6 characters required") }
+                                }
                             )
-                        }
-                    }
-
-                    // Gender
-                    item {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                        ) {
-                            Text("Gender", fontSize = 16.sp, fontWeight = FontWeight.Medium)
                             Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.clickable { gender = "Male" }
-                                ) {
-                                    RadioButton(
-                                        selected = gender == "Male",
-                                        onClick = { gender = "Male" },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = when (personType) {
-                                                "student" -> StudentGreen
-                                                "teacher" -> TeacherBlue
-                                                else -> MaterialTheme.colorScheme.primary
-                                            }
-                                        )
-                                    )
-                                    Text("Male")
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.clickable { gender = "Female" }
-                                ) {
-                                    RadioButton(
-                                        selected = gender == "Female",
-                                        onClick = { gender = "Female" },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = when (personType) {
-                                                "student" -> StudentGreen
-                                                "teacher" -> TeacherBlue
-                                                else -> MaterialTheme.colorScheme.primary
-                                            }
-                                        )
-                                    )
-                                    Text("Female")
-                                }
-                            }
                         }
-                    }
 
-                    // Date of Birth
-                    item {
-                        OutlinedTextField(
-                            value = dateOfBirth,
-                            onValueChange = { input ->
-                                dateOfBirth = input
-                                // Try to auto-calc age when DOB changes
-                                val parsed = runCatching {
-                                    val fmt1 = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
-                                    fmt1.isLenient = false
-                                    fmt1.parse(input)
-                                }.getOrNull() ?: runCatching {
-                                    val fmt2 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                                    fmt2.isLenient = false
-                                    fmt2.parse(input)
-                                }.getOrNull()
-                                if (parsed != null) {
-                                    val dobCal = java.util.Calendar.getInstance().apply { time = parsed }
-                                    val now = java.util.Calendar.getInstance()
-                                    var years = now.get(java.util.Calendar.YEAR) - dobCal.get(java.util.Calendar.YEAR)
-                                    if (now.get(java.util.Calendar.DAY_OF_YEAR) < dobCal.get(java.util.Calendar.DAY_OF_YEAR)) {
-                                        years -= 1
-                                    }
-                                    age = years.coerceAtLeast(0).toString()
-                                }
-                            },
-                            label = { Text("Date of Birth (mm/dd/yyyy)") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    val cal = java.util.Calendar.getInstance()
-                                    // Prefill from existing value if present
-                                    val prefill = runCatching {
-                                        val f1 = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
-                                        f1.isLenient = false
-                                        f1.parse(dateOfBirth)
-                                    }.getOrNull() ?: runCatching {
-                                        val f2 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                                        f2.isLenient = false
-                                        f2.parse(dateOfBirth)
-                                    }.getOrNull()
-                                    if (prefill != null) cal.time = prefill
-
-                                    DatePickerDialog(
-                                        context,
-                                        { _, year, month, dayOfMonth ->
-                                            val picked = java.util.Calendar.getInstance().apply {
-                                                set(year, month, dayOfMonth)
-                                            }
-                                            val outFmt = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US)
-                                            dateOfBirth = outFmt.format(picked.time)
-                                            // Update age
-                                            val now = java.util.Calendar.getInstance()
-                                            var years = now.get(java.util.Calendar.YEAR) - year
-                                            val temp = java.util.Calendar.getInstance().apply { set(year, month, dayOfMonth) }
-                                            if (now.get(java.util.Calendar.DAY_OF_YEAR) < temp.get(java.util.Calendar.DAY_OF_YEAR)) {
-                                                years -= 1
-                                            }
-                                            age = years.coerceAtLeast(0).toString()
-                                        },
-                                        cal.get(java.util.Calendar.YEAR),
-                                        cal.get(java.util.Calendar.MONTH),
-                                        cal.get(java.util.Calendar.DAY_OF_MONTH)
-                                    ).show()
-                                }) {
-                                    Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
-                                }
-                            }
+                        // 2. Academic Details Section
+                        Divider(modifier = Modifier.padding(vertical = 16.dp))
+                        Text(
+                            text = "Academic Details",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (personType == "student") StudentGreen else TeacherBlue,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
-                    }
 
-                    // Mobile No
-                    item {
                         OutlinedTextField(
-                            value = mobileNo,
-                            onValueChange = { mobileNo = it },
-                            label = { Text("Mobile No") },
+                            value = selectedClass,
+                            onValueChange = { },
+                            label = { Text("Class") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
+                                .clickable { showClassDialog = true },
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, "Select Class") }
                         )
-                    }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Address
-                    item {
-                        OutlinedTextField(
-                            value = address,
-                            onValueChange = { address = it },
-                            label = { Text("Address") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // Class selection
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showClassDialog = true }
-                        ) {
-                            OutlinedTextField(
-                                value = selectedClass,
-                                onValueChange = { },
-                                label = { Text("Class") },
-                                readOnly = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                trailingIcon = {
-                                    Icon(Icons.Default.ArrowDropDown, "Select Class")
-                                },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    disabledTextColor = LocalContentColor.current,
-                                    disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                    disabledLeadingIconColor = MaterialTheme.colorScheme.onSurface,
-                                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurface,
-                                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                enabled = false
-                            )
-                        }
-                    }
-
-                    // Type selection
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showTypeDialog = true }
-                        ) {
-                            OutlinedTextField(
-                                value = personTypeValue,
-                                onValueChange = { },
-                                label = { Text("Type") },
-                                readOnly = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                trailingIcon = {
-                                    Icon(Icons.Default.ArrowDropDown, "Select Type")
-                                },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    disabledTextColor = LocalContentColor.current,
-                                    disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                    disabledLeadingIconColor = MaterialTheme.colorScheme.onSurface,
-                                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurface,
-                                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                enabled = false
-                            )
-                        }
-                    }
-
-                    // Roll Number (only for students)
-                    if (personType == "student") {
-                        item {
+                        if (personType == "student") {
                             OutlinedTextField(
                                 value = rollNumber,
                                 onValueChange = { rollNumber = it },
                                 label = { Text("Roll Number") },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
+                                    .padding(horizontal = 16.dp),
+                                singleLine = true
                             )
-                        }
-                    }
-
-                    // Age (auto-calculated)
-                    item {
-                        OutlinedTextField(
-                            value = age,
-                            onValueChange = { },
-                            label = { Text("Age") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            enabled = false
-                        )
-                    }
-
-                    // Phone
-                    item {
-                        OutlinedTextField(
-                            value = phone,
-                            onValueChange = { phone = it },
-                            label = { Text("Phone") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // Student admissions fields
-                    if (personType == "student") {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = admissionNumber,
-                                    onValueChange = { admissionNumber = it },
-                                    label = { Text("Admission Number (manual override)") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                // Last issued hint for legacy students (only when editing and value is a prefix)
-                                val year = remember(admissionNumber) {
-                                    com.ecorvi.schmng.ui.utils.AdmissionUtils.getAdmissionYear(admissionNumber)
-                                        ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-                                }
-                                var lastIssued by remember { mutableStateOf<String?>(null) }
-                                LaunchedEffect(isEditMode, admissionNumber, year) {
-                                    if (isEditMode && admissionNumber.endsWith("-")) {
-                                        lastIssued = FirestoreDatabase.getLastIssuedAdmissionNumber(year)
-                                    } else {
-                                        lastIssued = null
-                                    }
-                                }
-                                if (lastIssued != null) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(text = "Last issued: ${lastIssued}", color = Color.Gray, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
                             OutlinedTextField(
                                 value = admissionDate,
                                 onValueChange = { admissionDate = it },
-                                label = { Text("Date of Admission (yyyy-MM-dd)") },
+                                label = { Text("Admission Date (YYYY-MM-DD)") },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),
+                                singleLine = true,
                                 trailingIcon = {
                                     IconButton(onClick = {
+                                        // Simple date picker logic could go here
                                         val cal = java.util.Calendar.getInstance()
-                                        val prefill = runCatching {
-                                            val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                                            f.isLenient = false
-                                            f.parse(admissionDate)
-                                        }.getOrNull()
-                                        if (prefill != null) cal.time = prefill
-
                                         DatePickerDialog(
                                             context,
                                             { _, year, month, dayOfMonth ->
-                                                val picked = java.util.Calendar.getInstance().apply { set(year, month, dayOfMonth) }
-                                                val outFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                                                admissionDate = outFmt.format(picked.time)
+                                                val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                                val c = java.util.Calendar.getInstance()
+                                                c.set(year, month, dayOfMonth)
+                                                admissionDate = fmt.format(c.time)
                                             },
                                             cal.get(java.util.Calendar.YEAR),
                                             cal.get(java.util.Calendar.MONTH),
                                             cal.get(java.util.Calendar.DAY_OF_MONTH)
                                         ).show()
                                     }) {
-                                        Icon(Icons.Default.CalendarToday, contentDescription = "Select Date")
+                                        Icon(Icons.Default.DateRange, "Select Date")
                                     }
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // 3. Additional Details (Category, Transport, etc.)
+                        if (personType == "student") {
+                            Divider(modifier = Modifier.padding(vertical = 16.dp))
+                            Text(
+                                text = "Additional Details",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = StudentGreen,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+
+                            // Category Dropdown
+                            Box {
+                                OutlinedTextField(
+                                    value = category,
+                                    onValueChange = { },
+                                    label = { Text("Category") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showCategoryDialog = true },
+                                    enabled = false,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, "Select Category") }
+                                )
+                                DropdownMenu(
+                                    expanded = showCategoryDialog,
+                                    onDismissRequest = { showCategoryDialog = false }
+                                ) {
+                                    categoryOptions.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option) },
+                                            onClick = {
+                                                category = option
+                                                showCategoryDialog = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = caste,
+                                onValueChange = { caste = it },
+                                label = { Text("Caste") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = subCaste,
+                                onValueChange = { subCaste = it },
+                                label = { Text("Sub Caste") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Transport Dropdown
+                            Box {
+                                OutlinedTextField(
+                                    value = modeOfTransport,
+                                    onValueChange = { },
+                                    label = { Text("Mode of Transport") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                        .clickable { showTransportDialog = true },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.ArrowDropDown, "Select Transport")
+                                    },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        disabledTextColor = if (modeOfTransport.isEmpty()) Color.Gray else LocalContentColor.current,
+                                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    enabled = false
+                                )
+                            }
+                            if (showTransportDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showTransportDialog = false },
+                                    title = { 
+                                        Text(
+                                            "Select Mode of Transport",
+                                            color = StudentGreen
+                                        ) 
+                                    },
+                                    text = {
+                                        LazyColumn {
+                                            items(transportOptions) { option ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            modeOfTransport = option
+                                                            showTransportDialog = false
+                                                        }
+                                                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    RadioButton(
+                                                        selected = modeOfTransport == option,
+                                                        onClick = {
+                                                            modeOfTransport = option
+                                                            showTransportDialog = false
+                                                        },
+                                                        colors = RadioButtonDefaults.colors(
+                                                            selectedColor = StudentGreen
+                                                        )
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(option)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = { showTransportDialog = false },
+                                            colors = ButtonDefaults.textButtonColors(
+                                                contentColor = StudentGreen
+                                            )
+                                        ) {
+                                            Text("Close")
+                                        }
+                                    }
+                                )
+                            }
+                            }
+                        }
+                        
+                        // Fee Structure Section
+                        item {
+                            Divider(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = Color.Gray.copy(alpha = 0.3f)
+                            )
+                        }
+                        item {
+                            Text(
+                                text = "Fee Structure",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = StudentGreen,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = feeStructure,
+                                onValueChange = { input ->
+                                    val digits = input.filter { it.isDigit() || it == '.' }.take(15)
+                                    feeStructure = digits
+                                },
+                                label = { Text("Total Fee Structure (₹)") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal
+                                ),
+                                leadingIcon = {
+                                    Text("₹", color = StudentGreen, style = MaterialTheme.typography.bodyLarge)
+                                },
+                                supportingText = {
+                                    Text("Enter the total fee amount set during admission")
                                 }
                             )
                         }
                         item {
                             OutlinedTextField(
-                                value = academicYear,
-                                onValueChange = { academicYear = it },
-                                label = { Text("Academic Year (e.g., 2025-26)") },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                        item {
-                            OutlinedTextField(
-                                value = aadharNumber,
-                                onValueChange = { value ->
-                                    val digits = value.filter { it.isDigit() }.take(12)
-                                    aadharNumber = digits
+                                value = feePaid,
+                                onValueChange = { input ->
+                                    val digits = input.filter { it.isDigit() || it == '.' }.take(15)
+                                    feePaid = digits
                                 },
-                                label = { Text("Aadhar Number (12 digits)") },
+                                label = { Text("Amount Paid (₹)") },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),
                                 keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Number
-                                )
+                                    keyboardType = KeyboardType.Decimal
+                                ),
+                                leadingIcon = {
+                                    Text("₹", color = StudentGreen, style = MaterialTheme.typography.bodyLarge)
+                                },
+                                supportingText = {
+                                    val feeStruct = feeStructure.toDoubleOrNull() ?: 0.0
+                                    val paid = feePaid.toDoubleOrNull() ?: 0.0
+                                    val remaining = feeStruct - paid
+                                    Text(
+                                        if (feeStruct > 0) {
+                                            if (remaining >= 0) {
+                                                "Remaining: ₹${String.format("%.2f", remaining)}"
+                                            } else {
+                                                "Overpaid: ₹${String.format("%.2f", -remaining)}"
+                                            }
+                                        } else {
+                                            "Enter fee structure first"
+                                        },
+                                        color = if (feeStruct > 0 && remaining >= 0) Color.Gray else Color.Red
+                                    )
+                                }
                             )
                         }
-                        if (aadharNumber.length in 1..11) {
+                        // Display fee summary
+                        if (feeStructure.isNotBlank() && feeStructure.toDoubleOrNull() != null) {
                             item {
-                                Text(
-                                    text = "Aadhar must be 12 digits",
-                                    color = Color.Red,
-                                    fontSize = 12.sp,
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
-                                )
-                            }
+                                        .padding(horizontal = 16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = StudentGreen.copy(alpha = 0.1f)
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp)
+                                    ) {
+                                        val feeStruct = feeStructure.toDoubleOrNull() ?: 0.0
+                                        val paid = feePaid.toDoubleOrNull() ?: 0.0
+                                        val remaining = feeStruct - paid
+                                        Text(
+                                            text = "Fee Summary",
+                                            fontWeight = FontWeight.Bold,
+                                            color = StudentGreen
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("Total Fee: ₹${String.format("%.2f", feeStruct)}")
+                                        Text("Paid: ₹${String.format("%.2f", paid)}")
+                                        Text(
+                                            "Remaining: ₹${String.format("%.2f", remaining.coerceAtLeast(0.0))}",
+                                            color = if (remaining > 0) Color.Red else StudentGreen
+                                        )
+                                    }
+                                 } }
                         }
-                        item {
-                            OutlinedTextField(
-                                value = aaparId,
-                                onValueChange = { aaparId = it.trim() },
-                                label = { Text("AAPAR ID") },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
 
                     // Add parent information section when creating a student OR editing a student
                     if (personType == "student") {
@@ -1566,6 +1613,22 @@ fun AddPersonScreen(
                         Button(
                             onClick = {
                                 if (isEditMode) {
+                                    // Validate fee fields for students
+                                    if (personType == "student") {
+                                        val feeStruct = feeStructure.toDoubleOrNull() ?: 0.0
+                                        val paid = feePaid.toDoubleOrNull() ?: 0.0
+                                        if (feeStruct > 0 && paid > feeStruct) {
+                                            errorMessage = "Amount paid cannot exceed total fee structure"
+                                            showErrorDialog = true
+                                            return@Button
+                                        }
+                                    }
+                                    
+                                    // Calculate fee remaining
+                                    val feeStruct = feeStructure.toDoubleOrNull() ?: 0.0
+                                    val paid = feePaid.toDoubleOrNull() ?: 0.0
+                                    val remaining = (feeStruct - paid).coerceAtLeast(0.0)
+                                    
                                     validateAndSavePerson(
                                         Person(
                                             id = personId ?: "",
@@ -1585,7 +1648,14 @@ fun AddPersonScreen(
                                             admissionDate = admissionDate,
                                             academicYear = academicYear,
                                             aadharNumber = aadharNumber,
-                                            aaparId = aaparId
+                                            aaparId = aaparId,
+                                            caste = caste.trim(),
+                                            category = category.trim(),
+                                            subCaste = subCaste.trim(),
+                                            modeOfTransport = modeOfTransport,
+                                            feeStructure = feeStruct,
+                                            feePaid = paid,
+                                            feeRemaining = remaining
                                         ),
                                         personType,
                                         {
@@ -1612,6 +1682,11 @@ fun AddPersonScreen(
                                         // For teacher or staff, use savePersonDirectly
                                         val auth = FirebaseAuth.getInstance()
                                         val db = FirebaseFirestore.getInstance()
+                                        // Calculate fee remaining for students
+                                        val feeStruct = if (personType == "student") feeStructure.toDoubleOrNull() ?: 0.0 else 0.0
+                                        val paid = if (personType == "student") feePaid.toDoubleOrNull() ?: 0.0 else 0.0
+                                        val remaining = (feeStruct - paid).coerceAtLeast(0.0)
+                                        
                                         val person = Person(
                                             id = "",
                                             firstName = firstName.trim(),
@@ -1631,7 +1706,14 @@ fun AddPersonScreen(
                                             admissionDate = if (personType == "student") admissionDate else "",
                                             academicYear = if (personType == "student") academicYear else "",
                                             aadharNumber = if (personType == "student") aadharNumber else "",
-                                            aaparId = if (personType == "student") aaparId else ""
+                                            aaparId = if (personType == "student") aaparId else "",
+                                            caste = if (personType == "student") caste.trim() else "",
+                                            category = if (personType == "student") category.trim() else "",
+                                            subCaste = if (personType == "student") subCaste.trim() else "",
+                                            modeOfTransport = if (personType == "student") modeOfTransport else "",
+                                            feeStructure = feeStruct,
+                                            feePaid = paid,
+                                            feeRemaining = remaining
                                         )
                                         savePersonDirectly(
                                             person = person,

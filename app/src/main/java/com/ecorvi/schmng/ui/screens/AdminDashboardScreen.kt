@@ -206,7 +206,8 @@ fun AdminDashboardScreen(
         "STUDENTS" to Icons.Default.Person,
         "TEACHERS" to Icons.Default.School,
         "STAFF" to Icons.Default.Group,
-        "TIMETABLE" to Icons.Default.Schedule
+        "TIMETABLE" to Icons.Default.Schedule,
+        "MARKS" to Icons.Default.Grade
     )
     
     // State management using remember and mutableStateOf
@@ -866,6 +867,24 @@ fun AdminDashboardScreen(
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                         navController.navigate("attendance_analytics")
+                    }
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Assignment, contentDescription = "Grade Entry", tint = drawerTextColor) },
+                    label = { Text("Marks Entry", fontSize = 16.sp, color = drawerTextColor) },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("marks_entry")
+                    }
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Assignment, contentDescription = "New Grade Entry", tint = drawerTextColor) },
+                    label = { Text("Marks Entry (New)", fontSize = 16.sp, color = drawerTextColor) },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("marks_entry_new")
                     }
                 )
                 NavigationDrawerItem(

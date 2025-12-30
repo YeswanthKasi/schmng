@@ -24,6 +24,13 @@ data class Person(
     val academicYear: String = "",
     val aadharNumber: String = "",
     val aaparId: String = "",
+    val caste: String = "",
+    val category: String = "",
+    val subCaste: String = "",
+    val feeStructure: Double = 0.0,
+    val feePaid: Double = 0.0,
+    val feeRemaining: Double = 0.0,
+    val modeOfTransport: String = "", // Bus, Own Transport, etc.
     
     // For students: their parent's info
     val parentInfo: ParentInfo? = null,
@@ -54,6 +61,13 @@ data class Person(
         academicYear = "",
         aadharNumber = "",
         aaparId = "",
+        caste = "",
+        category = "",
+        subCaste = "",
+        feeStructure = 0.0,
+        feePaid = 0.0,
+        feeRemaining = 0.0,
+        modeOfTransport = "",
         parentInfo = null,
         childInfo = null
     )
