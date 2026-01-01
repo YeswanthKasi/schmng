@@ -875,15 +875,6 @@ fun AdminDashboardScreen(
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
-                        navController.navigate("marks_entry")
-                    }
-                )
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Assignment, contentDescription = "New Grade Entry", tint = drawerTextColor) },
-                    label = { Text("Marks Entry (New)", fontSize = 16.sp, color = drawerTextColor) },
-                    selected = false,
-                    onClick = {
-                        coroutineScope.launch { drawerState.close() }
                         navController.navigate("marks_entry_new")
                     }
                 )

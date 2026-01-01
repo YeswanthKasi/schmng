@@ -1,178 +1,182 @@
-# School Management App (schmng) - Comprehensive Documentation
+# 🏫 School Management System (schmng) - Technical Project Report
 
-Welcome to the **School Management App (schmng)**, a state-of-the-art, AI-ready mobile solution designed to streamline school operations, enhance communication, and provide a seamless experience for students, teachers, parents, and administrators.
-
----
-
-## 🌟 1. Non-Technical Overview
-
-### What is this app?
-Think of this app as a "Digital School Office" that fits in your pocket. It replaces paper-based registers, manual fee tracking, and physical notice boards with a fast, secure, and easy-to-use mobile application.
-
-### Who is it for?
-- **Administrators**: To manage the entire school, from staff hiring to fee collection.
-- **Teachers**: To take attendance, manage schedules, and communicate with students.
-- **Students**: To check their timetables, view marks, and stay updated with school news.
-- **Parents**: To monitor their child's progress, attendance, and pay fees.
-- **Staff**: To manage their leaves and daily tasks.
-
-### Why use it?
-- **Efficiency**: No more manual data entry.
-- **Transparency**: Parents know exactly when their child is in school.
-- **Communication**: Instant notifications for important announcements.
-- **Security**: Data is safely stored in the cloud using Google's Firebase.
+## 📝 Executive Summary
+The **School Management System (schmng)** is a comprehensive, enterprise-grade Android application built with **Kotlin** and **Jetpack Compose**. It serves as a centralized platform for managing school operations, including student/teacher administration, real-time attendance tracking, fee management, and automated scheduling. The system leverages **Firebase** for its backend, providing real-time data synchronization, secure authentication, and scalable cloud storage.
 
 ---
 
-## 🚀 2. Key Features by User Role
+## 🏗️ 1. System Architecture & Tech Stack
 
-### 🔑 Administrator
-- **Dashboard**: Real-time overview of school statistics.
-- **User Management**: Add, edit, or remove students, teachers, and staff.
-- **Fee Management**: Track pending fees and send reminders.
-- **Timetable & Scheduling**: Create and manage school-wide schedules.
-- **Notice Board**: Post official announcements for the entire school.
-- **Leave Management**: Approve or reject leave applications from staff and teachers.
+### 1.1 Core Technologies
+- **Language**: Kotlin 1.9+ (Coroutines, Flow, Serialization)
+- **UI Framework**: Jetpack Compose (Declarative UI, Material 3)
+- **Architecture**: MVVM (Model-View-ViewModel)
+- **Backend-as-a-Service**: Google Firebase
+    - **Firestore**: NoSQL Database for real-time data.
+    - **Authentication**: Secure email/password and Google Sign-In.
+    - **Storage**: Cloud storage for profile photos and documents.
+    - **Cloud Functions**: Server-side logic (e.g., automated notifications).
+    - **Remote Config**: Dynamic app behavior management.
+- **Dependency Management**: Gradle (Kotlin DSL) with Version Catalogs (`libs.versions.toml`).
+- **Image Loading**: Coil (optimized for Compose).
+- **Automation**: Fastlane (CI/CD) and Python (Data Generation).
 
-### 👨‍🏫 Teacher
-- **Attendance**: Digital attendance marking for assigned classes.
-- **My Schedule**: View daily teaching timetable.
-- **Student Management**: View details of students in their class.
-- **Leave Application**: Apply for leaves and track status.
-- **Class Events**: Create and manage events specific to their class.
-
-### 🎓 Student
-- **My Profile**: View personal and academic details.
-- **Timetable**: Access daily class schedules.
-- **Attendance Tracking**: Monitor personal attendance percentage.
-- **Marks & Grades**: View results of exams and assignments.
-- **Fees**: Check fee status and payment history.
-
-### 👪 Parent
-- **Child Monitoring**: View attendance and academic performance of their children.
-- **Communication**: Receive messages from teachers and school admin.
-- **Fee Payment**: View and manage school fee payments.
-
-### 🛠️ Staff (Non-Teaching)
-- **Daily Tasks**: View assigned duties.
-- **Attendance**: Mark daily check-in/out.
-- **Leave Management**: Apply for and track leaves.
+### 1.2 High-Level Data Flow
+1. **User Interaction**: User triggers an event in a Compose Screen.
+2. **State Management**: The Screen observes a `StateFlow` from a `ViewModel`.
+3. **Business Logic**: The `ViewModel` processes the event and calls the `FirestoreDatabase` singleton.
+4. **Data Persistence**: `FirestoreDatabase` performs asynchronous operations using Kotlin Coroutines (`await()`).
+5. **Real-time Update**: Firestore listeners notify the `ViewModel`, which updates the `StateFlow`, triggering a UI recomposition.
 
 ---
 
-## 🏗️ 3. Technical Architecture
+## 📂 2. Detailed Module Analysis (File-by-File)
 
-The app is built using modern Android development practices:
+### 🔑 2.1 Core & Entry Points
+#### `MainActivity.kt`
+The primary activity and entry point.
+- **`onCreate()`**: Initializes Firebase, Analytics, and Remote Config. Sets up the `AppNavigation` host.
+- **`checkForAppUpdate()`**: Implements the Google Play Core API for flexible in-app updates.
+- **`setupInitialState()`**: Determines if the user is logged in and routes them to the appropriate dashboard based on their role stored in `SharedPreferences`.
+- **`determineInitialRoute()`**: A critical logic block that fetches the user's role from Firestore if not found locally.
 
-- **Language**: Kotlin (100%)
-- **UI Framework**: Jetpack Compose (Declarative UI)
-- **Architecture Pattern**: MVVM (Model-View-ViewModel)
-- **Backend**: Firebase (Firestore, Auth, Storage, Cloud Functions, Remote Config)
-- **Navigation**: Jetpack Navigation Compose
-- **Dependency Injection**: Manual (using Singletons and ViewModels)
-- **Image Loading**: Coil
-- **Data Persistence**: SharedPreferences & Firestore
-
----
-
-## 📂 4. Detailed Code Documentation (Pin-to-Pin)
-
-### 4.1 Core Application Entry
-- **`MainActivity.kt`**: The heart of the app. It initializes Firebase, checks for app updates via Google Play, determines the user's login state, and sets up the main navigation host.
-- **`SplashActivity.kt`**: Handles the initial branding screen and pre-loads essential data.
-
-### 4.2 Navigation System
-- **`AppNavigation.kt`**: Defines every single "route" (screen) in the app. It uses a `NavHost` to switch between screens like Login, Dashboard, and Profile based on user interaction.
-- **`BottomNavItem.kt`**: Defines the icons and labels for the bottom navigation bar used by different roles.
-
-### 4.3 Data Layer (The "Backend" in the Frontend)
-- **`FirestoreDatabase.kt`**: A massive utility class (2900+ lines) that handles all communication with the Google Firebase database.
-    - *Functions*: `addStudent()`, `markAttendance()`, `fetchFees()`, `validateAdmissionNumber()`, etc.
-    - *Logic*: Includes complex validation for Aadhar numbers, Admission numbers, and automated ID generation.
-- **Models (`/models`)**: Plain Kotlin classes that define the structure of data.
-    - `Student.kt`: Name, Roll No, Class, Parent details.
-    - `AttendanceRecord.kt`: Date, Status (Present/Absent), Student ID.
-    - `Notice.kt`: Title, Content, Date, Target Audience.
-
-### 4.4 UI Layer (The "Frontend")
-- **Screens (`/ui/screens`)**: Each file represents a full screen.
-    - `AdminDashboardScreen.kt`: Uses grids and cards to show school stats.
-    - `AttendanceScreen.kt`: A list with toggle switches for marking attendance.
-    - `LoginScreen.kt`: Handles user authentication with error feedback.
-- **Components (`/ui/components`)**: Reusable UI elements like `CustomButton`, `LoadingSpinner`, and `InfoCard`.
-- **Theme (`/ui/theme`)**: Defines the colors (Material 3), typography, and shapes to ensure a consistent look.
-
-### 4.5 Business Logic (The "Brain")
-- **ViewModels (`/viewmodels`)**: These classes hold the data for the UI and handle user actions.
-    - `AttendanceViewModel.kt`: Calculates attendance percentages and filters records by date.
-    - `NoticeViewModel.kt`: Handles the logic for posting and fetching announcements.
-
-### 4.6 Background Services
-- **`MessagingService.kt`**: Handles Firebase Cloud Messaging (FCM) for push notifications.
-- **`RemoteConfigService.kt`**: Allows changing app behavior (like maintenance mode) without a new app release.
+#### `SplashActivity.kt`
+Handles the cold-start experience, branding, and pre-fetching of essential configuration data.
 
 ---
 
-## 🗄️ 5. Database Structure (Firestore)
+### 🧭 2.2 Navigation & Routing
+#### `AppNavigation.kt`
+The central hub for all screen transitions.
+- **`NavHost`**: Defines the entire navigation graph.
+- **`composable()`**: Maps string routes (e.g., `"admin_dashboard"`) to screen functions.
+- **`navArgument()`**: Handles type-safe parameter passing (e.g., passing a `studentId` to a profile screen).
 
-The app uses a NoSQL structure in Firebase Firestore:
-- **`users`**: Stores authentication UID and user role (Admin/Teacher/etc).
-- **`students`**: Detailed profiles of all students.
-- **`teachers`**: Profiles and assigned classes for teachers.
-- **`attendance`**: Daily records indexed by date and class.
-- **`fees`**: Financial records for each student.
-- **`meta`**: Stores counters for generating unique IDs (like Admission Numbers).
-
----
-
-## 🐍 6. Automation & Helper Scripts
-
-- **`generate_dummy_students.py`**: A Python script that uses the Firebase Admin SDK to populate the database with hundreds of fake students for testing.
-- **`generate_dummy_teachers.py`**: Similar script for creating teacher accounts.
-- **`fastlane/`**: Contains automation scripts for building the app and uploading it to the Google Play Store.
+#### `BottomNavItem.kt` & `StudentBottomNavItem.kt`
+Sealed classes defining the structure of the bottom navigation bars for different user roles (Admin vs. Student).
 
 ---
 
-## 🐳 7. Development Environment
+### 📊 2.3 Data Models (`/models`)
+These classes define the "Shape" of the data throughout the app.
 
-### Docker Setup
-We provide a Dockerized environment to ensure "it works on my machine" for every developer.
-- **`Dockerfile`**: Sets up the Android SDK and Gradle environment.
-- **`docker-compose.yml`**: Orchestrates the build process.
-
-### Manual Setup
-1. Install **Android Studio (Ladybug or newer)**.
-2. Clone the repo.
-3. Add your `google-services.json` to the `app/` folder.
-4. Sync Gradle and Run.
+| File | Description | Key Properties |
+|:---|:---|:---|
+| `User.kt` | Base user profile | `id`, `email`, `type` (Admin/Teacher/Student), `fullName` |
+| `Student.kt` | Detailed student record | `admissionNumber`, `rollNumber`, `parentPhone`, `isActive` |
+| `TeacherData.kt` | Teacher-specific info | `department`, `designation`, `assignedClasses` |
+| `AttendanceRecord.kt` | Daily attendance entry | `studentId`, `date`, `status` (Present/Absent/Leave) |
+| `Notice.kt` | School announcements | `title`, `content`, `targetAudience`, `timestamp` |
+| `LeaveApplication.kt` | Staff leave requests | `applicantId`, `reason`, `startDate`, `status` (Pending/Approved) |
 
 ---
 
-## 🛠️ 8. Project Folder Structure
+### 🧠 2.4 Business Logic (ViewModels)
+ViewModels act as the "Brain" of each screen, surviving configuration changes.
 
-```text
-root/
-├── app/                        # Main Android Module
-│   ├── src/main/java/...       # Kotlin Source Code
-│   │   ├── models/             # Data Structures
-│   │   ├── ui/                 # UI Screens & Components
-│   │   ├── viewmodels/         # Business Logic
-│   │   └── services/           # Background Services
-│   └── build.gradle.kts        # App-level dependencies
-├── fastlane/                   # Deployment Automation
-├── scripts/                    # Python Data Generators
-├── Dockerfile                  # Container Config
-└── README.md                   # This Documentation
+#### `AttendanceViewModel.kt`
+- **`loadUsers(userType)`**: Fetches a list of students or staff for attendance marking.
+- **`loadAttendance(date)`**: Retrieves existing records for a specific day.
+- **`updatePendingStatus(id, status)`**: Manages a local map of changes before they are committed to the database.
+- **`saveAttendance()`**: Commits all pending changes to Firestore in a single batch operation.
+
+#### `TeacherDashboardViewModel.kt`
+- **`loadTeacherData()`**: Fetches the logged-in teacher's profile and assigned classes.
+- **`calculateAttendanceStats()`**: Aggregates attendance data to show real-time percentages on the dashboard.
+- **`setupTimeSlotsListener()`**: Listens for changes in the school timetable.
+
+---
+
+### ⚙️ 2.5 The Data Engine (`FirestoreDatabase.kt`)
+A massive repository class (2900+ lines) containing all backend interaction logic.
+
+**Key Functions & Logic:**
+- **`generateAndReserveAdmissionNumber()`**: 
+    - *Logic*: Uses a Firestore Transaction to read the current counter, increment it, and write it back atomically.
+    - *Purpose*: Prevents duplicate admission numbers in a multi-user environment.
+- **`validateAadharNumber(number)`**: 
+    - *Logic*: Implements the **Verhoeff Algorithm** (checksum validation) to ensure the 12-digit Aadhar number is valid.
+- **`markAttendance(records)`**: 
+    - *Logic*: Uses `WriteBatch` to update multiple documents simultaneously, ensuring data consistency.
+- **`uploadProfilePhoto(uri)`**: 
+    - *Logic*: Compresses the image using `Compressor` library before uploading to Firebase Storage to save bandwidth and storage.
+
+---
+
+## 🎨 3. UI & User Experience
+
+### 3.1 Screen Architecture
+Every screen (e.g., `AdminDashboardScreen.kt`, `AttendanceScreen.kt`) follows a consistent pattern:
+1. **State Observation**: `val state by viewModel.state.collectAsState()`.
+2. **Scaffold**: Provides the top bar, bottom bar, and snackbar host.
+3. **Content**: Uses `LazyColumn` for lists and `ConstraintLayout` or `Box/Column/Row` for complex layouts.
+4. **Animations**: Uses `AnimatedVisibility` and `animateContentSize` for smooth transitions.
+
+### 3.2 Reusable Components (`/ui/components`)
+- **`CommonBackground`**: A consistent gradient background used across the app.
+- **`InfoCard`**: A standardized card for displaying data points.
+- **`AnalyticsPieChart`**: A custom-drawn Canvas component for visualizing attendance and fee data.
+
+---
+
+## 🔄 4. Process Flowcharts
+
+### 4.1 User Authentication Flow
+```mermaid
+sequenceDiagram
+    User->>LoginScreen: Enters Credentials
+    LoginScreen->>FirebaseAuth: signInWithEmailAndPassword()
+    FirebaseAuth-->>LoginScreen: Success (UID)
+    LoginScreen->>Firestore: Get user role from /users/{UID}
+    Firestore-->>LoginScreen: Role (e.g., "ADMIN")
+    LoginScreen->>AppNavigation: Navigate to AdminDashboard
+```
+
+### 4.2 Student Registration Flow
+```mermaid
+graph LR
+    A[Admin: AddStudentScreen] --> B[Validate Input]
+    B --> C[Generate Admission No]
+    C --> D[Upload Photo to Storage]
+    D --> E[Create Auth Account]
+    E --> F[Save to Firestore: /students]
+    F --> G[Save to Firestore: /users]
 ```
 
 ---
 
-## 🔮 9. Future Roadmap
-- **AI Analytics**: Predicting student performance based on attendance and marks.
-- **Bus Tracking**: Real-time GPS tracking for school buses.
-- **Online Exams**: Integrated quiz and testing module.
-- **Multi-language Support**: Support for regional languages.
+## 🛠️ 5. Automation & DevOps
+
+### 5.1 Python Helper Scripts
+- **`generate_dummy_students.py`**: Uses `faker` and `firebase-admin` to populate the database for stress testing.
+- **`generate_dummy_teachers.py`**: Creates teacher accounts with randomized schedules.
+
+### 5.2 Fastlane Integration
+Located in `/fastlane`, these scripts automate:
+- **`beta`**: Building the APK and uploading to Firebase App Distribution.
+- **`release`**: Building the AAB (Android App Bundle) and uploading to Google Play Console.
+
+### 5.3 Docker Environment
+The `Dockerfile` provides a consistent build environment containing:
+- OpenJDK 17
+- Android SDK (Platform 34, Build Tools 34.0.0)
+- Gradle 8.x
 
 ---
 
-**Built with ❤️ by Yeswanth Kasi**
+## 🔒 6. Security & Data Integrity
+- **Firestore Rules**: Restrict data access based on user roles (e.g., students cannot see other students' fee details).
+- **Input Validation**: Regex-based validation for emails, phone numbers, and custom formats like Admission Numbers (`ADM-YYYY-NNNNNN`).
+- **ProGuard/R8**: Obfuscates code and removes unused resources in the release build to prevent reverse engineering.
+
+---
+
+## 🔮 7. Conclusion & Future Scope
+The **schmng** app is a robust foundation for school digitalization. Its modular architecture allows for easy expansion into:
+- **AI-Driven Insights**: Predicting student drop-out risks.
+- **LMS Integration**: Online assignments and grading.
+- **IoT Integration**: RFID-based automated attendance.
+
+---
+**Project Owner**: Yeswanth Kasi
+**Last Updated**: December 30, 2025

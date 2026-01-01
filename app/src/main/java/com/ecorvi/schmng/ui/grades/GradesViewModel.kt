@@ -1,5 +1,6 @@
 package com.ecorvi.schmng.ui.grades
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ecorvi.schmng.ui.data.model.ExamTypes
@@ -19,6 +20,11 @@ import java.util.Locale
 class GradesViewModel(
     private val repo: GradesRepository = GradesRepository()
 ) : ViewModel() {
+    
+    companion object {
+        private const val TAG = "GradesViewModel"
+    }
+    
     private fun normalizeClassName(raw: String): String {
         val t = raw.trim()
         if (t.startsWith("Class ")) return t
@@ -43,6 +49,9 @@ class GradesViewModel(
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
+    
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
 
     private val _selectedClass = MutableStateFlow(Constants.CLASS_OPTIONS.first())
     val selectedClass: StateFlow<String> = _selectedClass
@@ -65,33 +74,57 @@ class GradesViewModel(
             else -> StandardSubjects.HIGHER_SECONDARY
         }
     }
+    
+    fun clearError() {
+        _errorMessage.value = null
+    }
 
     fun load() {
         viewModelScope.launch {
             _isLoading.value = true
-            val cls = normalizeClassName(_selectedClass.value)
-            val people = repo.listStudents(cls).sortedBy { it.rollNumber.toIntOrNull() ?: 999 }
-            _students.value = people
-            val grades = repo.listGrades(cls, _examType.value, _academicYear.value)
-            _existing.value = grades.associateBy { it.studentId }
-            val defaultSubjects = defaultSubjectsForClass(cls).toSet()
-            val cloudSubjects = grades.flatMap { it.subjects.keys }.toSet()
-            val union = _subjects.value.union(defaultSubjects).union(cloudSubjects)
-            _subjects.value = union
-            val base = mutableMapOf<String, MutableMap<String, String>>()
-            people.forEach { st ->
-                val row = mutableMapOf<String, String>()
-                _subjects.value.forEach { subj ->
-                    val g = _existing.value[st.id]
-                    val m = g?.subjects?.get(subj)?.obtainedMarks
-                    row[subj] = if (m != null) { if (m % 1.0 == 0.0) m.toInt().toString() else m.toString() } else ""
+            _errorMessage.value = null
+            try {
+                val cls = normalizeClassName(_selectedClass.value)
+                Log.d(TAG, "Loading data for class: $cls, exam: ${_examType.value}, year: ${_academicYear.value}")
+                
+                val people = repo.listStudents(cls).sortedBy { it.rollNumber.toIntOrNull() ?: 999 }
+                Log.d(TAG, "Loaded ${people.size} students")
+                _students.value = people
+                
+                val grades = repo.listGrades(cls, _examType.value, _academicYear.value)
+                Log.d(TAG, "Loaded ${grades.size} existing grades")
+                _existing.value = grades.associateBy { it.studentId }
+                
+                val defaultSubjects = defaultSubjectsForClass(cls).toSet()
+                val cloudSubjects = grades.flatMap { it.subjects.keys }.toSet()
+                val union = _subjects.value.union(defaultSubjects).union(cloudSubjects)
+                _subjects.value = union
+                Log.d(TAG, "Subjects: $union")
+                
+                val base = mutableMapOf<String, MutableMap<String, String>>()
+                people.forEach { st ->
+                    val row = mutableMapOf<String, String>()
+                    _subjects.value.forEach { subj ->
+                        val g = _existing.value[st.id]
+                        val m = g?.subjects?.get(subj)?.obtainedMarks
+                        row[subj] = if (m != null) { if (m % 1.0 == 0.0) m.toInt().toString() else m.toString() } else ""
+                    }
+                    base[st.id] = row
                 }
-                base[st.id] = row
+                _gradeBaseline.value = base
+                _dirty.value = emptyMap()
+                
+                if (people.isEmpty()) {
+                    _errorMessage.value = "No students found for $cls"
+                }
+                
+                attachListener()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading data: ${e.message}", e)
+                _errorMessage.value = "Error loading data: ${e.message}"
+            } finally {
+                _isLoading.value = false
             }
-            _gradeBaseline.value = base
-            _dirty.value = emptyMap()
-            _isLoading.value = false
-            attachListener()
         }
     }
 
@@ -142,8 +175,10 @@ class GradesViewModel(
 
     suspend fun deleteGrade(studentId: String): Result<Unit> {
         val existing = _existing.value[studentId] ?: return Result.failure(IllegalStateException("No saved grade"))
+        Log.d(TAG, "Deleting grade for student: $studentId, gradeId: ${existing.id}")
         val res = repo.deleteGrade(existing.id)
         if (res.isSuccess) {
+            Log.d(TAG, "Grade deleted successfully")
             val newExisting = _existing.value.toMutableMap(); newExisting.remove(studentId); _existing.value = newExisting
             val updatedBaseline = _gradeBaseline.value.toMutableMap()
             updatedBaseline[studentId] = _subjects.value.associateWith { "" }.toMutableMap()
@@ -221,18 +256,98 @@ class GradesViewModel(
         }
         return out
     }
+    
+    // Build grade for a single student
+    private fun buildGradeForStudent(studentId: String): StudentGrade? {
+        val st = _students.value.find { it.id == studentId } ?: return null
+        val subjectGrades = mutableMapOf<String, SubjectGrade>()
+        var total = 0.0
+        var obtained = 0.0
+        
+        _subjects.value.forEach { subj ->
+            val raw = effectiveMarks(studentId, subj).trim()
+            val v = raw.toDoubleOrNull()
+            if (v != null && v in 0.0..100.0) {
+                total += 100.0
+                obtained += v
+                subjectGrades[subj] = SubjectGrade(
+                    subjectName = subj,
+                    maxMarks = 100.0,
+                    obtainedMarks = v,
+                    grade = GradeCalculator.calculateGrade(v),
+                    remarks = ""
+                )
+            }
+        }
+        
+        if (subjectGrades.isEmpty()) return null
+        
+        val pct = if (total > 0) (obtained / total) * 100 else 0.0
+        val overallGrade = GradeCalculator.calculateGrade(pct)
+        val existing = _existing.value[studentId]
+        
+        return StudentGrade(
+            id = existing?.id ?: "",
+            studentId = st.id,
+            studentName = "${st.firstName} ${st.lastName}",
+            className = normalizeClassName(_selectedClass.value),
+            academicYear = _academicYear.value,
+            examType = _examType.value,
+            examDate = _examDate.value,
+            subjects = subjectGrades,
+            totalMarks = total,
+            obtainedMarks = obtained,
+            percentage = pct,
+            grade = overallGrade,
+            createdBy = "",
+            createdAt = existing?.createdAt ?: System.currentTimeMillis()
+        )
+    }
 
     fun effectiveMarks(studentId: String, subject: String): String {
         val d = _dirty.value[studentId]?.get(subject)
         return d ?: _gradeBaseline.value[studentId]?.get(subject) ?: ""
     }
+    
+    // Save a single student's grade
+    suspend fun saveStudent(studentId: String, createdBy: String): Result<Unit> {
+        Log.d(TAG, "Saving grade for student: $studentId")
+        val grade = buildGradeForStudent(studentId)
+        if (grade == null) {
+            Log.w(TAG, "No valid marks for student $studentId")
+            return Result.failure(IllegalStateException("No valid marks entered for this student"))
+        }
+        
+        val res = repo.saveGradesBatch(listOf(grade), createdBy)
+        if (res.isSuccess) {
+            Log.d(TAG, "Student grade saved successfully")
+            // Clear dirty state for this student
+            val newDirty = _dirty.value.toMutableMap()
+            newDirty.remove(studentId)
+            _dirty.value = newDirty
+            // Reload to get updated data
+            load()
+        } else {
+            Log.e(TAG, "Failed to save student grade: ${res.exceptionOrNull()?.message}")
+        }
+        return res
+    }
 
     suspend fun save(createdBy: String): Result<Unit> {
         val toSave = buildGradesForSave()
-        if (toSave.isEmpty()) return Result.failure(IllegalStateException("No valid grades"))
+        Log.d(TAG, "Saving ${toSave.size} grades")
+        if (toSave.isEmpty()) {
+            Log.w(TAG, "No valid grades to save")
+            return Result.failure(IllegalStateException("No valid grades to save. Please enter marks for at least one subject."))
+        }
         val res = repo.saveGradesBatch(toSave, createdBy)
         if (res.isSuccess) {
+            Log.d(TAG, "Grades saved successfully")
             _dirty.value = emptyMap()
+            // Reload to get updated data
+            load()
+        } else {
+            Log.e(TAG, "Failed to save grades: ${res.exceptionOrNull()?.message}")
         }
         return res
     }
