@@ -70,6 +70,15 @@ object FirestoreDatabase {
     // Time slots collection
     private val timeSlotsCollection = db.collection("timeSlots")
     private val subjectsCollection = db.collection("subjects")
+    private val studentGradesCollection = db.collection("student_grades")
+    // Normalize class names to the canonical format "Class X"
+    private fun normalizeClassName(raw: String): String {
+        val t = raw.trim()
+        if (t.startsWith("Class ")) return t
+        val num = t.replace(Regex("[^0-9]"), "")
+        return if (num.isNotBlank()) "Class $num" else "Class $t"
+    }
+
 
     // Constants
     private const val PROFILE_PHOTOS_PATH = "profile_photos"
@@ -2682,4 +2691,248 @@ object FirestoreDatabase {
             onError(e)
         }
     }
+
+    // ==================== Student Grades Management ====================
+
+
+    // Save or update student grade
+    suspend fun saveStudentGrade(grade: com.ecorvi.schmng.ui.data.model.StudentGrade): Result<Unit> {
+        return try {
+            val gradeId = if (grade.id.isBlank()) {
+                "${grade.studentId}_${grade.examType}_${grade.academicYear}_${System.currentTimeMillis()}"
+            } else {
+                grade.id
+            }
+            
+            val gradeToSave = grade.copy(
+                id = gradeId,
+                className = normalizeClassName(grade.className),
+                academicYear = grade.academicYear.trim(),
+                updatedAt = System.currentTimeMillis()
+            )
+            
+            studentGradesCollection.document(gradeId).set(gradeToSave).await()
+            Log.d("Firestore", "Student grade saved successfully: $gradeId")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error saving student grade: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    // Get all grades for a student
+    suspend fun getStudentGrades(
+        studentId: String,
+        academicYear: String? = null
+    ): List<com.ecorvi.schmng.ui.data.model.StudentGrade> {
+        return try {
+            var query = studentGradesCollection.whereEqualTo("studentId", studentId)
+            if (academicYear != null) {
+                query = query.whereEqualTo("academicYear", academicYear)
+            }
+            
+            query.get().await().documents.mapNotNull { doc ->
+                try {
+                    doc.toObject(com.ecorvi.schmng.ui.data.model.StudentGrade::class.java)?.copy(id = doc.id)
+                } catch (e: Exception) {
+                    Log.e("Firestore", "Error converting grade document: ${e.message}")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting student grades: ${e.message}")
+            emptyList()
+        }
+    }
+
+    // Get grades for a class by exam type
+    suspend fun getClassGrades(
+        className: String,
+        examType: String,
+        academicYear: String
+    ): List<com.ecorvi.schmng.ui.data.model.StudentGrade> {
+        return try {
+            val normalizedClass = normalizeClassName(className)
+            val trimmedYear = academicYear.trim()
+            Log.d("GradesFetch", "getClassGrades filters -> className='$normalizedClass', examType='$examType', academicYear='$trimmedYear'")
+            studentGradesCollection
+                .whereEqualTo("className", normalizeClassName(className))
+                .whereEqualTo("examType", examType)
+                .whereEqualTo("academicYear", academicYear.trim())
+                .get()
+                .await()
+                .documents.also { Log.d("GradesFetch", "getClassGrades matched docs: ${it.size}") }
+                .mapNotNull { doc ->
+                    try {
+                        doc.toObject(com.ecorvi.schmng.ui.data.model.StudentGrade::class.java)?.copy(id = doc.id)
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "Error converting grade document: ${e.message}")
+                        null
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting class grades: ${e.message}")
+            emptyList()
+        }
+    }
+
+    // Batch save grades for multiple students
+    suspend fun saveBatchGrades(
+        grades: List<com.ecorvi.schmng.ui.data.model.StudentGrade>,
+        createdBy: String
+    ): Result<Unit> {
+        return try {
+            val batch = db.batch()
+            
+            grades.forEach { grade ->
+                val isNew = grade.id.isBlank()
+                val gradeId = if (isNew) {
+                    "${grade.studentId}_${grade.examType}_${grade.academicYear}_${System.currentTimeMillis()}"
+                } else {
+                    grade.id
+                }
+                
+                val gradeToSave = grade.copy(
+                    id = gradeId,
+                    className = normalizeClassName(grade.className),
+                    academicYear = grade.academicYear.trim(),
+                    createdBy = createdBy,
+                    createdAt = if (isNew) System.currentTimeMillis() else grade.createdAt,
+                    updatedAt = System.currentTimeMillis()
+                )
+                
+                val docRef = studentGradesCollection.document(gradeId)
+                batch.set(docRef, gradeToSave)
+            }
+            
+            batch.commit().await()
+            Log.d("Firestore", "Batch grades saved successfully: ${grades.size} grades")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error saving batch grades: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    // Delete a grade
+    suspend fun deleteStudentGrade(gradeId: String): Result<Unit> {
+        return try {
+            studentGradesCollection.document(gradeId).delete().await()
+            Log.d("Firestore", "Student grade deleted: $gradeId")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error deleting student grade: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    // Get grade by ID
+    suspend fun getStudentGrade(gradeId: String): com.ecorvi.schmng.ui.data.model.StudentGrade? {
+        return try {
+            val doc = studentGradesCollection.document(gradeId).get().await()
+            if (doc.exists()) {
+                doc.toObject(com.ecorvi.schmng.ui.data.model.StudentGrade::class.java)?.copy(id = doc.id)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting student grade: ${e.message}")
+            null
+        }
+    }
+    // Fetch students by class
+    fun getStudentsByClass(
+        className: String,
+        onComplete: (List<Person>) -> Unit
+    ) {
+        studentsCollection
+            .whereEqualTo("className", className)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val students = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        doc.toObject(Person::class.java)?.copy(id = doc.id)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                onComplete(students)
+            }
+            .addOnFailureListener {
+                onComplete(emptyList())
+            }
+    }
+
+    // Get student grade for a specific exam
+    suspend fun getStudentGrade(studentId: String, examType: String): com.ecorvi.schmng.ui.data.model.StudentGrade? = withContext(Dispatchers.IO) {
+        try {
+            val snapshot = studentGradesCollection
+                .whereEqualTo("studentId", studentId)
+                .whereEqualTo("examType", examType)
+                .limit(1)
+                .get()
+                .await()
+            
+            if (!snapshot.isEmpty) {
+                snapshot.documents[0].toObject(com.ecorvi.schmng.ui.data.model.StudentGrade::class.java)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting student grade: ${e.message}")
+            null
+        }
+    }
+
+    // Get all grades for a student
+    suspend fun getStudentGrades(studentId: String): List<com.ecorvi.schmng.ui.data.model.StudentGrade> = withContext(Dispatchers.IO) {
+        try {
+            val snapshot = studentGradesCollection
+                .whereEqualTo("studentId", studentId)
+                .get()
+                .await()
+            
+            snapshot.documents.mapNotNull { 
+                it.toObject(com.ecorvi.schmng.ui.data.model.StudentGrade::class.java) 
+            }
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error getting student grades: ${e.message}")
+            emptyList()
+        }
+    }
+
+    // Real-time listener for class grades by exam type and academic year
+    fun listenClassGrades(
+        className: String,
+        examType: String,
+        academicYear: String,
+        onUpdate: (List<com.ecorvi.schmng.ui.data.model.StudentGrade>) -> Unit,
+        onError: (Exception) -> Unit
+    ): ListenerRegistration {
+        val normalizedClass = normalizeClassName(className)
+        val trimmedYear = academicYear.trim()
+        Log.d("GradesListen", "listenClassGrades filters -> className='$normalizedClass', examType='$examType', academicYear='$trimmedYear'")
+        return studentGradesCollection
+            .whereEqualTo("className", normalizeClassName(className))
+            .whereEqualTo("examType", examType)
+            .whereEqualTo("academicYear", academicYear.trim())
+            .orderBy("studentName", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onError(error)
+                    return@addSnapshotListener
+                }
+                val docs = snapshot?.documents ?: emptyList()
+                Log.d("GradesListen", "snapshot docs count: ${docs.size}")
+                val grades = docs.mapNotNull { doc ->
+                    try {
+                        doc.toObject(com.ecorvi.schmng.ui.data.model.StudentGrade::class.java)?.copy(id = doc.id)
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: emptyList()
+                onUpdate(grades)
+            }
+    }
 }
+

@@ -282,6 +282,20 @@ fun AppNavigation(
         composable("manage_teacher_absences") {
             ManageTeacherAbsencesScreen(navController = navController)
         }
+        
+        // Grade Entry Route
+        composable("grade_entry") {
+            com.ecorvi.schmng.ui.screens.admin.GradeEntryScreen(navController = navController)
+        }
+        
+        // Class-wise Marks Entry
+        composable("marks_entry") {
+            com.ecorvi.schmng.ui.screens.MarksScreen(navController = navController)
+        }
+        // New Marks Entry (isolated module)
+        composable("marks_entry_new") {
+            com.ecorvi.schmng.ui.grades.GradesEntryNewScreen(navController = navController)
+        }
         composable(
             "attendance/{userType}",
             arguments = listOf(navArgument("userType") { type = NavType.StringType })
